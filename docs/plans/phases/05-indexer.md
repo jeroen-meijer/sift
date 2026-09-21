@@ -1,6 +1,10 @@
 # Phase 05 — Indexer
 
-**Status:** in_progress
+**Status:** complete
+
+## Done
+
+Recursive audio indexer with ignore globs, progress events, auto-index on add root, reindex commands. Formats: wav/aiff/flac/mp3/aac/m4a/ogg/opus.
 
 ## Previous
 

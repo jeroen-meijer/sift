@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod error;
+mod indexer;
 mod library;
 mod paths;
 mod state;
@@ -24,6 +25,8 @@ pub fn run() {
             commands::remove_root,
             commands::folder_tree,
             commands::set_folder_favorite,
+            commands::reindex_root,
+            commands::reindex_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

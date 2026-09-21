@@ -1,8 +1,9 @@
 use serde_json::Value;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db::settings;
 use crate::error::AppResult;
+use crate::indexer::{self, IndexProgress};
 use crate::library::{self, FolderNode, RootDto};
 use crate::state::AppState;
 
@@ -47,8 +48,29 @@ pub fn list_roots(state: State<'_, AppState>) -> AppResult<Vec<RootDto>> {
 }
 
 #[tauri::command]
-pub fn add_root(state: State<'_, AppState>, path: String) -> AppResult<RootDto> {
-    state.db.with_conn(|conn| library::add_root(conn, &path))
+pub fn add_root(app: AppHandle, state: State<'_, AppState>, path: String) -> AppResult<RootDto> {
+    let root = state.db.with_conn(|conn| library::add_root(conn, &path))?;
+    let root_id = root.id;
+    let db = state.db.clone();
+    std::thread::spawn(move || {
+        let _ = db.with_conn(|conn| {
+            indexer::index_root(conn, root_id, |progress| {
+                let _ = app.emit("index-progress", &progress);
+            })
+        });
+        let _ = app.emit(
+            "index-progress",
+            &IndexProgress {
+                root_id,
+                scanned: 0,
+                indexed: 0,
+                skipped: 0,
+                current_path: String::new(),
+                done: true,
+            },
+        );
+    });
+    Ok(root)
 }
 
 #[tauri::command]
@@ -72,4 +94,30 @@ pub fn set_folder_favorite(
     state
         .db
         .with_conn(|conn| library::set_folder_favorite(conn, &path, favorite))
+}
+
+#[tauri::command]
+pub fn reindex_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) -> AppResult<()> {
+    let db = state.db.clone();
+    std::thread::spawn(move || {
+        let _ = db.with_conn(|conn| {
+            indexer::index_root(conn, root_id, |progress| {
+                let _ = app.emit("index-progress", &progress);
+            })
+        });
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
+    let db = state.db.clone();
+    std::thread::spawn(move || {
+        let _ = db.with_conn(|conn| {
+            indexer::index_all_roots(conn, |progress| {
+                let _ = app.emit("index-progress", &progress);
+            })
+        });
+    });
+    Ok(())
 }
