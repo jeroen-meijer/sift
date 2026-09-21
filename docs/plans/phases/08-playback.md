@@ -1,6 +1,10 @@
 # Phase 08 — Playback
 
-**Status:** pending
+**Status:** complete
+
+## Done
+
+cpal PlayerEngine, play-on-select, Enter/Space/arrows, loop preview.
 
 ## Previous
 

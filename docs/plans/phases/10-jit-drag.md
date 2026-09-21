@@ -1,6 +1,6 @@
 # Phase 10 — JIT + drag
 
-**Status:** pending
+**Status:** in_progress
 
 ## Previous
 

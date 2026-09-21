@@ -1,6 +1,10 @@
 # Phase 06 — Sample table
 
-**Status:** pending
+**Status:** complete
+
+## Done
+
+Virtualized table, sort cycle, multi-select, favorites, detail header.
 
 ## Previous
 
