@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 
-use rusqlite::Connection;
+use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppResult;
@@ -59,7 +59,7 @@ impl UndoStack {
         self.redo.clear();
     }
 
-    pub fn undo(&mut self, conn: &Connection) -> AppResult<Option<UndoAction>> {
+    pub fn undo(&mut self, conn: &mut SqliteConnection) -> AppResult<Option<UndoAction>> {
         let Some(action) = self.undo.pop_back() else {
             return Ok(None);
         };
@@ -71,7 +71,7 @@ impl UndoStack {
         Ok(Some(action))
     }
 
-    pub fn redo(&mut self, conn: &Connection) -> AppResult<Option<UndoAction>> {
+    pub fn redo(&mut self, conn: &mut SqliteConnection) -> AppResult<Option<UndoAction>> {
         let Some(action) = self.redo.pop_back() else {
             return Ok(None);
         };
@@ -92,7 +92,7 @@ impl UndoStack {
     }
 }
 
-fn apply_inverse(conn: &Connection, action: &UndoAction) -> AppResult<()> {
+fn apply_inverse(conn: &mut SqliteConnection, action: &UndoAction) -> AppResult<()> {
     match action {
         UndoAction::Favorite { id, before, .. } => samples::set_sample_favorite(conn, *id, *before),
         UndoAction::TagAdd { sample_id, tag_id } => {
@@ -111,7 +111,7 @@ fn apply_inverse(conn: &Connection, action: &UndoAction) -> AppResult<()> {
     }
 }
 
-fn apply_forward(conn: &Connection, action: &UndoAction) -> AppResult<()> {
+fn apply_forward(conn: &mut SqliteConnection, action: &UndoAction) -> AppResult<()> {
     match action {
         UndoAction::Favorite { id, after, .. } => samples::set_sample_favorite(conn, *id, *after),
         UndoAction::TagAdd { sample_id, tag_id } => {

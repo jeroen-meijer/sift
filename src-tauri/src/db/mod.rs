@@ -1,47 +1,84 @@
+pub mod models;
 pub mod schema;
 pub mod settings;
 pub mod taxonomy;
 
-use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::Connection;
+use diesel::connection::SimpleConnection;
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
 
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+
+/// UTC timestamp matching SQLite `strftime('%Y-%m-%dT%H:%M:%fZ','now')` style.
+pub fn utc_now() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
 pub struct Db {
-    conn: Mutex<Connection>,
+    conn: Mutex<SqliteConnection>,
 }
 
 impl Db {
     pub fn open(paths: &AppPaths) -> AppResult<Self> {
-        let conn = Connection::open(&paths.db_path)?;
-        conn.execute_batch(
+        match Self::open_inner(paths) {
+            Ok(db) => Ok(db),
+            Err(e) => {
+                // Pre-Diesel DBs lack `__diesel_schema_migrations`. Wipe index once and retry.
+                // Sample files on disk are never touched.
+                let msg = e.to_string();
+                if msg.contains("migrate:") {
+                    let _ = std::fs::remove_file(&paths.db_path);
+                    let wal = format!("{}-wal", paths.db_path.display());
+                    let shm = format!("{}-shm", paths.db_path.display());
+                    let _ = std::fs::remove_file(&wal);
+                    let _ = std::fs::remove_file(&shm);
+                    Self::open_inner(paths)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    fn open_inner(paths: &AppPaths) -> AppResult<Self> {
+        // Diesel SQLite expects a filesystem path (not a URL).
+        let mut conn = SqliteConnection::establish(paths.db_path.to_str().unwrap_or_default())
+            .map_err(|e| AppError::msg(format!("open db: {e}")))?;
+
+        conn.batch_execute(
             "
             PRAGMA foreign_keys = ON;
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             ",
-        )?;
+        )
+        .map_err(|e| AppError::msg(format!("pragma: {e}")))?;
+
+        conn.run_pending_migrations(MIGRATIONS)
+            .map_err(|e| AppError::msg(format!("migrate: {e}")))?;
+
         let db = Self {
             conn: Mutex::new(conn),
         };
         {
-            let conn = db.conn.lock().expect("db lock");
-            schema::migrate(&conn)?;
-            settings::ensure_defaults(&conn, paths)?;
-            taxonomy::seed_if_empty(&conn)?;
+            let mut conn = db.conn.lock().expect("db lock");
+            settings::ensure_defaults(&mut conn, paths)?;
+            taxonomy::seed_if_empty(&mut conn)?;
         }
         Ok(db)
     }
 
-    pub fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
-        let conn = self.conn.lock().expect("db lock");
-        f(&conn)
-    }
-
-    pub fn path_exists(path: &Path) -> bool {
-        path.exists()
+    pub fn with_conn<T>(
+        &self,
+        f: impl FnOnce(&mut SqliteConnection) -> AppResult<T>,
+    ) -> AppResult<T> {
+        let mut conn = self.conn.lock().expect("db lock");
+        f(&mut conn)
     }
 }

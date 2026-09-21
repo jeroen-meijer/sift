@@ -43,9 +43,15 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: Value) -> App
 #[tauri::command]
 pub fn db_stats(state: State<'_, AppState>) -> AppResult<DbStats> {
     state.db.with_conn(|conn| {
-        let roots: i64 = conn.query_row("SELECT COUNT(*) FROM roots", [], |r| r.get(0))?;
-        let samples: i64 = conn.query_row("SELECT COUNT(*) FROM samples", [], |r| r.get(0))?;
-        let tags: i64 = conn.query_row("SELECT COUNT(*) FROM tags", [], |r| r.get(0))?;
+        use diesel::dsl::count_star;
+        use diesel::prelude::*;
+        use crate::db::schema::roots::dsl as roots_dsl;
+        use crate::db::schema::samples::dsl as samples_dsl;
+        use crate::db::schema::tags::dsl as tags_dsl;
+
+        let roots: i64 = roots_dsl::roots.select(count_star()).first(conn)?;
+        let samples: i64 = samples_dsl::samples.select(count_star()).first(conn)?;
+        let tags: i64 = tags_dsl::tags.select(count_star()).first(conn)?;
         Ok(DbStats {
             roots,
             samples,

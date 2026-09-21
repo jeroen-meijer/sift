@@ -6,7 +6,9 @@ pub enum AppError {
     #[error("{0}")]
     Message(String),
     #[error(transparent)]
-    Db(#[from] rusqlite::Error),
+    Db(#[from] diesel::result::Error),
+    #[error(transparent)]
+    Connection(#[from] diesel::ConnectionError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

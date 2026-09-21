@@ -1,109 +1,121 @@
-use rusqlite::Connection;
+// @generated automatically by Diesel CLI.
 
-use crate::error::AppResult;
-
-pub fn migrate(conn: &Connection) -> AppResult<()> {
-    conn.execute_batch(
-        r#"
-        CREATE TABLE IF NOT EXISTS meta (
-            key TEXT PRIMARY KEY NOT NULL,
-            value TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY NOT NULL,
-            value TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS roots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT NOT NULL UNIQUE,
-            label TEXT,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS samples (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            root_id INTEGER NOT NULL REFERENCES roots(id) ON DELETE CASCADE,
-            path TEXT NOT NULL UNIQUE,
-            filename TEXT NOT NULL,
-            parent_path TEXT NOT NULL,
-            extension TEXT NOT NULL,
-            size_bytes INTEGER,
-            mtime_ms INTEGER,
-            inode INTEGER,
-            missing INTEGER NOT NULL DEFAULT 0,
-            sample_rate INTEGER,
-            bit_depth INTEGER,
-            channels INTEGER,
-            duration_ms REAL,
-            format TEXT,
-            bpm REAL,
-            bpm_confidence REAL,
-            key_name TEXT,
-            key_confidence REAL,
-            sample_type TEXT,
-            favorite INTEGER NOT NULL DEFAULT 0,
-            analyzed_at TEXT,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_samples_root ON samples(root_id);
-        CREATE INDEX IF NOT EXISTS idx_samples_parent ON samples(parent_path);
-        CREATE INDEX IF NOT EXISTS idx_samples_filename ON samples(filename);
-        CREATE INDEX IF NOT EXISTS idx_samples_bpm ON samples(bpm);
-        CREATE INDEX IF NOT EXISTS idx_samples_key ON samples(key_name);
-        CREATE INDEX IF NOT EXISTS idx_samples_type ON samples(sample_type);
-        CREATE INDEX IF NOT EXISTS idx_samples_favorite ON samples(favorite);
-        CREATE INDEX IF NOT EXISTS idx_samples_missing ON samples(missing);
-
-        CREATE TABLE IF NOT EXISTS tags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            path TEXT NOT NULL UNIQUE,
-            name TEXT NOT NULL,
-            parent_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-            color TEXT,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_tags_parent ON tags(parent_id);
-
-        CREATE TABLE IF NOT EXISTS sample_tags (
-            sample_id INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
-            tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-            source TEXT NOT NULL DEFAULT 'user',
-            PRIMARY KEY (sample_id, tag_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS tag_rejects (
-            sample_id INTEGER NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
-            tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-            PRIMARY KEY (sample_id, tag_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS favorite_folders (
-            path TEXT PRIMARY KEY NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS undo_stack (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-            action_json TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS redo_stack (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-            action_json TEXT NOT NULL
-        );
-        "#,
-    )?;
-
-    conn.execute(
-        "INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '1')",
-        [],
-    )?;
-    Ok(())
+diesel::table! {
+    favorite_folders (path) {
+        path -> Text,
+        created_at -> Text,
+    }
 }
+
+diesel::table! {
+    meta (key) {
+        key -> Text,
+        value -> Text,
+    }
+}
+
+diesel::table! {
+    redo_stack (id) {
+        id -> Integer,
+        created_at -> Text,
+        action_json -> Text,
+    }
+}
+
+diesel::table! {
+    roots (id) {
+        id -> Integer,
+        path -> Text,
+        label -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    sample_tags (sample_id, tag_id) {
+        sample_id -> Integer,
+        tag_id -> Integer,
+        source -> Text,
+    }
+}
+
+diesel::table! {
+    samples (id) {
+        id -> Integer,
+        root_id -> Integer,
+        path -> Text,
+        filename -> Text,
+        parent_path -> Text,
+        extension -> Text,
+        size_bytes -> Nullable<BigInt>,
+        mtime_ms -> Nullable<BigInt>,
+        inode -> Nullable<BigInt>,
+        missing -> Integer,
+        sample_rate -> Nullable<Integer>,
+        bit_depth -> Nullable<Integer>,
+        channels -> Nullable<Integer>,
+        duration_ms -> Nullable<Double>,
+        format -> Nullable<Text>,
+        bpm -> Nullable<Double>,
+        bpm_confidence -> Nullable<Double>,
+        key_name -> Nullable<Text>,
+        key_confidence -> Nullable<Double>,
+        sample_type -> Nullable<Text>,
+        favorite -> Integer,
+        analyzed_at -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    settings (key) {
+        key -> Text,
+        value -> Text,
+    }
+}
+
+diesel::table! {
+    tag_rejects (sample_id, tag_id) {
+        sample_id -> Integer,
+        tag_id -> Integer,
+    }
+}
+
+diesel::table! {
+    tags (id) {
+        id -> Integer,
+        path -> Text,
+        name -> Text,
+        parent_id -> Nullable<Integer>,
+        color -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    undo_stack (id) {
+        id -> Integer,
+        created_at -> Text,
+        action_json -> Text,
+    }
+}
+
+diesel::joinable!(sample_tags -> samples (sample_id));
+diesel::joinable!(sample_tags -> tags (tag_id));
+diesel::joinable!(samples -> roots (root_id));
+diesel::joinable!(tag_rejects -> samples (sample_id));
+diesel::joinable!(tag_rejects -> tags (tag_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    favorite_folders,
+    meta,
+    redo_stack,
+    roots,
+    sample_tags,
+    samples,
+    settings,
+    tag_rejects,
+    tags,
+    undo_stack,
+);

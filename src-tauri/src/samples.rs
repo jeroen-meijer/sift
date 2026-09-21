@@ -1,8 +1,16 @@
 use std::collections::HashMap;
 
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use diesel::dsl::{exists, sql};
+use diesel::prelude::*;
+use diesel::sql_types::{Bool, Text};
+use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
+use crate::db::models::Sample;
+use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
+use crate::db::schema::samples::dsl as samples_dsl;
+use crate::db::schema::tags::dsl as tags_dsl;
+use crate::db::utc_now;
 use crate::error::AppResult;
 
 #[derive(Debug, Clone, Serialize)]
@@ -57,122 +65,111 @@ pub struct Query {
     pub offset: Option<i64>,
 }
 
-fn row_to_sample(row: &rusqlite::Row<'_>) -> rusqlite::Result<SampleDto> {
-    Ok(SampleDto {
-        id: row.get(0)?,
-        root_id: row.get(1)?,
-        path: row.get(2)?,
-        filename: row.get(3)?,
-        parent_path: row.get(4)?,
-        extension: row.get(5)?,
-        missing: row.get::<_, i64>(6)? != 0,
-        sample_rate: row.get(7)?,
-        bit_depth: row.get(8)?,
-        channels: row.get(9)?,
-        duration_ms: row.get(10)?,
-        format: row.get(11)?,
-        bpm: row.get(12)?,
-        key_name: row.get(13)?,
-        sample_type: row.get(14)?,
-        favorite: row.get::<_, i64>(15)? != 0,
+fn sample_to_dto(s: Sample) -> SampleDto {
+    SampleDto {
+        id: s.id as i64,
+        root_id: s.root_id as i64,
+        path: s.path,
+        filename: s.filename,
+        parent_path: s.parent_path,
+        extension: s.extension,
+        missing: s.missing != 0,
+        sample_rate: s.sample_rate.map(|v| v as i64),
+        bit_depth: s.bit_depth.map(|v| v as i64),
+        channels: s.channels.map(|v| v as i64),
+        duration_ms: s.duration_ms,
+        format: s.format,
+        bpm: s.bpm,
+        key_name: s.key_name,
+        sample_type: s.sample_type,
+        favorite: s.favorite != 0,
         tags: Vec::new(),
-    })
+    }
 }
 
-const SAMPLE_SELECT: &str = r#"
-    SELECT id, root_id, path, filename, parent_path, extension, missing,
-           sample_rate, bit_depth, channels, duration_ms, format, bpm,
-           key_name, sample_type, favorite
-    FROM samples
-"#;
-
-fn order_clause(sort_column: &str, sort_direction: &str) -> &'static str {
+fn order_sql(sort_column: &str, sort_direction: &str) -> &'static str {
     let cleared = sort_direction.eq_ignore_ascii_case("clear")
         || sort_direction.is_empty()
         || sort_column.is_empty();
     if cleared {
-        return "ORDER BY filename COLLATE NOCASE ASC";
+        return "filename COLLATE NOCASE ASC";
     }
     let desc = sort_direction.eq_ignore_ascii_case("desc");
     match sort_column {
         "name" => {
             if desc {
-                "ORDER BY filename COLLATE NOCASE DESC"
+                "filename COLLATE NOCASE DESC"
             } else {
-                "ORDER BY filename COLLATE NOCASE ASC"
+                "filename COLLATE NOCASE ASC"
             }
         }
         "type" => {
             if desc {
-                "ORDER BY sample_type COLLATE NOCASE DESC NULLS LAST"
+                "sample_type COLLATE NOCASE DESC NULLS LAST"
             } else {
-                "ORDER BY sample_type COLLATE NOCASE ASC NULLS LAST"
+                "sample_type COLLATE NOCASE ASC NULLS LAST"
             }
         }
         "bpm" => {
             if desc {
-                "ORDER BY bpm DESC NULLS LAST"
+                "bpm DESC NULLS LAST"
             } else {
-                "ORDER BY bpm ASC NULLS LAST"
+                "bpm ASC NULLS LAST"
             }
         }
         "key" => {
             if desc {
-                "ORDER BY key_name COLLATE NOCASE DESC NULLS LAST"
+                "key_name COLLATE NOCASE DESC NULLS LAST"
             } else {
-                "ORDER BY key_name COLLATE NOCASE ASC NULLS LAST"
+                "key_name COLLATE NOCASE ASC NULLS LAST"
             }
         }
         "created_at" => {
             if desc {
-                "ORDER BY created_at DESC"
+                "created_at DESC"
             } else {
-                "ORDER BY created_at ASC"
+                "created_at ASC"
             }
         }
         "favorite" => {
             if desc {
-                "ORDER BY favorite DESC, filename COLLATE NOCASE ASC"
+                "favorite DESC, filename COLLATE NOCASE ASC"
             } else {
-                "ORDER BY favorite ASC, filename COLLATE NOCASE ASC"
+                "favorite ASC, filename COLLATE NOCASE ASC"
             }
         }
-        _ => "ORDER BY filename COLLATE NOCASE ASC",
+        _ => "filename COLLATE NOCASE ASC",
     }
 }
 
-fn load_tags_for(
-    conn: &Connection,
-    samples: &mut [SampleDto],
-) -> AppResult<()> {
+fn load_tags_for(conn: &mut SqliteConnection, samples: &mut [SampleDto]) -> AppResult<()> {
     if samples.is_empty() {
         return Ok(());
     }
-    let ids: Vec<i64> = samples.iter().map(|s| s.id).collect();
-    let placeholders: String = (1..=ids.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
-    let sql = format!(
-        "SELECT st.sample_id, t.id, t.path, t.color
-         FROM sample_tags st
-         JOIN tags t ON t.id = st.tag_id
-         WHERE st.sample_id IN ({placeholders})
-         ORDER BY t.path COLLATE NOCASE"
-    );
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(params_from_iter(ids.iter()), |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, i64>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, Option<String>>(3)?,
+    let ids: Vec<i32> = samples.iter().map(|s| s.id as i32).collect();
+    let rows: Vec<(i32, i32, String, Option<String>)> = sample_tags_dsl::sample_tags
+        .inner_join(tags_dsl::tags)
+        .filter(sample_tags_dsl::sample_id.eq_any(&ids))
+        .select((
+            sample_tags_dsl::sample_id,
+            tags_dsl::id,
+            tags_dsl::path,
+            tags_dsl::color,
         ))
-    })?;
+        .order(tags_dsl::path.asc())
+        .load(conn)?;
 
     let mut by_id: HashMap<i64, Vec<TagChip>> = HashMap::new();
-    for row in rows {
-        let (sample_id, tag_id, path, stored_color) = row?;
-        let color = stored_color
-            .or_else(|| crate::tags::resolve_color(conn, tag_id).ok().flatten());
-        by_id.entry(sample_id).or_default().push(TagChip { path, color });
+    for (sample_id, tag_id, path, stored_color) in rows {
+        let color = stored_color.or_else(|| {
+            crate::tags::resolve_color(conn, tag_id as i64)
+                .ok()
+                .flatten()
+        });
+        by_id
+            .entry(sample_id as i64)
+            .or_default()
+            .push(TagChip { path, color });
     }
     for sample in samples.iter_mut() {
         if let Some(tags) = by_id.remove(&sample.id) {
@@ -182,20 +179,22 @@ fn load_tags_for(
     Ok(())
 }
 
-pub fn list_samples(conn: &Connection, query: &Query) -> AppResult<Vec<SampleDto>> {
-    let mut sql = String::from(SAMPLE_SELECT);
-    sql.push_str(" WHERE 1=1");
-    let mut binds: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec<SampleDto>> {
+    let mut q = samples_dsl::samples
+        .select(Sample::as_select())
+        .into_boxed();
 
     if let Some(prefix) = query.folder_prefix.as_deref().filter(|s| !s.is_empty()) {
-        sql.push_str(" AND (parent_path = ? OR parent_path LIKE ?)");
-        binds.push(Box::new(prefix.to_string()));
-        binds.push(Box::new(format!("{prefix}{}%", std::path::MAIN_SEPARATOR)));
+        let like = format!("{prefix}{}%", std::path::MAIN_SEPARATOR);
+        q = q.filter(
+            samples_dsl::parent_path
+                .eq(prefix)
+                .or(samples_dsl::parent_path.like(like)),
+        );
     }
 
     if let Some(text) = query.text.as_deref().filter(|s| !s.is_empty()) {
-        sql.push_str(" AND filename LIKE ? COLLATE NOCASE");
-        binds.push(Box::new(format!("%{text}%")));
+        q = q.filter(samples_dsl::filename.like(format!("%{text}%")));
     }
 
     let mut tag_filters: Vec<String> = query
@@ -210,83 +209,86 @@ pub fn list_samples(conn: &Connection, query: &Query) -> AppResult<Vec<SampleDto
         }
     }
     for tag_path in &tag_filters {
-        sql.push_str(
-            " AND EXISTS (
-                SELECT 1 FROM sample_tags st
-                JOIN tags t ON t.id = st.tag_id
-                WHERE st.sample_id = samples.id
-                  AND (t.path = ? OR t.path LIKE ?)
-            )",
-        );
-        binds.push(Box::new(tag_path.clone()));
-        binds.push(Box::new(format!("{tag_path}/%")));
+        let like = format!("{tag_path}/%");
+        let tp = tag_path.clone();
+        q = q.filter(exists(
+            sample_tags_dsl::sample_tags
+                .inner_join(tags_dsl::tags)
+                .filter(sample_tags_dsl::sample_id.eq(samples_dsl::id))
+                .filter(tags_dsl::path.eq(tp).or(tags_dsl::path.like(like))),
+        ));
     }
 
     if query.bpm_min.is_some() || query.bpm_max.is_some() {
         let min = query.bpm_min.unwrap_or(0.0);
         let max = query.bpm_max.unwrap_or(f64::MAX);
         if query.half_double {
-            sql.push_str(
-                " AND bpm IS NOT NULL AND (
-                    (bpm >= ? AND bpm <= ?)
-                    OR (bpm >= ? AND bpm <= ?)
-                    OR (bpm >= ? AND bpm <= ?)
-                )",
+            q = q.filter(
+                samples_dsl::bpm
+                    .is_not_null()
+                    .and(
+                        samples_dsl::bpm
+                            .ge(min)
+                            .and(samples_dsl::bpm.le(max))
+                            .or(samples_dsl::bpm
+                                .ge(min / 2.0)
+                                .and(samples_dsl::bpm.le(max / 2.0)))
+                            .or(samples_dsl::bpm
+                                .ge(min * 2.0)
+                                .and(samples_dsl::bpm.le(max * 2.0))),
+                    ),
             );
-            binds.push(Box::new(min));
-            binds.push(Box::new(max));
-            binds.push(Box::new(min / 2.0));
-            binds.push(Box::new(max / 2.0));
-            binds.push(Box::new(min * 2.0));
-            binds.push(Box::new(max * 2.0));
         } else {
-            sql.push_str(" AND bpm IS NOT NULL AND bpm >= ? AND bpm <= ?");
-            binds.push(Box::new(min));
-            binds.push(Box::new(max));
+            q = q.filter(
+                samples_dsl::bpm
+                    .is_not_null()
+                    .and(samples_dsl::bpm.ge(min))
+                    .and(samples_dsl::bpm.le(max)),
+            );
         }
     }
 
     if let Some(key) = query.key.as_deref().filter(|s| !s.is_empty()) {
         let keys = key_match_set(key, query.relative_key);
         if !keys.is_empty() {
-            let ph = vec!["?"; keys.len()].join(", ");
-            sql.push_str(&format!(
-                " AND key_name IS NOT NULL AND lower(replace(key_name, ' ', '')) IN ({ph})"
-            ));
-            for k in keys {
-                binds.push(Box::new(k));
-            }
+            // Keys are controlled pitch tokens (a-z / # / m); safe to embed.
+            let list = keys
+                .iter()
+                .map(|k| format!("'{k}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            q = q.filter(sql::<Bool>(&format!(
+                "key_name IS NOT NULL AND lower(replace(key_name, ' ', '')) IN ({list})"
+            )));
         }
     }
 
     if let Some(sample_type) = query.sample_type.as_deref().filter(|s| !s.is_empty()) {
-        sql.push_str(" AND sample_type = ? COLLATE NOCASE");
-        binds.push(Box::new(sample_type.to_string()));
+        q = q.filter(sql::<Bool>(&format!(
+            "sample_type = {} COLLATE NOCASE",
+            // Escape single quotes if any; sample_type is user filter text.
+            format!("'{}'", sample_type.replace('\'', "''"))
+        )));
     }
 
     if query.favorites_only {
-        sql.push_str(" AND favorite = 1");
+        q = q.filter(samples_dsl::favorite.eq(1));
     }
 
-    sql.push(' ');
-    sql.push_str(order_clause(&query.sort_column, &query.sort_direction));
+    let order = order_sql(&query.sort_column, &query.sort_direction);
+    q = q.order(sql::<Text>(order));
 
-    if query.limit.is_some() {
-        sql.push_str(" LIMIT ?");
-        binds.push(Box::new(query.limit.unwrap()));
-        if query.offset.is_some() {
-            sql.push_str(" OFFSET ?");
-            binds.push(Box::new(query.offset.unwrap_or(0)));
+    if let Some(limit) = query.limit {
+        q = q.limit(limit);
+        if let Some(offset) = query.offset {
+            q = q.offset(offset);
         }
     } else if let Some(offset) = query.offset {
-        sql.push_str(" LIMIT -1 OFFSET ?");
-        binds.push(Box::new(offset));
+        q = q.limit(i64::MAX).offset(offset);
     }
 
-    let mut stmt = conn.prepare(&sql)?;
-    let params_refs: Vec<&dyn rusqlite::types::ToSql> = binds.iter().map(|b| b.as_ref()).collect();
-    let rows = stmt.query_map(params_refs.as_slice(), row_to_sample)?;
-    let mut samples: Vec<SampleDto> = rows.filter_map(|r| r.ok()).collect();
+    let rows: Vec<Sample> = q.load(conn)?;
+    let mut samples: Vec<SampleDto> = rows.into_iter().map(sample_to_dto).collect();
     load_tags_for(conn, &mut samples)?;
     Ok(samples)
 }
@@ -324,7 +326,6 @@ fn normalize_key_token(raw: &str) -> String {
         .replace("maj", "")
         .replace("minor", "m")
         .replace("min", "m");
-    // Collapse accidental spellings
     s.replace("♯", "#").replace("♭", "b")
 }
 
@@ -403,7 +404,6 @@ fn enharmonic_forms(key: &str) -> Vec<String> {
 fn relative_of(key: &str) -> Option<String> {
     let (root, minor) = parse_root_mode(key)?;
     let pc = pitch_class(&root)?;
-    // Relative major of minor = +3 semitones; relative minor of major = -3.
     let rel_pc = if minor {
         (pc + 3) % 12
     } else {
@@ -417,65 +417,76 @@ fn relative_of(key: &str) -> Option<String> {
     })
 }
 
-pub fn set_sample_favorite(conn: &Connection, id: i64, favorite: bool) -> AppResult<()> {
-    let n = conn.execute(
-        "UPDATE samples SET favorite = ?1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?2",
-        params![favorite as i64, id],
-    )?;
+pub fn set_sample_favorite(conn: &mut SqliteConnection, id: i64, favorite: bool) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id as i32))
+        .set((
+            samples_dsl::favorite.eq(favorite as i32),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
     if n == 0 {
         return Err(crate::error::AppError::msg("sample not found"));
     }
     Ok(())
 }
 
-pub fn get_sample(conn: &Connection, id: i64) -> AppResult<Option<SampleDto>> {
-    let mut stmt = conn.prepare(&format!("{SAMPLE_SELECT} WHERE id = ?1"))?;
-    let mut sample = stmt
-        .query_row(params![id], row_to_sample)
+pub fn get_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleDto>> {
+    let row: Option<Sample> = samples_dsl::samples
+        .find(id as i32)
+        .select(Sample::as_select())
+        .first(conn)
         .optional()?;
+    let mut sample = row.map(sample_to_dto);
     if let Some(ref mut s) = sample {
         load_tags_for(conn, std::slice::from_mut(s))?;
     }
     Ok(sample)
 }
 
-pub fn get_sample_by_path(conn: &Connection, path: &str) -> AppResult<Option<SampleDto>> {
-    let mut stmt = conn.prepare(&format!("{SAMPLE_SELECT} WHERE path = ?1"))?;
-    let mut sample = stmt
-        .query_row(params![path], row_to_sample)
+pub fn get_sample_by_path(
+    conn: &mut SqliteConnection,
+    path: &str,
+) -> AppResult<Option<SampleDto>> {
+    let row: Option<Sample> = samples_dsl::samples
+        .filter(samples_dsl::path.eq(path))
+        .select(Sample::as_select())
+        .first(conn)
         .optional()?;
+    let mut sample = row.map(sample_to_dto);
     if let Some(ref mut s) = sample {
         load_tags_for(conn, std::slice::from_mut(s))?;
     }
     Ok(sample)
 }
 
-pub fn mark_missing(conn: &Connection, path: &str) -> AppResult<bool> {
-    let n = conn.execute(
-        "UPDATE samples SET missing = 1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE path = ?1 AND missing = 0",
-        params![path],
-    )?;
+pub fn mark_missing(conn: &mut SqliteConnection, path: &str) -> AppResult<bool> {
+    let n = diesel::update(
+        samples_dsl::samples
+            .filter(samples_dsl::path.eq(path))
+            .filter(samples_dsl::missing.eq(0)),
+    )
+    .set((
+        samples_dsl::missing.eq(1),
+        samples_dsl::updated_at.eq(utc_now()),
+    ))
+    .execute(conn)?;
     Ok(n > 0)
 }
 
-pub fn remove_sample(conn: &Connection, id: i64) -> AppResult<()> {
-    let n = conn.execute("DELETE FROM samples WHERE id = ?1", params![id])?;
+pub fn remove_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<()> {
+    let n = diesel::delete(samples_dsl::samples.find(id as i32)).execute(conn)?;
     if n == 0 {
         return Err(crate::error::AppError::msg("sample not found"));
     }
     Ok(())
 }
 
-pub fn purge_missing(conn: &Connection) -> AppResult<u64> {
-    let n = conn.execute("DELETE FROM samples WHERE missing = 1", [])?;
+pub fn purge_missing(conn: &mut SqliteConnection) -> AppResult<u64> {
+    let n = diesel::delete(samples_dsl::samples.filter(samples_dsl::missing.eq(1))).execute(conn)?;
     Ok(n as u64)
 }
 
-pub fn update_path(conn: &Connection, from: &str, to: &str) -> AppResult<bool> {
+pub fn update_path(conn: &mut SqliteConnection, from: &str, to: &str) -> AppResult<bool> {
     use std::path::Path;
     let path = Path::new(to);
     let filename = path
@@ -493,17 +504,21 @@ pub fn update_path(conn: &Connection, from: &str, to: &str) -> AppResult<bool> {
         .unwrap_or("")
         .to_ascii_lowercase();
 
-    let n = conn.execute(
-        "UPDATE samples SET path = ?1, filename = ?2, parent_path = ?3, extension = ?4,
-         missing = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE path = ?5",
-        params![to, filename, parent, extension, from],
-    )?;
+    let n = diesel::update(samples_dsl::samples.filter(samples_dsl::path.eq(from)))
+        .set((
+            samples_dsl::path.eq(to),
+            samples_dsl::filename.eq(filename),
+            samples_dsl::parent_path.eq(parent),
+            samples_dsl::extension.eq(extension),
+            samples_dsl::missing.eq(0),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
     Ok(n > 0)
 }
 
 /// Refresh size/mtime/inode (+ probe technical audio fields). Keeps bpm/key/tags/type.
-pub fn refresh_technical(conn: &Connection, path: &str) -> AppResult<bool> {
+pub fn refresh_technical(conn: &mut SqliteConnection, path: &str) -> AppResult<bool> {
     use std::fs;
     use std::path::Path;
     use std::time::SystemTime;
@@ -530,68 +545,80 @@ pub fn refresh_technical(conn: &Connection, path: &str) -> AppResult<bool> {
     #[cfg(not(unix))]
     let inode: Option<i64> = None;
 
-    let existing: Option<(i64, Option<i64>, Option<i64>)> = conn
-        .query_row(
-            "SELECT id, size_bytes, mtime_ms FROM samples WHERE path = ?1",
-            params![path],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
+    let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
+        .filter(samples_dsl::path.eq(path))
+        .select((
+            samples_dsl::id,
+            samples_dsl::size_bytes,
+            samples_dsl::mtime_ms,
+        ))
+        .first(conn)
         .optional()?;
 
     let Some((id, old_size, old_mtime)) = existing else {
         return Ok(false);
     };
     if old_size == Some(size) && old_mtime == mtime {
-        conn.execute(
-            "UPDATE samples SET missing = 0 WHERE id = ?1",
-            params![id],
-        )?;
+        diesel::update(samples_dsl::samples.find(id))
+            .set(samples_dsl::missing.eq(0))
+            .execute(conn)?;
         return Ok(false);
     }
 
-    conn.execute(
-        "UPDATE samples SET size_bytes = ?1, mtime_ms = ?2, inode = ?3, missing = 0,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?4",
-        params![size, mtime, inode, id],
-    )?;
-    let _ = crate::audio::probe_and_update_sample(conn, id, path_buf);
+    diesel::update(samples_dsl::samples.find(id))
+        .set((
+            samples_dsl::size_bytes.eq(Some(size)),
+            samples_dsl::mtime_ms.eq(mtime),
+            samples_dsl::inode.eq(inode),
+            samples_dsl::missing.eq(0),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
+    let _ = crate::audio::probe_and_update_sample(conn, id as i64, path_buf);
     Ok(true)
 }
 
-pub fn set_sample_bpm(conn: &Connection, id: i64, bpm: Option<f64>) -> AppResult<()> {
-    let n = conn.execute(
-        "UPDATE samples SET bpm = ?1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?2",
-        params![bpm, id],
-    )?;
+pub fn set_sample_bpm(conn: &mut SqliteConnection, id: i64, bpm: Option<f64>) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id as i32))
+        .set((
+            samples_dsl::bpm.eq(bpm),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
     if n == 0 {
         return Err(crate::error::AppError::msg("sample not found"));
     }
     Ok(())
 }
 
-pub fn set_sample_key(conn: &Connection, id: i64, key: Option<&str>) -> AppResult<()> {
-    let n = conn.execute(
-        "UPDATE samples SET key_name = ?1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?2",
-        params![key, id],
-    )?;
+pub fn set_sample_key(
+    conn: &mut SqliteConnection,
+    id: i64,
+    key: Option<&str>,
+) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id as i32))
+        .set((
+            samples_dsl::key_name.eq(key),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
     if n == 0 {
         return Err(crate::error::AppError::msg("sample not found"));
     }
     Ok(())
 }
 
-pub fn set_sample_type(conn: &Connection, id: i64, sample_type: Option<&str>) -> AppResult<()> {
-    let n = conn.execute(
-        "UPDATE samples SET sample_type = ?1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?2",
-        params![sample_type, id],
-    )?;
+pub fn set_sample_type(
+    conn: &mut SqliteConnection,
+    id: i64,
+    sample_type: Option<&str>,
+) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id as i32))
+        .set((
+            samples_dsl::sample_type.eq(sample_type),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
     if n == 0 {
         return Err(crate::error::AppError::msg("sample not found"));
     }
@@ -599,20 +626,18 @@ pub fn set_sample_type(conn: &Connection, id: i64, sample_type: Option<&str>) ->
 }
 
 pub fn sample_meta_snapshot(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     id: i64,
 ) -> AppResult<(bool, Option<f64>, Option<String>, Option<String>)> {
-    conn.query_row(
-        "SELECT favorite, bpm, key_name, sample_type FROM samples WHERE id = ?1",
-        params![id],
-        |r| {
-            Ok((
-                r.get::<_, i64>(0)? != 0,
-                r.get(1)?,
-                r.get(2)?,
-                r.get(3)?,
-            ))
-        },
-    )
-    .map_err(|_| crate::error::AppError::msg("sample not found"))
+    samples_dsl::samples
+        .find(id as i32)
+        .select((
+            samples_dsl::favorite,
+            samples_dsl::bpm,
+            samples_dsl::key_name,
+            samples_dsl::sample_type,
+        ))
+        .first::<(i32, Option<f64>, Option<String>, Option<String>)>(conn)
+        .map(|(fav, bpm, key, ty)| (fav != 0, bpm, key, ty))
+        .map_err(|_| crate::error::AppError::msg("sample not found"))
 }
