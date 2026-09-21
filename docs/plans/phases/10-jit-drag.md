@@ -1,14 +1,10 @@
 # Phase 10 — JIT + drag
 
-**Status:** in_progress
+**Status:** complete
 
-## Previous
+## Done
 
-Phase 09: selection region exists on detail waveform.
-
-## This phase
-
-Drag full files from the list; drag JIT WAV clips from the selection box; cache management.
+JIT WAV clips via hound; `render_jit_clip` / `clear_jit_cache` / `start_drag_files`; tauri-plugin-drag; Drag files / Drag clip buttons.
 
 ### In scope
 

@@ -32,10 +32,26 @@ type Props = {
   focusedId: number | null;
   sortColumn: SortCol;
   sortDirection: "asc" | "desc" | "clear";
+  highlightText?: string;
   onSelect: (id: number, e: React.MouseEvent) => void;
   onToggleFavorite: (id: number, favorite: boolean) => void;
   onSort: (col: SortCol) => void;
 };
+
+function highlightName(name: string, query: string | undefined) {
+  if (!query || !query.trim()) return name;
+  const q = query.trim();
+  const lower = name.toLowerCase();
+  const idx = lower.indexOf(q.toLowerCase());
+  if (idx < 0) return name;
+  return (
+    <>
+      {name.slice(0, idx)}
+      <mark>{name.slice(idx, idx + q.length)}</mark>
+      {name.slice(idx + q.length)}
+    </>
+  );
+}
 
 function sortMark(active: boolean, dir: "asc" | "desc" | "clear") {
   if (!active || dir === "clear") return "";
@@ -48,6 +64,7 @@ export function SampleTable({
   focusedId,
   sortColumn,
   sortDirection,
+  highlightText,
   onSelect,
   onToggleFavorite,
   onSort,
@@ -123,7 +140,7 @@ export function SampleTable({
                   <Star size={12} weight={sample.favorite ? "fill" : "regular"} />
                 </button>
                 <div className="col name" title={sample.path}>
-                  {sample.filename}
+                  {highlightName(sample.filename, highlightText)}
                 </div>
                 <div className="col type">{sample.sample_type ?? ""}</div>
                 <div className="col bpm">{sample.bpm != null ? Math.round(sample.bpm) : ""}</div>

@@ -22,8 +22,8 @@ Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers SPEC Mus
 | 08 Playback | complete | pending |
 | 09 Waveforms + selection | complete | pending |
 | 10 JIT + drag | in_progress | pending |
-| 11 Tags | [phases/11-tags.md](phases/11-tags.md) | pending |
-| 12 Omni search | [phases/12-omni-search.md](phases/12-omni-search.md) | pending |
+| 11 Tags | [phases/11-tags.md](phases/11-tags.md) | complete |
+| 12 Omni search | [phases/12-omni-search.md](phases/12-omni-search.md) | complete |
 | 13 Analysis | [phases/13-analysis.md](phases/13-analysis.md) | pending |
 | 14 Watch + polish | [phases/14-watch-polish.md](phases/14-watch-polish.md) | pending |
 

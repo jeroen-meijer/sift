@@ -1,8 +1,10 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::channel;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, State, Window};
 
+use crate::audio::jit;
 use crate::audio::peaks::{self, PeakData, DEFAULT_BUCKETS};
 use crate::audio::player::{OutputDeviceInfo, SamplePlayType};
 use crate::db::settings;
@@ -11,6 +13,7 @@ use crate::indexer::{self, IndexProgress};
 use crate::library::{self, FolderNode, RootDto};
 use crate::samples::{self, Query as SampleQuery, SampleDto};
 use crate::state::AppState;
+use crate::tags::{self, TagNode};
 
 #[derive(serde::Serialize)]
 pub struct DbStats {
@@ -237,4 +240,175 @@ pub fn set_loop_preview(state: State<'_, AppState>, on: bool) -> AppResult<()> {
     state
         .db
         .with_conn(|conn| settings::set(conn, "loop_preview", &json!(on)))
+}
+
+#[tauri::command]
+pub fn list_tags(state: State<'_, AppState>) -> AppResult<Vec<TagNode>> {
+    state.db.with_conn(tags::list_tags)
+}
+
+#[tauri::command]
+pub fn create_tag(
+    state: State<'_, AppState>,
+    path: String,
+    color: Option<String>,
+) -> AppResult<TagNode> {
+    state
+        .db
+        .with_conn(|conn| tags::create_tag(conn, &path, color.as_deref()))
+}
+
+#[tauri::command]
+pub fn rename_tag(state: State<'_, AppState>, id: i64, name: String) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::rename_tag(conn, id, &name))
+}
+
+#[tauri::command]
+pub fn move_tag(
+    state: State<'_, AppState>,
+    id: i64,
+    new_parent_id: Option<i64>,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::move_tag(conn, id, new_parent_id))
+}
+
+#[tauri::command]
+pub fn set_tag_color(
+    state: State<'_, AppState>,
+    id: i64,
+    color: Option<String>,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::set_tag_color(conn, id, color.as_deref()))
+}
+
+#[tauri::command]
+pub fn delete_tag(state: State<'_, AppState>, id: i64, cascade: bool) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::delete_tag(conn, id, cascade))
+}
+
+#[tauri::command]
+pub fn set_sample_tags(
+    state: State<'_, AppState>,
+    sample_id: i64,
+    tag_ids: Vec<i64>,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::set_sample_tags(conn, sample_id, &tag_ids))
+}
+
+#[tauri::command]
+pub fn add_sample_tag(
+    state: State<'_, AppState>,
+    sample_id: i64,
+    tag_id: i64,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::add_sample_tag(conn, sample_id, tag_id))
+}
+
+#[tauri::command]
+pub fn remove_sample_tag(
+    state: State<'_, AppState>,
+    sample_id: i64,
+    tag_id: i64,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| tags::remove_sample_tag(conn, sample_id, tag_id))
+}
+
+/// Render a JIT WAV clip for `sample_id` over `[start_secs, end_secs)` and
+/// return the absolute output path under `AppPaths.clips_dir`.
+#[tauri::command]
+pub fn render_jit_clip(
+    state: State<'_, AppState>,
+    sample_id: i64,
+    start_secs: f64,
+    end_secs: f64,
+) -> AppResult<String> {
+    let sample = state
+        .db
+        .with_conn(|conn| samples::get_sample(conn, sample_id))?
+        .ok_or_else(|| AppError::msg("sample not found"))?;
+    if sample.missing {
+        return Err(AppError::msg("sample file is missing"));
+    }
+    let out = jit::allocate_clip_path(
+        &state.paths.clips_dir,
+        &sample.filename,
+        start_secs,
+        end_secs,
+    );
+    jit::render_clip(Path::new(&sample.path), start_secs, end_secs, &out)?;
+    Ok(out.to_string_lossy().into_owned())
+}
+
+/// Delete all cached JIT clip files under `clips_dir`.
+#[tauri::command]
+pub fn clear_jit_cache(state: State<'_, AppState>) -> AppResult<()> {
+    jit::clear_cache(&state.paths.clips_dir)
+}
+
+/// Start a native file drag with the given absolute paths (list multi-select
+/// or a single JIT clip). Uses `drag` / tauri-plugin-drag under the hood.
+#[tauri::command]
+pub async fn start_drag_files(
+    app: AppHandle,
+    window: Window,
+    paths: Vec<String>,
+) -> AppResult<()> {
+    if paths.is_empty() {
+        return Err(AppError::msg("no paths to drag"));
+    }
+    let files: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    for path in &files {
+        if !path.is_absolute() {
+            return Err(AppError::msg(format!(
+                "drag path must be absolute: {}",
+                path.display()
+            )));
+        }
+        if !path.exists() {
+            return Err(AppError::msg(format!("drag path missing: {}", path.display())));
+        }
+    }
+
+    let (tx, rx) = channel();
+    let icon = drag::Image::Raw(include_bytes!("../../icons/32x32.png").to_vec());
+    app.run_on_main_thread(move || {
+        #[cfg(target_os = "linux")]
+        let raw_window = window.gtk_window();
+        #[cfg(not(target_os = "linux"))]
+        let raw_window = tauri::Result::Ok(window);
+
+        let result = match raw_window {
+            Ok(w) => drag::start_drag(
+                &w,
+                drag::DragItem::Files(files),
+                icon,
+                |_result, _cursor| {},
+                drag::Options {
+                    mode: drag::DragMode::Copy,
+                    skip_animatation_on_cancel_or_failure: false,
+                },
+            )
+            .map_err(|e| AppError::msg(e.to_string())),
+            Err(e) => Err(AppError::msg(e.to_string())),
+        };
+        let _ = tx.send(result);
+    })
+    .map_err(|e| AppError::msg(e.to_string()))?;
+
+    rx.recv()
+        .map_err(|e| AppError::msg(e.to_string()))?
 }

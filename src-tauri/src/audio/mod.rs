@@ -1,4 +1,5 @@
 pub mod decode;
+pub mod jit;
 pub mod peaks;
 pub mod player;
 
