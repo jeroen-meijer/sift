@@ -1,6 +1,10 @@
 # Phase 02 — Shell, theme, i18n
 
-**Status:** pending
+**Status:** complete
+
+## Done
+
+Nocturne theme tokens, i18next locales (en), TitleBar / FirstLaunch / StatusBar / AppShell. Settings and Tags are stub overlays.
 
 ## Previous
 
