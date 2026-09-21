@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-1967debe-14a7-4f05-a2d5-d024cfb6e67d/styles.css">
+<script src="_ds/nocturne-1967debe-14a7-4f05-a2d5-d024cfb6e67d/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: #0d0e15; color: #e9e9ed; font-family: "Inter", system-ui, sans-serif; }
+  a { color: #9184d9; text-decoration: none; }
+  a:hover { color: #b5abfc; }
+  ::selection { background: rgba(145,132,217,.3); }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: #3f424d; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .btn, .seg-opt { white-space: nowrap; }
+  @keyframes siftShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0d0e15;padding:34px 34px 60px;display:flex;flex-direction:column;align-items:center;gap:20px">
+
+  <div style="width:1440px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+    <div>
+      <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#75798c;margin-bottom:5px">Local sample manager · v1 UI</div>
+      <div style="font-family:'Inter';font-weight:500;font-size:29px;letter-spacing:-.02em;line-height:1">Sift</div>
+    </div>
+    <div style="text-align:right;font-size:11.5px;color:#75798c;line-height:1.6;font-family:'JetBrains Mono',monospace">
+      <div>1440 × 900 · macOS + Windows · dark only</div>
+      <div>{{ viewTitle }}</div>
+    </div>
+  </div>
+
+  <div style="width:1440px;display:flex;flex-wrap:wrap;gap:5px">
+    <sc-for list="{{ views }}" as="v" hint-placeholder-count="12">
+      <sc-if value="{{ v.active }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ v.go }}" style="font-family:'Inter';font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:pointer;background:rgba(145,132,217,.14);color:#b5abfc;border:1px solid #9184d9;display:flex;align-items:center;gap:7px;white-space:nowrap">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.7">{{ v.num }}</span>{{ v.label }}
+        </button>
+      </sc-if>
+      <sc-if value="{{ v.inactive }}">
+        <button onClick="{{ v.go }}" style="font-family:'Inter';font-size:12px;font-weight:400;padding:6px 12px;border-radius:8px;cursor:pointer;background:transparent;color:#9397ab;border:1px solid rgba(233,233,237,.12);display:flex;align-items:center;gap:7px;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed;border-color:rgba(233,233,237,.24)">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.55">{{ v.num }}</span>{{ v.label }}
+        </button>
+      </sc-if>
+    </sc-for>
+  </div>
+
+  <div style="position:relative;width:1440px;height:900px;background:#161826;border-radius:11px;overflow:hidden;box-shadow:0 0 0 1px #3f424d, 0 26px 70px rgba(0,0,0,.7);display:flex;flex-direction:column">
+
+    <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;gap:9px;background:#1c1e2c;border-bottom:1px solid rgba(233,233,237,.09)">
+      <div style="display:flex;gap:7px;align-items:center">
+        <div style="width:11px;height:11px;border-radius:50%;background:#e0685f"></div>
+        <div style="width:11px;height:11px;border-radius:50%;background:#dfa53f"></div>
+        <div style="width:11px;height:11px;border-radius:50%;background:#5cb15c"></div>
+      </div>
+      <div style="flex:1;text-align:center;font-size:12px;color:#9397ab;letter-spacing:.01em">Sift</div>
+      <div style="display:flex;gap:4px;width:74px;justify-content:flex-end">
+        <button onClick="{{ goSettings }}" title="Settings" style="width:24px;height:24px;display:grid;place-items:center;border:0;background:transparent;color:#9397ab;cursor:pointer;border-radius:6px" style-hover="background:rgba(233,233,237,.08);color:#e9e9ed"><i class="ph ph-gear" style="font-size:15px"></i></button>
+        <button onClick="{{ goTags }}" title="Tag management" style="width:24px;height:24px;display:grid;place-items:center;border:0;background:transparent;color:#9397ab;cursor:pointer;border-radius:6px" style-hover="background:rgba(233,233,237,.08);color:#e9e9ed"><i class="ph ph-tag" style="font-size:15px"></i></button>
+      </div>
+    </div>
+
+    <sc-if value="{{ isFirst }}">
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="width:248px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.09);display:flex;flex-direction:column">
+          <div style="height:30px;flex:none;display:flex;align-items:center;padding:0 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70">Library</div>
+          <div style="flex:1;display:grid;place-items:center;padding:0 20px;text-align:center">
+            <div style="color:#4a4e5d;font-size:11.5px;line-height:1.6">No library roots yet.<br>Folders you add appear here.</div>
+          </div>
+        </div>
+        <div style="flex:1;display:grid;place-items:center;background:#161826">
+          <div style="width:430px;text-align:center">
+            <div style="width:60px;height:60px;margin:0 auto 20px;border-radius:14px;display:grid;place-items:center;background:rgba(145,132,217,.09);box-shadow:inset 0 0 0 1px rgba(145,132,217,.3)">
+              <i class="ph ph-waveform" style="font-size:28px;color:#9184d9"></i>
+            </div>
+            <div style="font-size:21px;font-weight:500;letter-spacing:-.015em;margin-bottom:9px">Point Sift at your samples</div>
+            <p style="font-size:13px;line-height:1.65;color:#9397ab;margin:0 0 22px">Sift indexes folders on your disks and drives. It only reads and catalogues files, never moves, copies, or writes to them.</p>
+            <div style="display:flex;gap:9px;justify-content:center">
+              <button class="btn btn-primary" style="font-size:13px"><i class="ph ph-folder-plus" style="font-size:15px"></i>Add folder…</button>
+              <button class="btn btn-secondary" style="font-size:13px">Preferences</button>
+            </div>
+            <div style="margin-top:30px;padding-top:18px;font-size:11px;color:#5b5f70;line-height:1.7;background:linear-gradient(to right,transparent,rgba(233,233,237,.14) 48px,rgba(233,233,237,.14) calc(100% - 48px),transparent) no-repeat top / 100% 1px">
+              Indexing runs in the background. You can browse and play while it works.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="height:28px;flex:none;display:flex;align-items:center;padding:0 12px;gap:14px;background:#12141f;border-top:1px solid rgba(233,233,237,.09);font-size:11px;color:#5b5f70;font-family:'JetBrains Mono',monospace">
+        <span>0 roots</span><span>·</span><span>0 files indexed</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isShell }}">
+      <div style="height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;background:#181a28;border-bottom:1px solid rgba(233,233,237,.09)">
+
+        <div style="flex:1;min-width:0;height:32px;display:flex;align-items:center;gap:7px;padding:0 9px;background:#101220;border:1px solid rgba(233,233,237,.13);border-radius:8px" style-focus="border-color:#9184d9">
+          <i class="ph ph-magnifying-glass" style="font-size:14px;color:#75798c;flex:none"></i>
+          <div style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden;flex:1">
+            <sc-for list="{{ chips }}" as="c" hint-placeholder-count="0">
+              <div style="flex:none;display:flex;align-items:center;gap:6px;height:21px;padding:0 5px 0 7px;background:#232532;border:1px solid rgba(233,233,237,.14);border-radius:6px;font-size:11px;white-space:nowrap">
+                <sc-if value="{{ c.hasDot }}"><span style="width:7px;height:7px;border-radius:2px;background:#8a7ad0;flex:none"></span></sc-if>
+                <span style="color:#75798c;font-size:10px;letter-spacing:.04em;text-transform:uppercase">{{ c.pre }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#e9e9ed">{{ c.val }}</span>
+                <sc-if value="{{ c.hasToggle }}">
+                  <span style="display:flex;align-items:center;gap:4px;padding-left:5px;margin-left:1px;border-left:1px solid rgba(233,233,237,.14);color:#5b5f70;font-size:10px">
+                    <span style="width:16px;height:9px;border-radius:5px;background:#31333d;position:relative;display:inline-block"><span style="position:absolute;top:1.5px;left:1.5px;width:6px;height:6px;border-radius:50%;background:#75798c"></span></span>{{ c.toggle }}
+                  </span>
+                </sc-if>
+                <i class="ph ph-x" style="font-size:10px;color:#75798c;cursor:pointer;margin-left:1px" style-hover="color:#e9e9ed"></i>
+              </div>
+            </sc-for>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#e9e9ed;white-space:nowrap">{{ queryText }}</span>
+            <sc-if value="{{ hasCaret }}"><span style="width:1px;height:15px;background:#9184d9;flex:none"></span></sc-if>
+            <sc-if value="{{ noQuery }}"><span style="font-size:12.5px;color:#4a4e5d">Search names, or add folder / tag / BPM / key filters</span></sc-if>
+          </div>
+          <sc-if value="{{ hasQuery }}"><i class="ph ph-x-circle" style="font-size:14px;color:#75798c;flex:none;cursor:pointer" style-hover="color:#e9e9ed"></i></sc-if>
+        </div>
+
+        <div style="flex:none;display:flex;align-items:center;gap:2px;padding-left:4px">
+          <sc-if value="{{ wavesOn }}">
+            <button title="Row waveforms" style="height:28px;padding:0 9px;display:flex;align-items:center;gap:6px;border-radius:7px;border:1px solid #9184d9;background:rgba(145,132,217,.14);color:#b5abfc;font-size:11.5px;cursor:pointer;font-family:'Inter'"><i class="ph ph-waveform" style="font-size:14px"></i>Waveforms</button>
+          </sc-if>
+          <sc-if value="{{ wavesOff }}">
+            <button title="Row waveforms" style="height:28px;padding:0 9px;display:flex;align-items:center;gap:6px;border-radius:7px;border:1px solid rgba(233,233,237,.13);background:transparent;color:#9397ab;font-size:11.5px;cursor:pointer;font-family:'Inter'" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed"><i class="ph ph-waveform" style="font-size:14px"></i>Waveforms</button>
+          </sc-if>
+          <button title="Favorites only" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;border:1px solid transparent;background:transparent;color:#9397ab;cursor:pointer" style-hover="background:rgba(233,233,237,.06);color:#e9e9ed"><i class="ph ph-star" style="font-size:15px"></i></button>
+          <button title="Columns" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;border:1px solid transparent;background:transparent;color:#9397ab;cursor:pointer" style-hover="background:rgba(233,233,237,.06);color:#e9e9ed"><i class="ph ph-columns" style="font-size:15px"></i></button>
+        </div>
+      </div>
+
+      <div style="flex:1;display:flex;min-height:0">
+
+        <div style="width:248px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.09);display:flex;flex-direction:column;min-height:0">
+          <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column">
+            <div style="height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 12px">
+              <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70">Folders</span>
+              <button title="Add library root" style="width:19px;height:19px;display:grid;place-items:center;border:0;background:transparent;color:#75798c;cursor:pointer;border-radius:5px" style-hover="background:rgba(233,233,237,.08);color:#e9e9ed"><i class="ph ph-plus" style="font-size:12px"></i></button>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding-bottom:8px;font-size:12px">
+              <sc-for list="{{ tree }}" as="t" hint-placeholder-count="14">
+                <sc-if value="{{ t.plain }}">
+                  <div style="display:flex;align-items:center;gap:6px;height:23px;padding-right:10px;color:#b2b6ca;cursor:default;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">
+                    <span style="width:{{ t.pad }}px;flex:none"></span>
+                    <i class="{{ t.icon }}" style="font-size:13px;color:#75798c;flex:none"></i>
+                    <span style="overflow:hidden;text-overflow:ellipsis">{{ t.label }}</span>
+                    <sc-if value="{{ t.fav }}"><i class="ph-fill ph-star" style="font-size:9px;color:#796cbf;flex:none"></i></sc-if>
+                    <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a4e5d">{{ t.count }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ t.current }}">
+                  <div style="position:relative;display:flex;align-items:center;gap:6px;height:23px;padding-right:10px;color:#e7e5fe;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9;white-space:nowrap">
+                    <span style="width:{{ t.pad }}px;flex:none"></span>
+                    <i class="{{ t.icon }}" style="font-size:13px;color:#b5abfc;flex:none"></i>
+                    <span style="overflow:hidden;text-overflow:ellipsis">{{ t.label }}</span>
+                    <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b84ad">{{ t.count }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ t.root }}">
+                  <div style="display:flex;align-items:center;gap:6px;height:25px;padding:0 10px 0 8px;color:#e9e9ed;white-space:nowrap;margin-top:4px" style-hover="background:rgba(233,233,237,.05)">
+                    <i class="ph-bold ph-caret-down" style="font-size:9px;color:#75798c;flex:none"></i>
+                    <i class="ph-fill ph-hard-drives" style="font-size:13px;color:#796cbf;flex:none"></i>
+                    <span style="font-size:11.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;font-family:'JetBrains Mono',monospace">{{ t.label }}</span>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:none;border-top:1px solid rgba(233,233,237,.09)">
+            <div style="height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 8px;cursor:pointer" style-hover="background:rgba(233,233,237,.04)">
+              <span style="display:flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70">
+                <i class="ph-bold ph-caret-down" style="font-size:9px"></i>Tags
+              </span>
+              <button onClick="{{ goTags }}" title="Manage tags" style="width:19px;height:19px;display:grid;place-items:center;border:0;background:transparent;color:#75798c;cursor:pointer;border-radius:5px" style-hover="background:rgba(233,233,237,.08);color:#e9e9ed"><i class="ph ph-sliders-horizontal" style="font-size:12px"></i></button>
+            </div>
+            <div style="max-height:190px;overflow-y:auto;padding-bottom:7px;font-size:12px">
+              <sc-for list="{{ tagTree }}" as="g" hint-placeholder-count="10">
+                <sc-if value="{{ g.plain }}">
+                  <div style="display:flex;align-items:center;gap:7px;height:22px;padding-right:10px;color:#b2b6ca;cursor:default;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">
+                    <span style="width:{{ g.pad }}px;flex:none"></span>
+                    <span style="width:8px;height:8px;border-radius:2px;flex:none;background:{{ g.color }}"></span>
+                    <span style="overflow:hidden;text-overflow:ellipsis">{{ g.label }}</span>
+                    <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a4e5d">{{ g.count }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ g.on }}">
+                  <div style="display:flex;align-items:center;gap:7px;height:22px;padding-right:10px;color:#e7e5fe;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9;white-space:nowrap">
+                    <span style="width:{{ g.pad }}px;flex:none"></span>
+                    <span style="width:8px;height:8px;border-radius:2px;flex:none;background:{{ g.color }}"></span>
+                    <span style="overflow:hidden;text-overflow:ellipsis">{{ g.label }}</span>
+                    <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b84ad">{{ g.count }}</span>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:#161826">
+            <div style="height:26px;flex:none;display:grid;grid-template-columns:26px minmax(170px,1.3fr) 58px 46px 54px minmax(150px,1.2fr) 210px;align-items:center;padding-right:12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70;background:#181a28;border-bottom:1px solid rgba(233,233,237,.1)">
+              <span></span>
+              <span style="display:flex;align-items:center;gap:4px">Name <i class="ph-bold ph-caret-up" style="font-size:8px;color:#9184d9"></i></span>
+              <span>Type</span><span>BPM</span><span>Key</span><span>Waveform</span><span>Tags</span>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow-y:auto;position:relative">
+              <sc-for list="{{ rows }}" as="row" hint-placeholder-count="16">
+                <div style="position:relative;display:grid;grid-template-columns:26px minmax(170px,1.3fr) 58px 46px 54px minmax(150px,1.2fr) 210px;align-items:center;height:28px;padding-right:12px;border-bottom:1px solid rgba(233,233,237,.04)" style-hover="background:rgba(233,233,237,.045)">
+
+                  <sc-if value="{{ row.selected }}"><div style="position:absolute;inset:0;background:rgba(145,132,217,.15);box-shadow:inset 2px 0 0 #9184d9;pointer-events:none"></div></sc-if>
+                  <sc-if value="{{ row.hovered }}"><div style="position:absolute;inset:0;background:rgba(233,233,237,.05);pointer-events:none"></div></sc-if>
+
+                  <div style="display:grid;place-items:center;position:relative">
+                    <sc-if value="{{ row.fav }}"><i class="ph-fill ph-star" style="font-size:11px;color:#b5abfc"></i></sc-if>
+                    <sc-if value="{{ row.notFav }}"><i class="ph ph-star" style="font-size:11px;color:#34374250"></i></sc-if>
+                  </div>
+
+                  <div style="display:flex;align-items:center;gap:6px;min-width:0;position:relative;padding-right:8px">
+                    <sc-if value="{{ row.playing }}"><i class="ph-fill ph-play" style="font-size:8px;color:#b5abfc;flex:none"></i></sc-if>
+                    <sc-if value="{{ row.missing }}"><i class="ph-fill ph-warning-circle" style="font-size:11px;color:#c9736d;flex:none"></i></sc-if>
+                    <sc-if value="{{ row.ok }}">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#e9e9ed;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.pre }}<span style="background:rgba(145,132,217,.34);color:#f5f4ff;border-radius:2px;padding:0 1px">{{ row.hit }}</span>{{ row.post }}</span>
+                    </sc-if>
+                    <sc-if value="{{ row.missing }}">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#6d6f7c;text-decoration:line-through;text-decoration-color:#4a4e5d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.name }}</span>
+                    </sc-if>
+                  </div>
+
+                  <div style="position:relative;font-size:11px;color:#9397ab">{{ row.type }}</div>
+                  <div style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca">{{ row.bpm }}</div>
+                  <div style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca">{{ row.key }}</div>
+
+                  <div style="position:relative;height:28px;padding:0 14px 0 2px;display:flex;align-items:center">
+                    <sc-if value="{{ row.hasWave }}">
+                      <div style="position:relative;width:100%;height:18px">
+                        <svg viewBox="0 0 300 18" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible">
+                          <path d="{{ row.wave }}" stroke="{{ row.waveInk }}" stroke-width="1.05" stroke-linecap="butt" fill="none" vector-effect="non-scaling-stroke"></path>
+                        </svg>
+                        <sc-if value="{{ row.playing }}">
+                          <div style="position:absolute;top:-3px;bottom:-3px;left:38%;width:1.5px;background:#b5abfc;box-shadow:0 0 6px rgba(181,171,252,.8)"></div>
+                          <div style="position:absolute;top:0;bottom:0;left:0;width:38%;background:linear-gradient(to right,rgba(145,132,217,.03),rgba(145,132,217,.13))"></div>
+                        </sc-if>
+                        <sc-if value="{{ row.hovered }}">
+                          <div style="position:absolute;top:-3px;bottom:-3px;left:62%;width:1px;background:rgba(233,233,237,.45)"></div>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ row.analyzing }}">
+                      <div style="position:relative;width:100%;height:4px;border-radius:3px;background:#22242f;overflow:hidden">
+                        <div style="position:absolute;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,rgba(145,132,217,.6),transparent);animation:siftShimmer 1.4s linear infinite"></div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ row.missing }}">
+                      <div style="width:100%;height:1px;background:repeating-linear-gradient(90deg,#3a3d49 0 4px,transparent 4px 8px)"></div>
+                    </sc-if>
+                    <sc-if value="{{ row.noWave }}">
+                      <div style="width:100%;height:1px;background:rgba(233,233,237,.07)"></div>
+                    </sc-if>
+                  </div>
+
+                  <div style="position:relative;display:flex;align-items:center;gap:4px;overflow:hidden">
+                    <sc-if value="{{ row.analyzing }}">
+                      <span style="font-size:10.5px;color:#9184d9;font-style:italic;white-space:nowrap">Analyzing…</span>
+                    </sc-if>
+                    <sc-for list="{{ row.tags }}" as="tg" hint-placeholder-count="1">
+                      <span style="flex:none;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1;padding:3px 6px;border-radius:5px;white-space:nowrap;background:{{ tg.bg }};color:{{ tg.fg }}">{{ tg.label }}</span>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+
+              <sc-if value="{{ isEmptyResults }}">
+                <div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center">
+                  <div>
+                    <i class="ph ph-magnifying-glass" style="font-size:26px;color:#3f424d"></i>
+                    <div style="font-size:14px;color:#b2b6ca;margin:12px 0 5px">No samples match</div>
+                    <div style="font-size:12px;color:#5b5f70;line-height:1.6">Remove a filter chip, or widen the BPM range.<br>4,402 files are indexed.</div>
+                  </div>
+                </div>
+              </sc-if>
+
+            </div>
+
+            <sc-if value="{{ isMulti }}">
+              <div style="flex:none;height:30px;display:flex;align-items:center;gap:10px;padding:0 12px;background:rgba(145,132,217,.11);border-top:1px solid rgba(145,132,217,.32);font-size:11.5px">
+                <i class="ph-fill ph-stack" style="font-size:13px;color:#b5abfc"></i>
+                <span style="color:#e7e5fe;font-weight:500">4 samples selected</span>
+                <span style="color:#8b84ad">·</span>
+                <span style="color:#9397ab;font-family:'JetBrains Mono',monospace;font-size:11px">3.1 MB · ⇧ range · ⌘ toggle</span>
+                <span style="margin-left:auto;display:flex;align-items:center;gap:7px;color:#b5abfc"><i class="ph ph-hand-grabbing" style="font-size:14px"></i>Drag to your DAW to copy all four files</span>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="flex:none;height:300px;background:#1b1d2b;border-top:1px solid rgba(233,233,237,.12);display:flex;flex-direction:column">
+
+            <div style="height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid rgba(233,233,237,.07)">
+              <sc-if value="{{ detail.fav }}"><i class="ph-fill ph-star" style="font-size:14px;color:#b5abfc;cursor:pointer"></i></sc-if>
+              <sc-if value="{{ detail.notFav }}"><i class="ph ph-star" style="font-size:14px;color:#5b5f70;cursor:pointer" style-hover="color:#b5abfc"></i></sc-if>
+              <div style="min-width:0">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;color:#e9e9ed;white-space:nowrap">{{ detail.name }}</span>
+                  <sc-if value="{{ detail.missing }}"><span style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:rgba(201,115,109,.16);color:#e0a29d;white-space:nowrap">File missing</span></sc-if>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6d6f7c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">{{ detail.path }}</div>
+              </div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex:none">
+                <sc-for list="{{ detail.tags }}" as="tg" hint-placeholder-count="2">
+                  <span style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1;padding:4px 5px 4px 8px;border-radius:6px;background:{{ tg.bg }};color:{{ tg.fg }}">{{ tg.label }}<i class="ph ph-x" style="font-size:9px;opacity:.6;cursor:pointer"></i></span>
+                </sc-for>
+                <button title="Add tag" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;border:1px dashed rgba(233,233,237,.24);background:transparent;color:#75798c;cursor:pointer" style-hover="border-color:#9184d9;color:#b5abfc"><i class="ph ph-plus" style="font-size:11px"></i></button>
+                <div style="width:1px;height:20px;background:rgba(233,233,237,.12);margin:0 3px"></div>
+                <div style="display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:11px">
+                  <span style="padding:4px 8px;border-radius:6px;background:#232532;color:#b2b6ca">{{ detail.type }}</span>
+                  <span style="padding:4px 8px;border-radius:6px;background:#232532;color:#b2b6ca">{{ detail.bpmLabel }}</span>
+                  <span style="padding:4px 8px;border-radius:6px;background:#232532;color:#b2b6ca">{{ detail.keyLabel }}</span>
+                </div>
+              </div>
+            </div>
+
+            <sc-if value="{{ detail.missing }}">
+              <div style="flex:1;display:grid;place-items:center;padding:0 40px">
+                <div style="display:flex;gap:16px;align-items:flex-start;max-width:640px">
+                  <i class="ph ph-plug-charging" style="font-size:26px;color:#c9736d;flex:none;margin-top:2px"></i>
+                  <div>
+                    <div style="font-size:14px;color:#e9e9ed;margin-bottom:6px">Sift can't reach this file</div>
+                    <p style="font-size:12.5px;line-height:1.65;color:#9397ab;margin:0 0 14px">The path is gone. The volume <span style="font-family:'JetBrains Mono',monospace;color:#b2b6ca">/Volumes/SFX</span> may be unmounted. Preview and drag-to-DAW are unavailable, but metadata and tags stay in the index until you remove the entry.</p>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn btn-secondary" style="font-size:12px;padding:5px 11px"><i class="ph ph-arrows-clockwise" style="font-size:13px"></i>Locate…</button>
+                      <button class="btn btn-secondary" style="font-size:12px;padding:5px 11px"><i class="ph ph-arrow-counter-clockwise" style="font-size:13px"></i>Re-check path</button>
+                      <button class="btn btn-ghost" style="font-size:12px;padding:5px 9px;color:#d4837d">Remove from library…</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ detail.playable }}">
+              <div style="flex:1;min-height:0;position:relative;padding:11px 14px 9px">
+                <div style="position:relative;height:100%;border-radius:7px;background:#101220;box-shadow:inset 0 0 0 1px rgba(233,233,237,.07);overflow:hidden">
+
+                  <sc-if value="{{ snapQuarter }}"><div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(233,233,237,.10) 0 1px,transparent 1px 6.25%);pointer-events:none"></div></sc-if>
+                  <sc-if value="{{ snapEighth }}"><div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(233,233,237,.09) 0 1px,transparent 1px 3.125%);pointer-events:none"></div></sc-if>
+                  <sc-if value="{{ snapSixteenth }}"><div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(233,233,237,.08) 0 1px,transparent 1px 1.5625%);pointer-events:none"></div></sc-if>
+                  <sc-if value="{{ snapBars }}"><div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(145,132,217,.30) 0 1px,transparent 1px 25%);pointer-events:none"></div></sc-if>
+
+                  <div style="position:absolute;inset:0;display:flex;flex-direction:column">
+                    <div style="flex:1;position:relative;display:flex;align-items:center">
+                      <span style="position:absolute;left:7px;top:5px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#4a4e5d;letter-spacing:.08em;z-index:3">L</span>
+                      <svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+                        <path d="{{ detail.waveL }}" stroke="#7b71b8" stroke-width="1" fill="none"></path>
+                      </svg>
+                    </div>
+                    <div style="height:1px;background:rgba(233,233,237,.09)"></div>
+                    <div style="flex:1;position:relative;display:flex;align-items:center">
+                      <span style="position:absolute;left:7px;top:5px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#4a4e5d;letter-spacing:.08em;z-index:3">R</span>
+                      <svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+                        <path d="{{ detail.waveR }}" stroke="#7b71b8" stroke-width="1" fill="none"></path>
+                      </svg>
+                    </div>
+                  </div>
+
+                  <sc-if value="{{ hasSelection }}">
+                    <div style="position:absolute;top:0;bottom:0;left:0;width:33%;background:rgba(13,14,21,.62);pointer-events:none"></div>
+                    <div style="position:absolute;top:0;bottom:0;right:0;width:41%;background:rgba(13,14,21,.62);pointer-events:none"></div>
+                    <div style="position:absolute;top:0;bottom:0;left:33%;width:26%;background:rgba(145,132,217,.10);box-shadow:inset 0 0 0 1px rgba(181,171,252,.55)"></div>
+                    <div style="position:absolute;top:0;bottom:0;left:33%;width:7px;margin-left:-3px;cursor:ew-resize;display:flex;align-items:center;justify-content:center"><div style="width:3px;height:26px;border-radius:2px;background:#b5abfc"></div></div>
+                    <div style="position:absolute;top:0;bottom:0;left:59%;width:7px;margin-left:-4px;cursor:ew-resize;display:flex;align-items:center;justify-content:center"><div style="width:3px;height:26px;border-radius:2px;background:#b5abfc"></div></div>
+                    <div style="position:absolute;top:6px;left:33.6%;display:flex;align-items:center;gap:6px;height:19px;padding:0 8px;border-radius:5px;background:rgba(145,132,217,.92);color:#100f1a;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;white-space:nowrap">
+                      <i class="ph-bold ph-hand-grabbing" style="font-size:11px"></i>2 bars · 4.36 s · drag out = clip
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ dragging }}">
+                    <div style="position:absolute;top:44%;left:44%;width:262px;padding:8px 10px;border-radius:8px;background:#22242f;box-shadow:0 0 0 1px #9184d9, 0 16px 34px rgba(0,0,0,.7);transform:rotate(-1.4deg);z-index:5">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <i class="ph-fill ph-waveform" style="font-size:15px;color:#b5abfc"></i>
+                        <div style="min-width:0">
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#e9e9ed;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">loop_funk_110_Gm_clip_4.364-8.727.wav</div>
+                          <div style="font-size:9.5px;color:#8b84ad;margin-top:1px">JIT clip · WAV · 44.1 kHz / 24-bit / stereo</div>
+                        </div>
+                      </div>
+                    </div>
+                    <i class="ph-fill ph-cursor" style="position:absolute;top:calc(44% + 34px);left:calc(48% + 10px);font-size:17px;color:#e9e9ed;z-index:6;filter:drop-shadow(0 2px 4px rgba(0,0,0,.8))"></i>
+                  </sc-if>
+
+                  <div style="position:absolute;top:0;bottom:0;left:{{ detail.playhead }};width:1.5px;background:#e9e9ed;z-index:4"></div>
+                  <div style="position:absolute;top:0;left:{{ detail.playhead }};margin-left:-4px;width:9px;height:5px;background:#e9e9ed;z-index:4;clip-path:polygon(0 0,100% 0,50% 100%)"></div>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="height:36px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid rgba(233,233,237,.07);font-size:11.5px">
+              <div style="display:flex;align-items:center;gap:6px;color:#9397ab">
+                <span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#5b5f70">Snap</span>
+                <span style="display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px 8px;border-radius:6px;background:#232532;color:#e9e9ed;cursor:pointer" style-hover="background:#2b2e3d">{{ snapLabel }}<i class="ph-bold ph-caret-down" style="font-size:8px;opacity:.6"></i></span>
+              </div>
+              <sc-if value="{{ loopOn }}">
+                <span style="display:flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.14);color:#b5abfc;cursor:pointer;font-size:11px"><i class="ph-fill ph-repeat" style="font-size:12px"></i>Loop preview</span>
+              </sc-if>
+              <sc-if value="{{ loopOff }}">
+                <span style="display:flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer;font-size:11px" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.26)"><i class="ph ph-repeat" style="font-size:12px"></i>Loop preview</span>
+              </sc-if>
+              <div style="display:flex;align-items:center;gap:8px;color:#9397ab">
+                <span style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#5b5f70">Preview gain</span>
+                <div style="position:relative;width:96px;height:3px;border-radius:2px;background:#31333d">
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:62%;border-radius:2px;background:#796cbf"></div>
+                  <div style="position:absolute;left:62%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#cfd3e5;box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>
+                </div>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#b2b6ca;width:54px;white-space:nowrap">−4.5 dB</span>
+              </div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:13px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5b5f70">
+                <span><span style="color:#9397ab">Enter</span> play from start</span>
+                <span><span style="color:#9397ab">Space</span> pause / resume</span>
+                <span><span style="color:#9397ab">⇧drag</span> free time</span>
+                <span><span style="color:#9397ab">Z</span> zero-crossing</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:28px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px;background:#12141f;border-top:1px solid rgba(233,233,237,.09);font-size:11px;color:#6d6f7c;font-family:'JetBrains Mono',monospace">
+        <span style="color:#9397ab">{{ resultCount }}</span>
+        <span>·</span>
+        <span>3 roots</span>
+        <span>·</span>
+        <span>4,402 files</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:9px">
+          <i class="ph ph-circle-notch" style="font-size:12px;color:#9184d9"></i>
+          <span style="color:#b2b6ca">Analyzing 128 of 4,402</span>
+          <div style="width:118px;height:3px;border-radius:2px;background:#292b31;overflow:hidden">
+            <div style="width:3%;height:100%;background:#9184d9"></div>
+          </div>
+          <span style="color:#5b5f70">browse and play while this runs</span>
+        </div>
+      </div>
+
+      <sc-if value="{{ isIndexPrompt }}">
+        <div style="position:absolute;right:16px;bottom:44px;width:392px;padding:13px 14px;border-radius:10px;background:#22242f;box-shadow:0 0 0 1px #4a4e5d, 0 20px 46px rgba(0,0,0,.66);z-index:30">
+          <div style="display:flex;gap:10px">
+            <i class="ph ph-folder-plus" style="font-size:17px;color:#b5abfc;flex:none;margin-top:1px"></i>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:500;margin-bottom:3px">412 new files appeared</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b8d9a;margin-bottom:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/Users/alex/Samples/Packs/Drums/Breaks</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-primary" style="font-size:12px;padding:4px 11px">Index</button>
+                <button class="btn btn-secondary" style="font-size:12px;padding:4px 11px">Skip</button>
+                <div style="width:1px;background:rgba(233,233,237,.12);margin:2px 3px"></div>
+                <button class="btn btn-secondary" style="font-size:12px;padding:4px 11px">Index all</button>
+                <button class="btn btn-secondary" style="font-size:12px;padding:4px 11px">Skip all</button>
+              </div>
+              <div style="margin-top:9px;font-size:10.5px;color:#5b5f70;line-height:1.5">You can keep browsing while this waits. 3 folders queued behind it.</div>
+            </div>
+            <i class="ph ph-x" style="font-size:13px;color:#5b5f70;cursor:pointer;flex:none" style-hover="color:#e9e9ed"></i>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAnalysis }}">
+        <div style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(13,14,21,.62);z-index:50">
+          <div style="width:492px;padding:18px;border-radius:14px;background:#22242f;box-shadow:0 0 0 1px #75798c, 0 26px 60px rgba(0,0,0,.72)">
+            <div style="font-family:'Inter';font-weight:500;font-size:18px;letter-spacing:-.01em;margin-bottom:4px">Custom analysis</div>
+            <p style="font-size:12.5px;line-height:1.6;color:#9397ab;margin:0 0 16px">Force-runs on the <span style="color:#e9e9ed">4 selected samples</span>. Existing values are kept unless you tick the matching box.</p>
+
+            <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:16px">
+              <label style="display:flex;align-items:center;gap:10px;height:31px;padding:0 9px;border-radius:7px;cursor:pointer;font-size:13px" style-hover="background:rgba(233,233,237,.05)">
+                <span style="width:15px;height:15px;border-radius:4px;border:1.5px solid #9184d9;background:#9184d9;display:grid;place-items:center;flex:none"><i class="ph-bold ph-check" style="font-size:10px;color:#161826"></i></span>Re-run BPM
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;height:31px;padding:0 9px;border-radius:7px;cursor:pointer;font-size:13px" style-hover="background:rgba(233,233,237,.05)">
+                <span style="width:15px;height:15px;border-radius:4px;border:1.5px solid #9184d9;background:#9184d9;display:grid;place-items:center;flex:none"><i class="ph-bold ph-check" style="font-size:10px;color:#161826"></i></span>Re-run key
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;height:31px;padding:0 9px;border-radius:7px;cursor:pointer;font-size:13px" style-hover="background:rgba(233,233,237,.05)">
+                <span style="width:15px;height:15px;border-radius:4px;border:1.5px solid #5b5f70;flex:none"></span>Re-run loop vs one-shot
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;height:31px;padding:0 9px;border-radius:7px;cursor:pointer;font-size:13px" style-hover="background:rgba(233,233,237,.05)">
+                <span style="width:15px;height:15px;border-radius:4px;border:1.5px solid #5b5f70;flex:none"></span>Overwrite tags
+                <span style="font-size:11px;color:#6d6f7c">replaces tags Sift detected; yours stay</span>
+              </label>
+            </div>
+
+            <div style="padding:13px;border-radius:9px;background:#191b27;box-shadow:inset 0 0 0 1px rgba(233,233,237,.07)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px">
+                <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#75798c">BPM range</span>
+                <span style="font-size:10.5px;color:#5b5f70">shared with Settings › Analysis</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">60–150</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">68–135</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.15);color:#b5abfc;cursor:pointer">70–180</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">90–180</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">98–195</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px">
+                <input class="input" value="70" style="width:64px;min-height:28px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center">
+                <div style="flex:1;position:relative;height:3px;border-radius:2px;background:#31333d">
+                  <div style="position:absolute;left:8%;right:12%;top:0;bottom:0;border-radius:2px;background:#796cbf"></div>
+                  <div style="position:absolute;left:8%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#cfd3e5"></div>
+                  <div style="position:absolute;right:12%;top:50%;width:11px;height:11px;margin:-5.5px -5.5px 0 0;border-radius:50%;background:#cfd3e5"></div>
+                </div>
+                <input class="input" value="180" style="width:64px;min-height:28px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center">
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:9px;margin-top:16px">
+              <span style="font-size:11px;color:#5b5f70;margin-right:auto">Runs in the background · queued behind 128 files</span>
+              <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:13px">Cancel</button>
+              <button class="btn btn-primary" onClick="{{ goLibrary }}" style="font-size:13px">Analyze 4 samples</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showMenu }}">
+        <div style="position:absolute;top:360px;left:306px;width:256px;padding:5px;border-radius:9px;background:#22242f;box-shadow:0 0 0 1px #4a4e5d, 0 18px 44px rgba(0,0,0,.72);z-index:40;font-size:12.5px">
+          <sc-for list="{{ menuItems }}" as="m" hint-placeholder-count="14">
+            <sc-if value="{{ m.rule }}"><div style="height:1px;margin:4px 8px;background:rgba(233,233,237,.11)"></div></sc-if>
+            <sc-if value="{{ m.item }}">
+              <div style="display:flex;align-items:center;gap:9px;height:26px;padding:0 9px;border-radius:6px;color:#dedfe6;cursor:default;white-space:nowrap" style-hover="background:#9184d9;color:#100f1a">
+                <i class="{{ m.icon }}" style="font-size:14px;width:15px;flex:none;opacity:.85"></i>
+                <span>{{ m.label }}</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:.5">{{ m.hint }}</span>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRemoveRoot }}">
+        <div style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(13,14,21,.62);z-index:50">
+          <div style="width:452px;padding:18px;border-radius:14px;background:#22242f;box-shadow:0 0 0 1px #75798c, 0 26px 60px rgba(0,0,0,.72)">
+            <div style="display:flex;gap:11px;margin-bottom:15px">
+              <i class="ph ph-hard-drives" style="font-size:19px;color:#b5abfc;flex:none;margin-top:1px"></i>
+              <div>
+                <div style="font-family:'Inter';font-weight:500;font-size:17px;margin-bottom:5px">Remove this root from the library?</div>
+                <p style="font-size:12.5px;line-height:1.6;color:#9397ab;margin:0">Sift forgets the <span style="color:#e9e9ed">1,880 samples</span> under it, with their tags, overrides, and favorites.</p>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:9px;background:#191b27;box-shadow:inset 0 0 0 1px rgba(233,233,237,.07);margin-bottom:14px">
+              <i class="ph ph-folder" style="font-size:15px;color:#75798c;flex:none"></i>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e9e9ed">/Volumes/SFX</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;background:rgba(95,154,114,.1);margin-bottom:16px">
+              <i class="ph-fill ph-shield-check" style="font-size:15px;color:#7fbf95;flex:none"></i>
+              <span style="font-size:12px;color:#a9cdb6">Nothing on disk is touched. Re-add the folder later to index it again, but the tags do not come back.</span>
+            </div>
+            <div class="dialog-actions" style="margin:0">
+              <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:13px">Cancel</button>
+              <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:13px;color:#e08b85;border-color:#a8524c;background:rgba(168,82,76,.14)">Remove root</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRemoveMissing }}">
+        <div style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(13,14,21,.62);z-index:50">
+          <div style="width:452px;padding:18px;border-radius:14px;background:#22242f;box-shadow:0 0 0 1px #75798c, 0 26px 60px rgba(0,0,0,.72)">
+            <div style="display:flex;gap:11px;margin-bottom:15px">
+              <i class="ph ph-warning" style="font-size:19px;color:#d4837d;flex:none;margin-top:1px"></i>
+              <div>
+                <div style="font-family:'Inter';font-weight:500;font-size:17px;margin-bottom:5px">Remove 1 missing sample?</div>
+                <p style="font-size:12.5px;line-height:1.6;color:#9397ab;margin:0">Its index entry, tags and overrides are deleted. If the file comes back at the same path later it is indexed as a new sample.</p>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:9px;background:#191b27;box-shadow:inset 0 0 0 1px rgba(233,233,237,.07);margin-bottom:14px">
+              <i class="ph-fill ph-warning-circle" style="font-size:15px;color:#c9736d;flex:none"></i>
+              <div style="min-width:0">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e9e9ed">night_tram_amb.flac</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6d6f7c;margin-top:2px">/Volumes/SFX/Field/City/Night</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px;font-size:12px;color:#9397ab">
+              <i class="ph ph-broom" style="font-size:15px;color:#75798c"></i>
+              <span>23 other samples are currently missing.</span>
+              <a href="#" style="margin-left:auto;font-size:12px">Remove all missing…</a>
+            </div>
+            <div class="dialog-actions" style="margin:0">
+              <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:13px">Cancel</button>
+              <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:13px;color:#e08b85;border-color:#a8524c;background:rgba(168,82,76,.14)">Remove from library</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </sc-if>
+
+    <sc-if value="{{ isTags }}">
+      <div style="flex:1;display:flex;min-height:0;background:#161826">
+        <div style="width:300px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.09);display:flex;flex-direction:column">
+          <div style="height:42px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 14px">
+            <span style="font-family:'Inter';font-weight:500;font-size:14px">Tags</span>
+            <button class="btn btn-secondary" style="font-size:11.5px;padding:3px 9px"><i class="ph ph-plus" style="font-size:12px"></i>New</button>
+          </div>
+          <div style="padding:0 10px 10px">
+            <input class="input" placeholder="Filter taxonomy…" style="min-height:29px;font-size:12px;background:#101220">
+          </div>
+          <div style="flex:1;overflow-y:auto;font-size:12.5px;padding-bottom:10px">
+            <sc-for list="{{ taxonomy }}" as="t" hint-placeholder-count="14">
+              <sc-if value="{{ t.plain }}">
+                <div style="display:flex;align-items:center;gap:8px;height:27px;padding-right:12px;color:#b2b6ca;cursor:default" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">
+                  <span style="width:{{ t.pad }}px;flex:none"></span>
+                  <span style="width:9px;height:9px;border-radius:3px;flex:none;background:{{ t.color }}"></span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px">{{ t.label }}</span>
+                  <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a4e5d">{{ t.count }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ t.on }}">
+                <div style="display:flex;align-items:center;gap:8px;height:27px;padding-right:12px;color:#e7e5fe;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9">
+                  <span style="width:{{ t.pad }}px;flex:none"></span>
+                  <span style="width:9px;height:9px;border-radius:3px;flex:none;background:{{ t.color }}"></span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500">{{ t.label }}</span>
+                  <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8b84ad">{{ t.count }}</span>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative">
+          <div style="flex:1;padding:22px 26px;overflow-y:auto">
+            <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70;margin-bottom:7px">Editing tag</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px">
+              <span style="width:13px;height:13px;border-radius:4px;background:#8a7ad0"></span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:500;letter-spacing:-.01em">Drums/Kick</span>
+              <span style="font-size:11.5px;color:#6d6f7c;padding:3px 9px;border-radius:6px;background:#232532">318 samples · 1 child</span>
+            </div>
+
+            <div style="display:flex;gap:26px;max-width:760px;margin-bottom:24px">
+              <div style="flex:1">
+                <div class="field"><label>Name</label><input class="input" value="Kick" style="font-family:'JetBrains Mono',monospace"></div>
+                <div style="font-size:11px;color:#5b5f70;margin-top:6px">Full path <span style="font-family:'JetBrains Mono',monospace;color:#9397ab">Drums/Kick</span>. Renaming it updates every sample and chip.</div>
+              </div>
+              <div style="flex:1">
+                <div class="field"><label>Parent</label>
+                  <div class="input" style="display:flex;align-items:center;justify-content:space-between;font-family:'JetBrains Mono',monospace;cursor:pointer">Drums<i class="ph-bold ph-caret-down" style="font-size:9px;color:#75798c"></i></div>
+                </div>
+                <div style="font-size:11px;color:#5b5f70;margin-top:6px">Moving a tag carries its children with it.</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:26px">
+              <div style="font-size:12px;color:#9397ab;margin-bottom:9px">Color</div>
+              <div style="display:flex;gap:7px;flex-wrap:wrap">
+                <span style="width:26px;height:26px;border-radius:7px;background:#8a7ad0;box-shadow:0 0 0 2px #161826, 0 0 0 3.5px #b5abfc;cursor:pointer"></span>
+                <span style="width:26px;height:26px;border-radius:7px;background:#5f8fa8;cursor:pointer"></span>
+                <span style="width:26px;height:26px;border-radius:7px;background:#a88a5f;cursor:pointer"></span>
+                <span style="width:26px;height:26px;border-radius:7px;background:#5f9a72;cursor:pointer"></span>
+                <span style="width:26px;height:26px;border-radius:7px;background:#a86b80;cursor:pointer"></span>
+                <span style="width:26px;height:26px;border-radius:7px;background:#7f849b;cursor:pointer"></span>
+                <span style="width:26px;height:26px;border-radius:7px;background:#6d78b8;cursor:pointer"></span>
+                <span style="height:26px;display:flex;align-items:center;gap:7px;padding:0 11px;border-radius:7px;border:1px solid rgba(233,233,237,.14);font-size:11.5px;color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)"><span style="width:10px;height:10px;border-radius:3px;background:#8a7ad0;opacity:.45"></span>Inherit from Drums</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;margin-top:13px">
+                <span style="font-size:11px;color:#5b5f70">Preview</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 7px;border-radius:5px;background:#39305a;color:#cdc4f5">Drums/Kick</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 7px;border-radius:5px;background:#39305a;color:#cdc4f5">Drums/Kick/808</span>
+              </div>
+            </div>
+
+            <div style="max-width:760px;padding-top:18px;background:linear-gradient(to right,transparent,rgba(233,233,237,.14) 48px,rgba(233,233,237,.14) calc(100% - 48px),transparent) no-repeat top / 100% 1px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div>
+                  <div style="font-size:13px;color:#e9e9ed;margin-bottom:3px">Delete this tag</div>
+                  <div style="font-size:11.5px;color:#6d6f7c">318 samples lose the tag. Files on disk are untouched.</div>
+                </div>
+                <button class="btn btn-secondary" style="margin-left:auto;font-size:12.5px;color:#d4837d;border-color:rgba(212,131,125,.4)" style-hover="background:rgba(212,131,125,.1)"><i class="ph ph-trash" style="font-size:13px"></i>Delete…</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="flex:none;height:44px;display:flex;align-items:center;gap:9px;padding:0 26px;border-top:1px solid rgba(233,233,237,.09);background:#181a28">
+            <span style="font-size:11px;color:#5b5f70;margin-right:auto;font-family:'JetBrains Mono',monospace">12 tags · 4 top-level</span>
+            <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:12.5px">Close</button>
+          </div>
+
+          <sc-if value="{{ isTagDelete }}">
+          <div style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(13,14,21,.66)">
+            <div style="width:452px;padding:18px;border-radius:14px;background:#22242f;box-shadow:0 0 0 1px #75798c, 0 26px 60px rgba(0,0,0,.72)">
+              <div style="display:flex;gap:11px;margin-bottom:14px">
+                <i class="ph ph-warning" style="font-size:19px;color:#d4837d;flex:none;margin-top:1px"></i>
+                <div>
+                  <div style="font-family:'Inter';font-weight:500;font-size:17px;margin-bottom:5px">Delete <span style="font-family:'JetBrains Mono',monospace">Drums</span> and everything under it?</div>
+                  <p style="font-size:12.5px;line-height:1.6;color:#9397ab;margin:0">This is a parent tag. Deleting it also deletes its <span style="color:#e9e9ed">5 child tags</span>, and removes all of them from <span style="color:#e9e9ed">1,204 samples</span>.</p>
+                </div>
+              </div>
+              <div style="padding:11px 13px;border-radius:9px;background:#191b27;box-shadow:inset 0 0 0 1px rgba(212,131,125,.22);margin-bottom:16px">
+                <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#75798c;margin-bottom:8px">Will be deleted</div>
+                <div style="display:flex;flex-direction:column;gap:4px;font-family:'JetBrains Mono',monospace;font-size:11.5px">
+                  <span style="color:#e9e9ed">Drums <span style="color:#6d6f7c">· 1,204</span></span>
+                  <span style="color:#b2b6ca;padding-left:15px">Drums/Breaks <span style="color:#6d6f7c">· 96</span></span>
+                  <span style="color:#b2b6ca;padding-left:15px">Drums/Clap <span style="color:#6d6f7c">· 142</span></span>
+                  <span style="color:#b2b6ca;padding-left:15px">Drums/Hats <span style="color:#6d6f7c">· 288</span></span>
+                  <span style="color:#b2b6ca;padding-left:15px">Drums/Kick <span style="color:#6d6f7c">· 318</span></span>
+                  <span style="color:#b2b6ca;padding-left:30px">Drums/Kick/808 <span style="color:#6d6f7c">· 64</span></span>
+                  <span style="color:#b2b6ca;padding-left:15px">Drums/Snare <span style="color:#6d6f7c">· 210</span></span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font-size:11px;color:#5b5f70;margin-right:auto">Audio files are never modified.</span>
+                <button class="btn btn-secondary" onClick="{{ goTags }}" style="font-size:13px">Cancel</button>
+                <button class="btn btn-secondary" onClick="{{ goTags }}" style="font-size:13px;color:#e08b85;border-color:#a8524c;background:rgba(168,82,76,.14)">Delete 6 tags</button>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}">
+      <div style="flex:1;display:flex;min-height:0;background:#161826">
+        <div style="width:212px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.09);padding:14px 9px">
+          <div style="font-family:'Inter';font-weight:500;font-size:14px;padding:0 7px;margin-bottom:13px">Settings</div>
+          <div style="display:flex;align-items:center;gap:9px;height:29px;padding:0 9px;border-radius:7px;background:rgba(145,132,217,.16);color:#e7e5fe;font-size:12.5px;margin-bottom:2px"><i class="ph-fill ph-play-circle" style="font-size:15px;color:#b5abfc"></i>Playback</div>
+          <div style="display:flex;align-items:center;gap:9px;height:29px;padding:0 9px;border-radius:7px;color:#9397ab;font-size:12.5px;margin-bottom:2px;cursor:pointer" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed"><i class="ph ph-folders" style="font-size:15px"></i>Library</div>
+          <div style="display:flex;align-items:center;gap:9px;height:29px;padding:0 9px;border-radius:7px;color:#9397ab;font-size:12.5px;margin-bottom:2px;cursor:pointer" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed"><i class="ph ph-pulse" style="font-size:15px"></i>Analysis</div>
+          <div style="display:flex;align-items:center;gap:9px;height:29px;padding:0 9px;border-radius:7px;color:#9397ab;font-size:12.5px;cursor:pointer" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed"><i class="ph ph-keyboard" style="font-size:15px"></i>Shortcuts</div>
+        </div>
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <div style="flex:1;overflow-y:auto;padding:22px 30px 26px">
+            <div style="max-width:720px;display:flex;flex-direction:column;gap:24px">
+
+              <div>
+                <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70;margin-bottom:11px">Playback</div>
+                <div style="display:flex;flex-direction:column;gap:1px">
+                  <div style="display:flex;align-items:center;gap:14px;padding:9px 0">
+                    <div style="flex:1"><div style="font-size:13px">Play on select</div><div style="font-size:11.5px;color:#6d6f7c;margin-top:2px">Moving the selection with ↑ ↓ starts preview immediately.</div></div>
+                    <span style="width:34px;height:19px;border-radius:10px;background:#796cbf;position:relative;flex:none;cursor:pointer"><span style="position:absolute;top:2.5px;right:2.5px;width:14px;height:14px;border-radius:50%;background:#f3f5fe"></span></span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:9px 0">
+                    <div style="flex:1"><div style="font-size:13px">Loop preview</div><div style="font-size:11.5px;color:#6d6f7c;margin-top:2px">Sticky. Stays on until you turn it off.</div></div>
+                    <span style="width:34px;height:19px;border-radius:10px;background:#31333d;position:relative;flex:none;cursor:pointer"><span style="position:absolute;top:2.5px;left:2.5px;width:14px;height:14px;border-radius:50%;background:#9397ab"></span></span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:9px 0">
+                    <div style="flex:1"><div style="font-size:13px">Waveform view</div><div style="font-size:11.5px;color:#6d6f7c;margin-top:2px">Stereo files can show both channels or one summed lane.</div></div>
+                    <div class="seg" style="flex:none"><label class="seg-opt" style="padding:5px 11px;font-size:12px;color:#b5abfc;box-shadow:inset 0 0 0 1px #9184d9"><input type="radio" name="wf" checked>Stereo L/R</label><label class="seg-opt" style="padding:5px 11px;font-size:12px"><input type="radio" name="wf">Summed mono</label></div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:9px 0">
+                    <div style="flex:1"><div style="font-size:13px">Output device</div><div style="font-size:11.5px;color:#6d6f7c;margin-top:2px">Preview only. Sift never claims your DAW's device exclusively.</div></div>
+                    <div class="input" style="width:248px;min-height:30px;display:flex;align-items:center;justify-content:space-between;font-size:12.5px;cursor:pointer;flex:none">Default — Scarlett 2i2 USB<i class="ph-bold ph-caret-down" style="font-size:9px;color:#75798c"></i></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding-top:20px;background:linear-gradient(to right,transparent,rgba(233,233,237,.13) 48px,rgba(233,233,237,.13) calc(100% - 48px),transparent) no-repeat top / 100% 1px">
+                <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70;margin-bottom:11px">Analysis</div>
+                <div style="padding:9px 0">
+                  <div style="font-size:13px;margin-bottom:3px">BPM range preset</div>
+                  <div style="font-size:11.5px;color:#6d6f7c;margin-bottom:10px">Narrower ranges guess octaves less often. The Custom analysis dialog starts from this.</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">60–150</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">68–135</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.15);color:#b5abfc;cursor:pointer">70–180 <span style="font-size:9.5px;opacity:.7">default</span></span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">90–180</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:nowrap;padding:4px 10px;border-radius:6px;border:1px solid rgba(233,233,237,.13);color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed;border-color:rgba(233,233,237,.3)">98–195</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;padding:11px 0">
+                  <div style="flex:1"><div style="font-size:13px">New files inside a root</div><div style="font-size:11.5px;color:#6d6f7c;margin-top:2px">Roots are watched continuously. Renames and moves update in place.</div></div>
+                  <div class="seg" style="flex:none"><label class="seg-opt" style="padding:5px 11px;font-size:12px;color:#b5abfc;box-shadow:inset 0 0 0 1px #9184d9"><input type="radio" name="idx" checked>Auto-index</label><label class="seg-opt" style="padding:5px 11px;font-size:12px"><input type="radio" name="idx">Ask first</label></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;padding:9px 0 11px 0">
+                  <div style="flex:1"><div style="font-size:13px">Notify when files are auto-indexed</div></div>
+                  <span style="width:34px;height:19px;border-radius:10px;background:#31333d;position:relative;flex:none;cursor:pointer"><span style="position:absolute;top:2.5px;left:2.5px;width:14px;height:14px;border-radius:50%;background:#9397ab"></span></span>
+                </div>
+                <div style="padding:9px 0">
+                  <div style="font-size:13px;margin-bottom:3px">Ignore list</div>
+                  <div style="font-size:11.5px;color:#6d6f7c;margin-bottom:9px">Paths and patterns Sift never indexes.</div>
+                  <div style="border-radius:9px;background:#101220;box-shadow:inset 0 0 0 1px rgba(233,233,237,.08);overflow:hidden">
+                    <div style="display:flex;align-items:center;gap:9px;padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca;border-bottom:1px solid rgba(233,233,237,.06)">**/.DS_Store<i class="ph ph-x" style="font-size:11px;color:#5b5f70;margin-left:auto;cursor:pointer"></i></div>
+                    <div style="display:flex;align-items:center;gap:9px;padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca;border-bottom:1px solid rgba(233,233,237,.06)">**/Bounces/**<i class="ph ph-x" style="font-size:11px;color:#5b5f70;margin-left:auto;cursor:pointer"></i></div>
+                    <div style="display:flex;align-items:center;gap:9px;padding:6px 11px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca;border-bottom:1px solid rgba(233,233,237,.06)">/Volumes/SFX/_archive<i class="ph ph-x" style="font-size:11px;color:#5b5f70;margin-left:auto;cursor:pointer"></i></div>
+                    <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;font-size:11.5px;color:#75798c;cursor:pointer" style-hover="color:#b5abfc"><i class="ph ph-plus" style="font-size:11px"></i>Add pattern</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;padding:11px 0">
+                  <div style="flex:1"><div style="font-size:13px">JIT clip cache</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6d6f7c;margin-top:3px">~/Library/Caches/Sift/clips · 412 MB</div></div>
+                  <div style="display:flex;gap:6px;flex:none"><button class="btn btn-secondary" style="font-size:12px;padding:4px 10px">Change…</button><button class="btn btn-secondary" style="font-size:12px;padding:4px 10px">Clear cache</button></div>
+                </div>
+              </div>
+
+              <div style="padding-top:20px;background:linear-gradient(to right,transparent,rgba(233,233,237,.13) 48px,rgba(233,233,237,.13) calc(100% - 48px),transparent) no-repeat top / 100% 1px">
+                <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70;margin-bottom:11px">Shortcuts</div>
+                <div style="display:flex;align-items:center;gap:14px;padding:9px 0">
+                  <div style="flex:1"><div style="font-size:13px">Hold to hover-preview</div><div style="font-size:11.5px;color:#6d6f7c;margin-top:2px">Hold this key and sweep the list to audition rows under the pointer.</div></div>
+                  <div style="display:flex;align-items:center;gap:7px;flex:none">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:4px 11px;border-radius:6px;border:1px dashed rgba(233,233,237,.2);color:#6d6f7c">Unbound</span>
+                    <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px">Record…</button>
+                  </div>
+                </div>
+                <div style="margin-top:8px;padding:12px 14px;border-radius:9px;background:#191b27;box-shadow:inset 0 0 0 1px rgba(233,233,237,.07)">
+                  <div style="font-size:11.5px;color:#9397ab;margin-bottom:10px">Fixed keys, not rebindable in v1.</div>
+                  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px 26px;font-size:12px">
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">Enter</span><span style="color:#9397ab">Play from start</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">Space</span><span style="color:#9397ab">Pause / resume, restart if finished</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">↑ ↓</span><span style="color:#9397ab">Move selection</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">⇧</span><span style="color:#9397ab">Range select · free time on waveform</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">⌘ / Ctrl</span><span style="color:#9397ab">Toggle a row in the selection</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">Z</span><span style="color:#9397ab">Snap selection edges to zero-crossings</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">⇧Z</span><span style="color:#9397ab">Free time and zero-crossing together</span></div>
+                    <div style="display:flex;gap:10px"><span style="font-family:'JetBrains Mono',monospace;color:#b5abfc;width:58px;flex:none">⌘Z</span><span style="color:#9397ab">Undo a metadata edit · ⇧⌘Z redo</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="flex:none;height:44px;display:flex;align-items:center;padding:0 30px;border-top:1px solid rgba(233,233,237,.09);background:#181a28">
+            <span style="font-size:11px;color:#5b5f70;margin-right:auto">Changes apply immediately.</span>
+            <button class="btn btn-secondary" onClick="{{ goLibrary }}" style="font-size:12.5px">Close</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showRowWaveforms&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Library list&quot;},&quot;snap&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;None&quot;,&quot;1/4&quot;,&quot;1/8&quot;,&quot;1/16&quot;],&quot;default&quot;:&quot;1/4&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview&quot;},&quot;loopPreview&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Preview&quot;}}">
+class Component extends DCLogic {
+  state = { view: 'library' };
+
+  VIEWS() {
+    return [
+      ['first', 'First launch'], ['library', 'Library populated'], ['search', 'Omni search'],
+      ['waveforms', 'Row waveforms'], ['clip', 'Selection → clip drag'], ['multi', 'Multi-select'],
+      ['missing', 'Missing file'], ['index', 'Ask before index'], ['analysis', 'Custom analysis'],
+      ['tags', 'Tag management'], ['settings', 'Settings'], ['menu', 'Context menu'],
+      ['removeroot', 'Remove library root'], ['removemissing', 'Remove missing'],
+      ['tagdelete', 'Delete tag (cascade)']
+    ];
+  }
+
+  DATA() {
+    const P = '/Users/alex/Samples/Packs';
+    return [
+      { n: '808_sub_hit_A.wav', t: 'one-shot', b: '', k: 'A', g: ['Drums/Kick/808'], f: true, p: P + '/Drums/Kicks' },
+      { n: 'bass_wobble_140_F#.wav', t: 'loop', b: '140', k: 'F# min', g: ['Synths/Bass'], p: P + '/Synths/Bass' },
+      { n: 'break_dusty_92.wav', t: 'loop', b: '92', k: '', g: ['Drums/Breaks'], p: P + '/Drums/Breaks' },
+      { n: 'clap_wide_stack.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Clap'], p: P + '/Drums/Claps' },
+      { n: 'hat_closed_micro.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Hats'], analyzing: true, p: P + '/Drums/Hats' },
+      { n: 'kick_808_long_A.wav', t: 'one-shot', b: '88', k: 'A', g: ['Drums/Kick/808'], p: P + '/Drums/Kicks' },
+      { n: 'kick_dusty_lofi.wav', t: 'one-shot', b: '94', k: 'A', g: ['Drums/Kick'], p: P + '/Drums/Kicks' },
+      { n: 'kick_sub_round_A.wav', t: 'one-shot', b: '91', k: 'A', g: ['Drums/Kick/808'], p: P + '/Drums/Kicks' },
+      { n: 'kick_tight_90.wav', t: 'one-shot', b: '90', k: '', g: ['Drums/Kick'], p: P + '/Drums/Kicks' },
+      { n: 'loop_funk_110_Gm.wav', t: 'loop', b: '110', k: 'G min', g: ['Drums/Breaks', 'Genre/Funk'], p: P + '/Drums/Breaks' },
+      { n: 'night_tram_amb.flac', t: 'one-shot', b: '', k: '', g: ['Field/City', 'Ambience'], missing: true, p: '/Volumes/SFX/Field/City/Night' },
+      { n: 'rim_dry_close.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Snare'], p: P + '/Drums/Snares' },
+      { n: 'shaker_swing_98.wav', t: 'loop', b: '98', k: '', g: ['Drums/Hats'], p: P + '/Drums/Hats' },
+      { n: 'snare_room_verb.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Snare', 'FX/Reverb'], f: true, p: P + '/Drums/Snares' },
+      { n: 'sub_drop_C.wav', t: 'one-shot', b: '', k: 'C', g: ['Synths/Bass'], p: P + '/Synths/Bass' },
+      { n: 'vocal_take_03_comp.aiff', t: 'one-shot', b: '', k: 'D min', g: ['Vocals'], p: '~/Music/Recorded Takes/2026-03 Vocals' }
+    ];
+  }
+
+  tagColor(path) {
+    const m = {
+      Drums: ['#39305a', '#cdc4f5', '#8a7ad0'], Synths: ['#1f3a45', '#bfe3ef', '#5f8fa8'],
+      FX: ['#453721', '#f1ddba', '#a88a5f'], Field: ['#26402f', '#c4e4ce', '#5f9a72'],
+      Ambience: ['#2b3348', '#c7d3ec', '#7f849b'], Vocals: ['#452a38', '#f1cadb', '#a86b80'],
+      Genre: ['#322b56', '#d2caf6', '#6d78b8']
+    };
+    const c = m[path.split('/')[0]] || ['#31333d', '#cfd3e5', '#75798c'];
+    return { label: path, bg: c[0], fg: c[1], dot: c[2] };
+  }
+
+  amps(seed, n, kind) {
+    let s = (seed >>> 0) || 1;
+    const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+    const out = [];
+    let smooth = 0.5;
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      let env;
+      if (kind === 'loop') {
+        const p = (t * 8) % 1;
+        env = (0.11 + 0.89 * Math.exp(-5.4 * p)) * (0.70 + 0.30 * Math.sin(t * 9.42 + 0.7));
+      } else {
+        const atk = t < 0.012 ? t / 0.012 : 1;
+        env = atk * (0.94 * Math.exp(-7.8 * t) + 0.09 * Math.exp(-1.7 * t));
+      }
+      smooth = smooth * 0.58 + rnd() * 0.42;
+      out.push(Math.max(0.012, Math.min(1, env * (0.52 + 0.74 * smooth) + 0.010)));
+    }
+    return out;
+  }
+
+  seedOf(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+
+  path(a, w, h) {
+    const c = h / 2, st = w / a.length;
+    let d = '';
+    for (let i = 0; i < a.length; i++) {
+      const x = (i * st + st / 2).toFixed(1);
+      const y = a[i] * c * 0.93;
+      d += 'M' + x + ' ' + (c - y).toFixed(1) + 'V' + (c + y).toFixed(1);
+    }
+    return d;
+  }
+
+  renderVals() {
+    const v = this.state.view;
+    const wavesPref = this.props.showRowWaveforms !== false;
+    const snap = this.props.snap || '1/4';
+    const loop = this.props.loopPreview !== false;
+    const data = this.DATA();
+
+    const isShell = v !== 'first' && v !== 'tags' && v !== 'tagdelete' && v !== 'settings';
+    const searching = v === 'search';
+
+    let list = data.map((d, i) => ({ d: d, i: i }));
+    if (searching) list = list.filter(x => /kick/.test(x.d.n) && x.d.k === 'A');
+
+    const focusName = { clip: 'loop_funk_110_Gm.wav', missing: 'night_tram_amb.flac', removemissing: 'night_tram_amb.flac' }[v] || 'kick_tight_90.wav';
+    const multiNames = ['kick_808_long_A.wav', 'kick_dusty_lofi.wav', 'kick_sub_round_A.wav', 'kick_tight_90.wav'];
+    const hoverName = v === 'waveforms' ? 'shaker_swing_98.wav' : null;
+    const playing = v === 'waveforms' || v === 'library' || v === 'menu' || v === 'index';
+
+    const rows = list.map(x => {
+      const d = x.d;
+      const sel = v === 'multi' ? multiNames.indexOf(d.n) >= 0 : d.n === focusName;
+      let pre = d.n, hit = '', post = '';
+      if (searching) {
+        const at = d.n.indexOf('kick');
+        if (at >= 0) { pre = d.n.slice(0, at); hit = d.n.slice(at, at + 4); post = d.n.slice(at + 4); }
+      }
+      const hasWave = wavesPref && !d.missing && !d.analyzing && v !== 'first';
+      return {
+        name: d.n, pre: pre, hit: hit, post: post,
+        type: d.missing ? '' : d.t, bpm: d.b || '—', key: d.k || '—',
+        tags: d.analyzing ? [] : d.g.map(t => this.tagColor(t)),
+        fav: !!d.f, notFav: !d.f,
+        selected: sel, hovered: d.n === hoverName,
+        missing: !!d.missing, ok: !d.missing, analyzing: !!d.analyzing,
+        playing: sel && playing && !d.missing && !d.analyzing,
+        hasWave: hasWave, noWave: !hasWave && !d.missing && !d.analyzing,
+        waveInk: sel ? '#b9b0f0' : '#6a6d80',
+        wave: this.path(this.amps(this.seedOf(d.n), 100, d.t), 300, 18)
+      };
+    });
+
+    const fd = data.filter(d => d.n === focusName)[0];
+    const detail = {
+      name: fd.n, path: fd.p + '/' + fd.n,
+      type: fd.t, bpmLabel: fd.b ? fd.b + ' BPM' : 'BPM —', keyLabel: fd.k || 'Key —',
+      tags: fd.g.map(t => this.tagColor(t)),
+      fav: !!fd.f, notFav: !fd.f,
+      missing: !!fd.missing, playable: !fd.missing,
+      playhead: v === 'clip' ? '41%' : '38%',
+      waveL: this.path(this.amps(this.seedOf(fd.n), 320, fd.t), 1000, 100),
+      waveR: this.path(this.amps(this.seedOf(fd.n) + 977, 320, fd.t), 1000, 100)
+    };
+
+    const chips = searching ? [
+      { pre: 'folder', val: 'Packs/Drums/Kicks' },
+      { pre: 'tag', val: 'Drums/Kick', hasDot: true },
+      { pre: 'bpm', val: '85–95', hasToggle: true, toggle: 'half / double' },
+      { pre: 'key', val: 'A', hasToggle: true, toggle: 'relative' }
+    ] : [];
+
+    const T = (label, depth, count, opts) => Object.assign({
+      label: label, pad: 8 + depth * 13, count: count, plain: true, current: false, root: false, fav: false,
+      icon: 'ph ph-folder'
+    }, opts || {});
+    const tree = [
+      T('/Users/alex/Samples/Packs', 0, '', { plain: false, root: true }),
+      T('Drums', 1, '1,204'),
+      T('Breaks', 2, '96'),
+      T('Claps', 2, '142'),
+      T('Hats', 2, '288'),
+      T('Kicks', 2, '318', { plain: false, current: true, icon: 'ph-fill ph-folder-open' }),
+      T('Snares', 2, '210'),
+      T('Synths', 1, '642'),
+      T('Bass', 2, '188', { fav: true }),
+      T('Keys', 2, '221'),
+      T('/Volumes/SFX', 0, '', { plain: false, root: true }),
+      T('Field', 1, '1,880'),
+      T('City', 2, '506', { icon: 'ph ph-folder-simple-dashed' }),
+      T('Night', 3, '212', { icon: 'ph ph-folder-simple-dashed' }),
+      T('~/Music/Recorded Takes', 0, '', { plain: false, root: true }),
+      T('2026-03 Vocals', 1, '64', { fav: true })
+    ];
+
+    const G = (label, depth, count, on) => {
+      const c = this.tagColor(label);
+      return { label: label, pad: 8 + depth * 12, count: count, color: c.dot, plain: !on, on: !!on };
+    };
+    const tagTree = [
+      G('Drums', 0, '1,204'), G('Drums/Breaks', 1, '96'), G('Drums/Clap', 1, '142'),
+      G('Drums/Hats', 1, '288'), G('Drums/Kick', 1, '318', searching), G('Drums/Kick/808', 2, '64'),
+      G('Drums/Snare', 1, '210'), G('Synths/Bass', 0, '188'), G('FX/Reverb', 0, '74'),
+      G('Field/City', 0, '506'), G('Ambience', 0, '318'), G('Vocals', 0, '64'), G('Genre/Funk', 0, '41')
+    ];
+    const taxonomy = [
+      G('Drums', 0, '1,204'), G('Drums/Breaks', 1, '96'), G('Drums/Clap', 1, '142'),
+      G('Drums/Hats', 1, '288'), G('Drums/Kick', 1, '318', true), G('Drums/Kick/808', 2, '64'),
+      G('Drums/Snare', 1, '210'), G('Synths', 0, '642'), G('Synths/Bass', 1, '188'),
+      G('FX', 0, '74'), G('FX/Reverb', 1, '74'), G('Field', 0, '1,880'), G('Field/City', 1, '506'),
+      G('Ambience', 0, '318'), G('Vocals', 0, '64'), G('Genre', 0, '41'), G('Genre/Funk', 1, '41')
+    ];
+
+    const M = (label, icon, hint) => ({ item: true, rule: false, label: label, icon: icon, hint: hint || '' });
+    const R = () => ({ item: false, rule: true });
+    const menuItems = [
+      M('Open', 'ph ph-arrow-square-out', '⌘O'), R(),
+      M('Favorite', 'ph ph-star', 'F'),
+      M('Add / remove tags…', 'ph ph-tag', 'T'),
+      M('Set type', 'ph ph-shapes', '▸'),
+      M('Set BPM…', 'ph ph-metronome'),
+      M('Set key…', 'ph ph-music-notes'), R(),
+      M('Show only files from parent folder', 'ph ph-funnel'), R(),
+      M('Reveal in Finder', 'ph ph-finder-logo', '⌘R'),
+      M('Copy path', 'ph ph-link-simple', '⌥⌘C'),
+      M('Copy filename', 'ph ph-textbox', '⌘C'), R(),
+      M('Re-analyze', 'ph ph-arrows-clockwise'),
+      M('Custom analysis…', 'ph ph-sliders')
+    ];
+
+    const titles = {};
+    this.VIEWS().forEach((x, i) => { titles[x[0]] = (i + 1) + '. ' + x[1]; });
+
+    return {
+      views: this.VIEWS().map((x, i) => ({
+        num: String(i + 1).padStart(2, '0'), label: x[1],
+        active: v === x[0], inactive: v !== x[0],
+        go: () => this.setState({ view: x[0] })
+      })),
+      viewTitle: titles[v],
+      goLibrary: () => this.setState({ view: 'library' }),
+      goSettings: () => this.setState({ view: 'settings' }),
+      goTags: () => this.setState({ view: 'tags' }),
+
+      isFirst: v === 'first', isShell: isShell, isTags: v === 'tags' || v === 'tagdelete',
+      isTagDelete: v === 'tagdelete', isSettings: v === 'settings',
+      isMulti: v === 'multi', isIndexPrompt: v === 'index', isAnalysis: v === 'analysis',
+      isRemoveRoot: v === 'removeroot', isRemoveMissing: v === 'removemissing',
+      showMenu: v === 'menu', isEmptyResults: searching && rows.length === 0,
+
+      rows: rows, detail: detail, chips: chips, tree: tree, tagTree: tagTree, taxonomy: taxonomy, menuItems: menuItems,
+
+      queryText: searching ? 'kick' : '', hasQuery: searching, noQuery: !searching, hasCaret: searching,
+      resultCount: searching ? rows.length + ' results' : '16 of 4,402 shown',
+      wavesOn: wavesPref, wavesOff: !wavesPref,
+      hasSelection: v === 'clip', dragging: v === 'clip',
+      loopOn: loop, loopOff: !loop,
+      snapLabel: snap,
+      snapNone: snap === 'None', snapQuarter: snap === '1/4', snapEighth: snap === '1/8',
+      snapSixteenth: snap === '1/16', snapBars: snap !== 'None' && !!fd.b
+    };
+  }
+}
+</script>
+</body>
+</html>

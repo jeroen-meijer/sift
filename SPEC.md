@@ -1,6 +1,6 @@
 # Sift - Product Specification
 
-**Version:** 0.3  
+**Version:** 0.3.1  
 **Status:** Q&A paused. Ready for UI design and implementation planning.  
 **Platforms:** macOS, Windows  
 **Users:** Music producers and audio engineers  
@@ -146,7 +146,11 @@ Priority: Must · Should · Open · Later
   - Custom analysis…
 - Should: Menu chrome/grouping is design's; the items above are required for v1.
 - Out of v1 for this menu: clear/reset waveform selection.
-- Must: Sort is user-changeable and persists. Default: Name A-Z. Alternate: date added/discovered, newest first.
+- Must: Sort is user-changeable and persists (active column + direction, or default).
+- Must: Default sort: Name A-Z (no column-sort indicator beyond that default).
+- Must: Clicking a sortable column header cycles: ascending (arrow down) → descending (arrow up) → clear (back to default Name A-Z). One active sort column at a time.
+- Must: Sortable columns include at least: name, type, BPM, key, and date added/discovered. Waveform column is not sortable. Favorite may be sortable (favorites first / non-favorites first) if cheap.
+- Should: Tags column sort is optional in v1 (multi-tag rows make ordering ambiguous).
 - Must: Shift is context-based: in the sample list, range-select; in the detail waveform, temporary free-time (disable beat snap). No conflict.
 
 ### 4.3 Playback and keyboard
@@ -215,7 +219,9 @@ Drag origin decides the payload:
 
 - Must: Runs in the background; never blocks browse, search, or playback.
 - Must: Extract file info when available: sample rate, bit depth, channels, duration, format.
-- Must: Detect BPM, key (unknown/low-confidence state when unsure), loop vs one-shot, and suggested tags (from filename/path and/or audio; method is Open).
+- Must: Detect BPM, key (unknown/low-confidence state when unsure), loop vs one-shot, and suggested tags.
+- Must: Auto-tag v1 priority: **filename and path token matching** into the default taxonomy (see [docs/DEFAULT_TAXONOMY.md](docs/DEFAULT_TAXONOMY.md)). Audio-based tagging is optional later if a crate earns it.
+- Must: BPM / key / loop-vs-one-shot: prefer an existing Rust analysis crate (or bindings) behind `trait Analyzer`. Imperfect results with unknown/low-confidence are acceptable for v1; user overrides win.
 - Must: Auto-apply suggested tags into the tag taxonomy where possible. User can edit afterward like any tags.
 - Must: Removing an auto-applied tag is a sticky rejection. Normal re-analyze must not put it back.
 - Must: Two modes:
@@ -229,7 +235,7 @@ Drag origin decides the payload:
 - Must: Show analysis progress (per sample and/or globally) without a blocking modal.
 - Should: Re-analyze a sample or folder (normal mode, forced).
 - Must: User overrides win for display/search until cleared.
-- Open: Algorithms / libraries (engineering).
+- Open: Exact analysis crate(s); spike `stratum-dsp` (or similar) and fall back to unknown when confidence is low.
 
 ### 4.8 Metadata storage and overrides
 
@@ -243,7 +249,7 @@ Drag origin decides the payload:
 ### 4.9 Tags
 
 - Must: Hierarchical tags, arbitrary depth (e.g. `Drums/Kick/808`).
-- Must: Ship a default taxonomy. Users can rename, add, and reorganize.
+- Must: Ship a default taxonomy ([docs/DEFAULT_TAXONOMY.md](docs/DEFAULT_TAXONOMY.md)). Users can rename, add, and reorganize.
 - Must: Add/remove tags on samples; hierarchy-aware autocomplete.
 - Should: Tag browser / facets with counts.
 - Must: Chips show the full path, not leaf-only.
@@ -290,10 +296,20 @@ Drag origin decides the payload:
 
 ### 4.13 Appearance
 
-- Must: Dark only in v1.
+- Must: Dark only in v1 (one shipped theme).
 - Must: Dense, readable metadata; clear selected and playing states.
+- Must: Colors and other theme tokens live outside components (dedicated theme files / token tables). Adding or changing a theme later must not require hunting through UI code for hex values.
+- Later: Additional themes (including light) can ship by adding theme definitions; no v1 theme picker required.
 
-### 4.14 Formats and cloud paths
+### 4.14 Localization
+
+- Must: User-visible copy lives in locale resource files (not hardcoded strings in components), keyed for lookup.
+- Must: v1 ships English (`en`) only.
+- Must: Adding a language later is mainly new locale files plus wiring the language list; UI code should not need string-by-string edits.
+- Should: Prefer short keys grouped by screen/feature (same shape as loudline's `locales/<lang>/…` layout).
+- Out of v1: In-app language picker UI (fine to add when a second locale exists).
+
+### 4.15 Formats and cloud paths
 
 - Must: These formats work for indexing, preview, and drag-out: WAV, AIFF/AIF, FLAC, MP3, AAC/M4A, OGG, Opus.
 - Must: Ignore non-audio junk by default (images, PDFs, ZIPs, DAW projects, Rex/RX2, MIDI, sampler instruments such as `.nki`/`.exs`/`.sfz`, …).
@@ -302,7 +318,7 @@ Drag origin decides the payload:
 - Must: Treat cloud online-only files as normal paths. Reading for analysis/preview/drag hydrates via the filesystem. Bulk hydration of a root during indexing is acceptable. No separate download UX.
 - Must: Hydration and analysis stay async; the UI must not freeze.
 
-### 4.15 First launch
+### 4.16 First launch
 
 - Must: First launch is simple: empty library and a way to add a root folder. No guided onboarding flow in v1.
 - Later: Optional onboarding.
@@ -316,6 +332,8 @@ Drag origin decides the payload:
 - Safety: Never modify or delete user audio without an explicit confirmed action. Metadata never writes into source files in v1.
 - Privacy: Local-first; no account for core use.
 - Reliability: Crash/force-quit must not corrupt the library index; analysis can resume.
+- v1 quality bar: A **complete** Must coverage of this SPEC plus the provided Claude Design surfaces, good enough to dogfood. Analysis, fuzzy search, and watch edge cases may be imperfect. Prefer shipping and tuning over polishing one subsystem forever.
+- Implementation bias: Prefer maintained Rust crates and existing React packages when they fit (audio I/O, decode, FS watch, SQLite, BPM/key, table virtualization, i18n). Custom code for product glue and UI chrome; avoid reimplementing OS integration or DSP that a crate already does well.
 
 ---
 
@@ -343,7 +361,8 @@ Add / differ: multi-root folders → search chips; row waveforms; play-from-curs
 
 ## 8. Open items
 
-1. Analysis algorithms (engineering)
+1. Exact BPM/key crate choice after a short spike (`stratum-dsp` first candidate)
+2. Windows validation (v1 can be macOS-first on this host; Windows before calling cross-platform done)
 
 ---
 
@@ -354,3 +373,4 @@ Add / differ: multi-root folders → search chips; row waveforms; play-from-curs
 | 0.1.x | 2026-09-21 | Requirements gathering |
 | 0.2.x | 2026-09-21 | Design + engineering tidy; continued Q&A |
 | 0.3 | 2026-09-21 | Named Sift; Q49-Q68 folded in; Q&A paused; cleanup + humanize |
+| 0.3.1 | 2026-09-22 | Locale + theme token separation (Q70); column sort cycle (Q71); taxonomy + v1 bar + crate bias (Q72–Q74) |

@@ -2,9 +2,9 @@
 
 Paste this **entire file** into Claude Design as the opening prompt. Attach the screenshot set this brief describes in §2. Those images are inputs; this file is product truth when they disagree.
 
-**For:** Claude Design  
-**Product:** Sift  
-**Platform:** Desktop · macOS + Windows · one laptop/desktop frame ≈ 1440×900 (or similar) · **dark theme only**  
+**For:** Claude Design
+**Product:** Sift
+**Platform:** Desktop · macOS + Windows · one laptop/desktop frame ≈ 1440×900 (or similar) · **dark theme only**
 **Goal:** Design the v1 UI for a local sample library so a producer can find files, hear them fast, tag them, and drag a file or waveform selection into a DAW.
 
 ---
@@ -114,18 +114,18 @@ Must support:
 
 ### 5.2 Primary content and behaviors the UI must make obvious
 
-| Capability | What the user must understand from the UI |
-|---|---|
-| Play on select | Selecting a row can start preview immediately (preference exists; default on) |
-| Row waveform | Click plays from that point; hover shows a light vertical cursor |
-| Detail waveform | Click sets playhead; drag selects a region; Shift = temporary free-time vs beat snap; Z = zero-crossing on edges |
-| Snap | Setting: None / 1/4 / 1/8 / 1/16 (default 1/4). Labels are yours |
-| Drag to DAW | List drag = full files for the multi-selection. Drag from **inside** the detail selection box = JIT clip of that region. Outside selection / no selection = no file drag |
-| Omni chips | Folder click (or "Show only files from parent folder") adds a recursive folder chip. Chips are removable |
+| Capability       | What the user must understand from the UI                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Play on select   | Selecting a row can start preview immediately (preference exists; default on)                                                                                                   |
+| Row waveform     | Click plays from that point; hover shows a light vertical cursor                                                                                                                |
+| Detail waveform  | Click sets playhead; drag selects a region; Shift = temporary free-time vs beat snap; Z = zero-crossing on edges                                                                |
+| Snap             | Setting: None / 1/4 / 1/8 / 1/16 (default 1/4). Labels are yours                                                                                                                |
+| Drag to DAW      | List drag = full files for the multi-selection. Drag from **inside** the detail selection box = JIT clip of that region. Outside selection / no selection = no file drag        |
+| Omni chips       | Folder click (or "Show only files from parent folder") adds a recursive folder chip. Chips are removable                                                                        |
 | BPM / key search | BPM range chip; half/double include toggle (default off, inline, sticky). Key chip; enharmonics always match; relative major/minor include toggle (default off, inline, sticky) |
-| Tags | Hierarchical; colored; full-path chips; autocomplete; management surface to rename/add/move/color/delete |
-| Overrides | Effective BPM/key/type/tags shown plainly (no special "detected vs override" styling required) |
-| Multi-select | Finder/Explorer rules: Shift range, ⌘/Ctrl toggle |
+| Tags             | Hierarchical; colored; full-path chips; autocomplete; management surface to rename/add/move/color/delete                                                                        |
+| Overrides        | Effective BPM/key/type/tags shown plainly (no special "detected vs override" styling required)                                                                                  |
+| Multi-select     | Finder/Explorer rules: Shift range, ⌘/Ctrl toggle                                                                                                                               |
 
 ### 5.3 Context menu (sample rows)
 
@@ -252,16 +252,16 @@ If something feels missing for a coherent tool, leave a short designer note on t
 
 ### Samples (rows)
 
-| Name | Type | BPM | Key | Tags | Favorite | Notes |
-|---|---|---|---|---|---|---|
-| `808_sub_hit_A.wav` | one-shot |  | A | `Drums/Kick/808` | ★ | |
-| `kick_tight_90.wav` | one-shot | 90 | | `Drums/Kick` | | |
-| `snare_room_verb.wav` | one-shot | | | `Drums/Snare`, `FX/Reverb` | ★ | |
-| `loop_funk_110_Gm.wav` | loop | 110 | G minor | `Drums/Breaks`, `Genre/Funk` | | |
-| `bass_wobble_140_F#.wav` | loop | 140 | F# minor | `Synths/Bass` | | |
-| `night_tram_amb.flac` | one-shot | | | `Field/City`, `Ambience` | | missing file |
-| `vocal_take_03_comp.aiff` | one-shot | | D minor | `Vocals` | | |
-| `hat_closed_micro.wav` | one-shot | | | `Drums/Hats` | | analyzing… |
+| Name                      | Type     | BPM | Key      | Tags                         | Favorite | Notes        |
+| ------------------------- | -------- | --- | -------- | ---------------------------- | -------- | ------------ |
+| `808_sub_hit_A.wav`       | one-shot |     | A        | `Drums/Kick/808`             | ★        |              |
+| `kick_tight_90.wav`       | one-shot | 90  |          | `Drums/Kick`                 |          |              |
+| `snare_room_verb.wav`     | one-shot |     |          | `Drums/Snare`, `FX/Reverb`   | ★        |              |
+| `loop_funk_110_Gm.wav`    | loop     | 110 | G minor  | `Drums/Breaks`, `Genre/Funk` |          |              |
+| `bass_wobble_140_F#.wav`  | loop     | 140 | F# minor | `Synths/Bass`                |          |              |
+| `night_tram_amb.flac`     | one-shot |     |          | `Field/City`, `Ambience`     |          | missing file |
+| `vocal_take_03_comp.aiff` | one-shot |     | D minor  | `Vocals`                     |          |              |
+| `hat_closed_micro.wav`    | one-shot |     |          | `Drums/Hats`                 |          | analyzing…   |
 
 ### Omni examples
 
