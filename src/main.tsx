@@ -1,9 +1,14 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
+import "./i18n";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { AppShell } from "./components/AppShell";
+import { applyTheme } from "./theme";
+import "./themes/dark-default.css";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+applyTheme("dark-default");
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <AppShell />
+  </StrictMode>,
 );

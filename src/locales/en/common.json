@@ -1,0 +1,15 @@
+{
+  "appName": "Sift",
+  "close": "Close",
+  "cancel": "Cancel",
+  "preferences": "Preferences",
+  "settings": "Settings",
+  "tags": "Tags",
+  "searchPlaceholder": "Search names, or add folder / tag / BPM / key filters",
+  "waveforms": "Waveforms",
+  "favoritesOnly": "Favorites only",
+  "columns": "Columns",
+  "statusRoots": "{{count}} roots",
+  "statusFiles": "{{count}} files indexed",
+  "statusAnalyzing": "Analyzing…"
+}

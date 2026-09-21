@@ -13,8 +13,8 @@ Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers SPEC Mus
 | Phase | Doc | Status |
 |-------|-----|--------|
 | 01 Scaffold | [phases/01-scaffold.md](phases/01-scaffold.md) | complete |
-| 02 Shell, theme, i18n | [phases/02-shell-theme-i18n.md](phases/02-shell-theme-i18n.md) | pending |
-| 03 DB + settings | [phases/03-db-settings.md](phases/03-db-settings.md) | pending |
+| 02 Shell, theme, i18n | [phases/02-shell-theme-i18n.md](phases/02-shell-theme-i18n.md) | complete |
+| 03 DB + settings | [phases/03-db-settings.md](phases/03-db-settings.md) | in_progress |
 | 04 Library roots + first launch | [phases/04-library-roots.md](phases/04-library-roots.md) | pending |
 | 05 Indexer | [phases/05-indexer.md](phases/05-indexer.md) | pending |
 | 06 Sample table | [phases/06-sample-table.md](phases/06-sample-table.md) | pending |

@@ -1,6 +1,6 @@
 # Phase 03 — DB + settings
 
-**Status:** pending
+**Status:** in_progress
 
 ## Previous
 
