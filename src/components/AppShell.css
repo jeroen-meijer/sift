@@ -198,6 +198,12 @@
   font-size: 12.5px;
 }
 
+.mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
 .library-placeholder {
   flex: 1;
   display: grid;
