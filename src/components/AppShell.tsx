@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FirstLaunch } from "./FirstLaunch";
@@ -18,6 +19,15 @@ type DbStats = {
   clips_dir: string;
 };
 
+type IndexProgress = {
+  root_id: number;
+  scanned: number;
+  indexed: number;
+  skipped: number;
+  current_path: string;
+  done: boolean;
+};
+
 export function AppShell() {
   const { t } = useTranslation("common");
   const { t: ts } = useTranslation("settings");
@@ -34,6 +44,7 @@ export function AppShell() {
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<FolderNode | null>(null);
+  const [indexStatus, setIndexStatus] = useState<string | undefined>();
 
   const refresh = useCallback(async () => {
     const [nextStats, tree] = await Promise.all([
@@ -48,6 +59,24 @@ export function AppShell() {
     void refresh().catch((err) => console.error(err));
   }, [refresh, view]);
 
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<IndexProgress>("index-progress", (event) => {
+      const p = event.payload;
+      if (p.done) {
+        setIndexStatus(undefined);
+        void refresh();
+      } else {
+        setIndexStatus(`Indexing ${p.scanned}…`);
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [refresh]);
+
   const addFolder = useCallback(async () => {
     const selected = await open({
       directory: true,
@@ -55,6 +84,7 @@ export function AppShell() {
       title: tl("addFolder"),
     });
     if (!selected || Array.isArray(selected)) return;
+    setIndexStatus("Indexing…");
     await invoke("add_root", { path: selected });
     await refresh();
   }, [refresh, tl]);
@@ -88,11 +118,28 @@ export function AppShell() {
           <main className="library-main">
             <div className="library-placeholder">
               {selectedFolder ?? t("appName")}
+              <div className="muted" style={{ marginTop: 8 }}>
+                {stats.samples} samples indexed
+              </div>
               {selectedFolder && folders.find((f) => f.path === selectedFolder)?.is_root ? (
                 <div style={{ marginTop: 16 }}>
                   <button
                     type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      const root = folders.find((f) => f.path === selectedFolder);
+                      if (root) {
+                        setIndexStatus("Indexing…");
+                        void invoke("reindex_root", { rootId: root.root_id });
+                      }
+                    }}
+                  >
+                    Re-index
+                  </button>
+                  <button
+                    type="button"
                     className="btn btn-danger"
+                    style={{ marginLeft: 8 }}
                     onClick={() =>
                       setConfirmRemove(folders.find((f) => f.path === selectedFolder) ?? null)
                     }
@@ -153,7 +200,7 @@ export function AppShell() {
         </div>
       ) : null}
 
-      <StatusBar rootCount={stats.roots} fileCount={stats.samples} />
+      <StatusBar rootCount={stats.roots} fileCount={stats.samples} statusText={indexStatus} />
     </div>
   );
 }
