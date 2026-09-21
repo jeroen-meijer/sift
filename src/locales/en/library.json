@@ -22,6 +22,8 @@
   "typeLoop": "loop",
   "typeOneShot": "one-shot",
   "loopPreview": "Loop preview",
+  "dragFiles": "Drag files",
+  "dragClip": "Drag clip",
   "previewGain": "Preview gain",
   "snap": "Snap",
   "askIndexTitle": "Index new files?",

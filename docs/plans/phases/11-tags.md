@@ -1,6 +1,6 @@
 # Phase 11 — Tags
 
-**Status:** pending
+**Status:** complete
 
 ## Previous
 
@@ -31,6 +31,13 @@ Hierarchical tags with colors, sample tagging, and dedicated tag management UI (
 - Tag management screen matches design intent
 - Cascade delete confirm works
 - Tags on samples show as full-path chips in table/detail
+
+## Done
+
+- `src-tauri/src/tags.rs`: list/create/rename/move/color/delete + sample tag set/add/remove (auto → `tag_rejects`)
+- Commands registered; inherited color resolved for sample chips
+- `TagManager` overlay: taxonomy list, add path, cascade delete confirm (locales/tags.json)
+- Sample table + detail show full-path colored chips
 
 ## Next
 

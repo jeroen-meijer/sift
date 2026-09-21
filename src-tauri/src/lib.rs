@@ -7,6 +7,7 @@ mod library;
 mod paths;
 mod samples;
 mod state;
+mod tags;
 
 use state::AppState;
 
@@ -17,6 +18,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_drag::init())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
@@ -40,6 +42,18 @@ pub fn run() {
             commands::set_output_device,
             commands::set_preview_gain,
             commands::set_loop_preview,
+            commands::render_jit_clip,
+            commands::clear_jit_cache,
+            commands::start_drag_files,
+            commands::list_tags,
+            commands::create_tag,
+            commands::rename_tag,
+            commands::move_tag,
+            commands::set_tag_color,
+            commands::delete_tag,
+            commands::set_sample_tags,
+            commands::add_sample_tag,
+            commands::remove_sample_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

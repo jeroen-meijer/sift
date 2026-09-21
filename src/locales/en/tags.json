@@ -2,6 +2,7 @@
   "title": "Tags",
   "manage": "Manage tags",
   "addTag": "Add tag",
+  "addPathPlaceholder": "New path, e.g. Drums/Rim",
   "rename": "Rename",
   "move": "Move",
   "color": "Color",
@@ -10,5 +11,7 @@
   "deleteTitle": "Delete tag?",
   "deleteCascadeBody": "This deletes the tag and all child tags, and removes them from every sample.",
   "deleteConfirm": "Delete {{count}} tags",
-  "preview": "Preview"
+  "preview": "Preview",
+  "editing": "Editing tag",
+  "selectHint": "Select a tag to edit or delete it."
 }

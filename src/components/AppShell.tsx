@@ -5,8 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FirstLaunch } from "./FirstLaunch";
 import { FolderSidebar, type FolderNode } from "./FolderSidebar";
+import { OmniSearch, type OmniState } from "./OmniSearch";
 import { SampleTable, type SampleRow } from "./SampleTable";
 import { StatusBar } from "./StatusBar";
+import { TagManager } from "./TagManager";
 import { TitleBar } from "./TitleBar";
 import { WaveformCanvas, type PeakData } from "./WaveformCanvas";
 import "./AppShell.css";
@@ -32,10 +34,20 @@ type IndexProgress = {
 
 type SortCol = "name" | "type" | "bpm" | "key" | "created_at" | "favorite";
 
+const emptyOmni = (): OmniState => ({
+  text: "",
+  folder: null,
+  tags: [],
+  bpmMin: null,
+  bpmMax: null,
+  key: null,
+  halfDouble: false,
+  relativeKey: false,
+});
+
 export function AppShell() {
   const { t } = useTranslation("common");
   const { t: ts } = useTranslation("settings");
-  const { t: tt } = useTranslation("tags");
   const { t: tl } = useTranslation("library");
   const [view, setView] = useState<AppView>("library");
   const [stats, setStats] = useState<DbStats>({
@@ -58,6 +70,7 @@ export function AppShell() {
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const [loopPreview, setLoopPreview] = useState(true);
   const [playOnSelect, setPlayOnSelect] = useState(true);
+  const [omni, setOmni] = useState<OmniState>(emptyOmni);
 
   const refreshStats = useCallback(async () => {
     const [nextStats, tree] = await Promise.all([
@@ -69,9 +82,18 @@ export function AppShell() {
   }, []);
 
   const refreshSamples = useCallback(async () => {
+    const folderPrefix = omni.folder ?? selectedFolder;
     const rows = await invoke<SampleRow[]>("list_samples", {
       query: {
-        folder_prefix: selectedFolder,
+        folder_prefix: folderPrefix,
+        text: omni.text || null,
+        tag_path: omni.tags[0] ?? null,
+        tag_paths: omni.tags,
+        bpm_min: omni.bpmMin,
+        bpm_max: omni.bpmMax,
+        key: omni.key,
+        half_double: omni.halfDouble,
+        relative_key: omni.relativeKey,
         favorites_only: false,
         sort_column: sortColumn,
         sort_direction: sortDirection,
@@ -80,7 +102,7 @@ export function AppShell() {
       },
     });
     setSamples(rows);
-  }, [selectedFolder, sortColumn, sortDirection]);
+  }, [omni, selectedFolder, sortColumn, sortDirection]);
 
   useEffect(() => {
     void refreshStats().catch(console.error);
@@ -93,9 +115,19 @@ export function AppShell() {
   }, [refreshSamples, stats.roots]);
 
   useEffect(() => {
-    void invoke<{ play_on_select?: boolean; loop_preview?: boolean }>("get_settings").then((s) => {
+    void invoke<{
+      play_on_select?: boolean;
+      loop_preview?: boolean;
+      half_double_bpm?: boolean;
+      relative_key?: boolean;
+    }>("get_settings").then((s) => {
       if (typeof s.play_on_select === "boolean") setPlayOnSelect(s.play_on_select);
       if (typeof s.loop_preview === "boolean") setLoopPreview(s.loop_preview);
+      setOmni((prev) => ({
+        ...prev,
+        halfDouble: typeof s.half_double_bpm === "boolean" ? s.half_double_bpm : prev.halfDouble,
+        relativeKey: typeof s.relative_key === "boolean" ? s.relative_key : prev.relativeKey,
+      }));
     });
   }, []);
 
@@ -209,8 +241,30 @@ export function AppShell() {
     if (sortDirection === "desc") setSortColumn("name");
   };
 
+  const persistOmniToggle = (key: "half_double_bpm" | "relative_key", value: boolean) => {
+    void invoke("set_setting", { key, value });
+  };
+
   const focused = samples.find((s) => s.id === focusedId) ?? null;
   const isEmpty = stats.roots === 0;
+
+  const dragSelectedFiles = useCallback(async () => {
+    const paths = samples
+      .filter((s) => selectedIds.has(s.id) && !s.missing)
+      .map((s) => s.path);
+    if (paths.length === 0) return;
+    await invoke("start_drag_files", { paths });
+  }, [samples, selectedIds]);
+
+  const dragSelectionClip = useCallback(async () => {
+    if (focusedId == null || !selection) return;
+    const path = await invoke<string>("render_jit_clip", {
+      sampleId: focusedId,
+      startSecs: selection.start,
+      endSecs: selection.end,
+    });
+    await invoke("start_drag_files", { paths: [path] });
+  }, [focusedId, selection]);
 
   return (
     <div className="app-shell">
@@ -227,18 +281,48 @@ export function AppShell() {
             selectedPath={selectedFolder}
             onSelect={(path) => {
               setSelectedFolder(path);
+              setOmni((prev) => ({ ...prev, folder: path }));
               setSelectedIds(new Set());
               setFocusedId(null);
             }}
             onAddRoot={() => void addFolder()}
           />
           <main className="library-main">
+            <OmniSearch
+              value={omni}
+              onChange={setOmni}
+              onToggleHalfDouble={() => {
+                setOmni((prev) => {
+                  const next = !prev.halfDouble;
+                  persistOmniToggle("half_double_bpm", next);
+                  return { ...prev, halfDouble: next };
+                });
+              }}
+              onToggleRelativeKey={() => {
+                setOmni((prev) => {
+                  const next = !prev.relativeKey;
+                  persistOmniToggle("relative_key", next);
+                  return { ...prev, relativeKey: next };
+                });
+              }}
+            />
+            <div className="library-toolbar">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={selectedIds.size === 0}
+                onClick={() => void dragSelectedFiles().catch(console.error)}
+              >
+                {tl("dragFiles")}
+              </button>
+            </div>
             <SampleTable
               samples={samples}
               selectedIds={selectedIds}
               focusedId={focusedId}
               sortColumn={sortColumn}
               sortDirection={sortDirection === "clear" ? "clear" : sortDirection}
+              highlightText={omni.text}
               onSelect={onSelectRow}
               onToggleFavorite={(id, favorite) => {
                 void invoke("set_sample_favorite", { id, favorite }).then(refreshSamples);
@@ -252,6 +336,22 @@ export function AppShell() {
                     <div>
                       <div className="detail-title">{focused.filename}</div>
                       <div className="detail-path mono">{focused.path}</div>
+                      {focused.tags.length > 0 ? (
+                        <div className="detail-tags">
+                          {focused.tags.map((tag) => (
+                            <span
+                              key={tag.path}
+                              className="tag-chip"
+                              style={{
+                                background: tag.color ? `${tag.color}33` : undefined,
+                                borderColor: tag.color ?? undefined,
+                              }}
+                            >
+                              {tag.path}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="detail-transport">
                       <button
@@ -265,6 +365,15 @@ export function AppShell() {
                       >
                         {tl("loopPreview")}
                       </button>
+                      {selection ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => void dragSelectionClip().catch(console.error)}
+                        >
+                          {tl("dragClip")}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <WaveformCanvas
@@ -298,24 +407,23 @@ export function AppShell() {
                 {ts("jitCache")}: {stats.clips_dir}
               </p>
             ) : null}
-            <button type="button" className="btn btn-secondary" onClick={() => setView("library")}>
-              {t("close")}
-            </button>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void invoke("clear_jit_cache").catch(console.error)}
+              >
+                {ts("clearCache")}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setView("library")}>
+                {t("close")}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
 
-      {view === "tags" ? (
-        <div className="overlay-panel">
-          <div className="overlay-card">
-            <h2>{tt("title")}</h2>
-            <p className="muted">{stats.tags} tags seeded</p>
-            <button type="button" className="btn btn-secondary" onClick={() => setView("library")}>
-              {t("close")}
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {view === "tags" ? <TagManager onClose={() => setView("library")} /> : null}
 
       {confirmRemove ? (
         <div className="overlay-panel modal">

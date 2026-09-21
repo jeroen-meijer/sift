@@ -12,6 +12,7 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@crabnebula/tauri-plugin-drag": "2",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-virtual": "^3.14.13",
     "@tauri-apps/api": "^2.11.0",

@@ -38,6 +38,16 @@ pub struct Query {
     pub text: Option<String>,
     pub tag_path: Option<String>,
     #[serde(default)]
+    pub tag_paths: Vec<String>,
+    pub bpm_min: Option<f64>,
+    pub bpm_max: Option<f64>,
+    pub key: Option<String>,
+    pub sample_type: Option<String>,
+    #[serde(default)]
+    pub half_double: bool,
+    #[serde(default)]
+    pub relative_key: bool,
+    #[serde(default)]
     pub favorites_only: bool,
     #[serde(default)]
     pub sort_column: String,
@@ -141,7 +151,7 @@ fn load_tags_for(
     let ids: Vec<i64> = samples.iter().map(|s| s.id).collect();
     let placeholders: String = (1..=ids.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
     let sql = format!(
-        "SELECT st.sample_id, t.path, t.color
+        "SELECT st.sample_id, t.id, t.path, t.color
          FROM sample_tags st
          JOIN tags t ON t.id = st.tag_id
          WHERE st.sample_id IN ({placeholders})
@@ -151,17 +161,18 @@ fn load_tags_for(
     let rows = stmt.query_map(params_from_iter(ids.iter()), |row| {
         Ok((
             row.get::<_, i64>(0)?,
-            TagChip {
-                path: row.get(1)?,
-                color: row.get(2)?,
-            },
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
         ))
     })?;
 
     let mut by_id: HashMap<i64, Vec<TagChip>> = HashMap::new();
     for row in rows {
-        let (sample_id, chip) = row?;
-        by_id.entry(sample_id).or_default().push(chip);
+        let (sample_id, tag_id, path, stored_color) = row?;
+        let color = stored_color
+            .or_else(|| crate::tags::resolve_color(conn, tag_id).ok().flatten());
+        by_id.entry(sample_id).or_default().push(TagChip { path, color });
     }
     for sample in samples.iter_mut() {
         if let Some(tags) = by_id.remove(&sample.id) {
@@ -187,7 +198,18 @@ pub fn list_samples(conn: &Connection, query: &Query) -> AppResult<Vec<SampleDto
         binds.push(Box::new(format!("%{text}%")));
     }
 
-    if let Some(tag_path) = query.tag_path.as_deref().filter(|s| !s.is_empty()) {
+    let mut tag_filters: Vec<String> = query
+        .tag_paths
+        .iter()
+        .filter(|s| !s.is_empty())
+        .cloned()
+        .collect();
+    if tag_filters.is_empty() {
+        if let Some(tag_path) = query.tag_path.as_deref().filter(|s| !s.is_empty()) {
+            tag_filters.push(tag_path.to_string());
+        }
+    }
+    for tag_path in &tag_filters {
         sql.push_str(
             " AND EXISTS (
                 SELECT 1 FROM sample_tags st
@@ -196,8 +218,50 @@ pub fn list_samples(conn: &Connection, query: &Query) -> AppResult<Vec<SampleDto
                   AND (t.path = ? OR t.path LIKE ?)
             )",
         );
-        binds.push(Box::new(tag_path.to_string()));
+        binds.push(Box::new(tag_path.clone()));
         binds.push(Box::new(format!("{tag_path}/%")));
+    }
+
+    if query.bpm_min.is_some() || query.bpm_max.is_some() {
+        let min = query.bpm_min.unwrap_or(0.0);
+        let max = query.bpm_max.unwrap_or(f64::MAX);
+        if query.half_double {
+            sql.push_str(
+                " AND bpm IS NOT NULL AND (
+                    (bpm >= ? AND bpm <= ?)
+                    OR (bpm >= ? AND bpm <= ?)
+                    OR (bpm >= ? AND bpm <= ?)
+                )",
+            );
+            binds.push(Box::new(min));
+            binds.push(Box::new(max));
+            binds.push(Box::new(min / 2.0));
+            binds.push(Box::new(max / 2.0));
+            binds.push(Box::new(min * 2.0));
+            binds.push(Box::new(max * 2.0));
+        } else {
+            sql.push_str(" AND bpm IS NOT NULL AND bpm >= ? AND bpm <= ?");
+            binds.push(Box::new(min));
+            binds.push(Box::new(max));
+        }
+    }
+
+    if let Some(key) = query.key.as_deref().filter(|s| !s.is_empty()) {
+        let keys = key_match_set(key, query.relative_key);
+        if !keys.is_empty() {
+            let ph = vec!["?"; keys.len()].join(", ");
+            sql.push_str(&format!(
+                " AND key_name IS NOT NULL AND lower(replace(key_name, ' ', '')) IN ({ph})"
+            ));
+            for k in keys {
+                binds.push(Box::new(k));
+            }
+        }
+    }
+
+    if let Some(sample_type) = query.sample_type.as_deref().filter(|s| !s.is_empty()) {
+        sql.push_str(" AND sample_type = ? COLLATE NOCASE");
+        binds.push(Box::new(sample_type.to_string()));
     }
 
     if query.favorites_only {
@@ -225,6 +289,132 @@ pub fn list_samples(conn: &Connection, query: &Query) -> AppResult<Vec<SampleDto
     let mut samples: Vec<SampleDto> = rows.filter_map(|r| r.ok()).collect();
     load_tags_for(conn, &mut samples)?;
     Ok(samples)
+}
+
+/// Normalized lowercase key tokens that should match `key` (enharmonics + optional relatives).
+fn key_match_set(key: &str, relative: bool) -> Vec<String> {
+    let normalized = normalize_key_token(key);
+    if normalized.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |s: String| {
+        if !out.iter().any(|x| x == &s) {
+            out.push(s);
+        }
+    };
+
+    for equiv in enharmonic_forms(&normalized) {
+        push(equiv.clone());
+        if relative {
+            if let Some(rel) = relative_of(&equiv) {
+                for e in enharmonic_forms(&rel) {
+                    push(e);
+                }
+            }
+        }
+    }
+    out
+}
+
+fn normalize_key_token(raw: &str) -> String {
+    let s = raw.trim().to_lowercase().replace(' ', "");
+    let s = s
+        .replace("major", "")
+        .replace("maj", "")
+        .replace("minor", "m")
+        .replace("min", "m");
+    // Collapse accidental spellings
+    s.replace("♯", "#").replace("♭", "b")
+}
+
+fn parse_root_mode(key: &str) -> Option<(String, bool)> {
+    let k = normalize_key_token(key);
+    if k.is_empty() {
+        return None;
+    }
+    let minor = k.ends_with('m');
+    let root = if minor {
+        k[..k.len() - 1].to_string()
+    } else {
+        k
+    };
+    if root.is_empty() {
+        return None;
+    }
+    Some((root, minor))
+}
+
+fn pitch_class(root: &str) -> Option<u8> {
+    match root {
+        "c" => Some(0),
+        "c#" | "db" => Some(1),
+        "d" => Some(2),
+        "d#" | "eb" => Some(3),
+        "e" | "fb" => Some(4),
+        "f" | "e#" => Some(5),
+        "f#" | "gb" => Some(6),
+        "g" => Some(7),
+        "g#" | "ab" => Some(8),
+        "a" => Some(9),
+        "a#" | "bb" => Some(10),
+        "b" | "cb" => Some(11),
+        _ => None,
+    }
+}
+
+fn spellings_for(pc: u8) -> &'static [&'static str] {
+    match pc {
+        0 => &["c", "b#"],
+        1 => &["c#", "db"],
+        2 => &["d"],
+        3 => &["d#", "eb"],
+        4 => &["e", "fb"],
+        5 => &["f", "e#"],
+        6 => &["f#", "gb"],
+        7 => &["g"],
+        8 => &["g#", "ab"],
+        9 => &["a"],
+        10 => &["a#", "bb"],
+        11 => &["b", "cb"],
+        _ => &[],
+    }
+}
+
+fn enharmonic_forms(key: &str) -> Vec<String> {
+    let Some((root, minor)) = parse_root_mode(key) else {
+        return vec![normalize_key_token(key)];
+    };
+    let Some(pc) = pitch_class(&root) else {
+        return vec![normalize_key_token(key)];
+    };
+    spellings_for(pc)
+        .iter()
+        .map(|sp| {
+            if minor {
+                format!("{sp}m")
+            } else {
+                (*sp).to_string()
+            }
+        })
+        .collect()
+}
+
+fn relative_of(key: &str) -> Option<String> {
+    let (root, minor) = parse_root_mode(key)?;
+    let pc = pitch_class(&root)?;
+    // Relative major of minor = +3 semitones; relative minor of major = -3.
+    let rel_pc = if minor {
+        (pc + 3) % 12
+    } else {
+        (pc + 9) % 12
+    };
+    let spelling = spellings_for(rel_pc).first()?;
+    Some(if minor {
+        (*spelling).to_string()
+    } else {
+        format!("{spelling}m")
+    })
 }
 
 pub fn set_sample_favorite(conn: &Connection, id: i64, favorite: bool) -> AppResult<()> {

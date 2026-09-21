@@ -1,6 +1,6 @@
 # Phase 12 — Omni search
 
-**Status:** pending
+**Status:** complete
 
 ## Previous
 
@@ -32,6 +32,15 @@ ADSR-style omni search: fuzzy text + removable chips; toggles; match highlightin
 - Typing filters the table; chips narrow further
 - Folder chip recursive; removing chip restores
 - Half/double and relative toggles persist
+
+## Done
+
+- `OmniSearch` bar above sample table: text + folder/tag/BPM/key chips, clear, ½× / rel toggles
+- Folder select sets folder chip; wired to `list_samples` (`text`, `folder_prefix`, `tag_path`/`tag_paths`, bpm/key, half_double, relative_key)
+- Name column `<mark>` highlight for text query
+- Enharmonic + relative key SQL filters; half/double BPM bands
+- Toggles persist via settings `half_double_bpm` / `relative_key`
+- Tag facet → chip and BPM/key chip entry UI still light (chips removable; add via state/API ready)
 
 ## Next
 
