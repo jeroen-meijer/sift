@@ -2,7 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FirstLaunch } from "./FirstLaunch";
 import { FolderSidebar, type FolderNode } from "./FolderSidebar";
@@ -93,6 +93,8 @@ export function AppShell() {
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const [loopPreview, setLoopPreview] = useState(true);
   const [playOnSelect, setPlayOnSelect] = useState(true);
+  const [snap, setSnap] = useState<"None" | "1/4" | "1/8" | "1/16">("1/4");
+  const shiftHeld = useRef(false);
   const [omni, setOmni] = useState<OmniState>(emptyOmni);
   const [customOpen, setCustomOpen] = useState(false);
   const [customOpts, setCustomOpts] = useState<CustomOpts>({
@@ -305,6 +307,32 @@ export function AppShell() {
       unlistenAsk?.();
     };
   }, [refreshSamples, refreshStats, t]);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Shift") shiftHeld.current = true;
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === "Shift") shiftHeld.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+
+  const snapSecs = useCallback(
+    (secs: number, bpm: number | null | undefined) => {
+      if (shiftHeld.current || snap === "None" || bpm == null || bpm <= 0) return secs;
+      const div = snap === "1/4" ? 1 : snap === "1/8" ? 2 : 4;
+      const beat = 60 / bpm;
+      const grid = beat / div;
+      return Math.round(secs / grid) * grid;
+    },
+    [snap],
+  );
 
   const addFolder = useCallback(async () => {
     const selected = await open({
@@ -596,6 +624,20 @@ export function AppShell() {
                       ) : null}
                     </div>
                     <div className="detail-transport">
+                      <label className="snap-select">
+                        <span>{tl("snap")}</span>
+                        <select
+                          value={snap}
+                          onChange={(e) =>
+                            setSnap(e.target.value as "None" | "1/4" | "1/8" | "1/16")
+                          }
+                        >
+                          <option value="None">None</option>
+                          <option value="1/4">1/4</option>
+                          <option value="1/8">1/8</option>
+                          <option value="1/16">1/16</option>
+                        </select>
+                      </label>
                       <button
                         type="button"
                         className={`btn ${loopPreview ? "btn-primary" : "btn-secondary"}`}
@@ -624,12 +666,18 @@ export function AppShell() {
                       selection={selection}
                       onSeek={(secs) => {
                         if (focusedId != null) {
-                          void invoke("play_sample", { sampleId: focusedId, startSecs: secs });
+                          const snapped = snapSecs(secs, focused.bpm);
+                          void invoke("play_sample", {
+                            sampleId: focusedId,
+                            startSecs: snapped,
+                          });
                         }
                       }}
-                      onSelectRegion={(a, b) =>
-                        setSelection({ start: Math.min(a, b), end: Math.max(a, b) })
-                      }
+                      onSelectRegion={(a, b) => {
+                        const s = snapSecs(Math.min(a, b), focused.bpm);
+                        const e = snapSecs(Math.max(a, b), focused.bpm);
+                        setSelection({ start: s, end: e });
+                      }}
                     />
                   ) : null}
                 </>

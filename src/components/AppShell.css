@@ -552,6 +552,28 @@
 .detail-transport {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.snap-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.snap-select select {
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-input);
+  color: var(--color-text);
+  padding: 0 8px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .waveform-canvas {
