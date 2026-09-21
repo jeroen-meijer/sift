@@ -1,7 +1,9 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FirstLaunch } from "./FirstLaunch";
+import { FolderSidebar, type FolderNode } from "./FolderSidebar";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
 import "./AppShell.css";
@@ -20,6 +22,7 @@ export function AppShell() {
   const { t } = useTranslation("common");
   const { t: ts } = useTranslation("settings");
   const { t: tt } = useTranslation("tags");
+  const { t: tl } = useTranslation("library");
   const [view, setView] = useState<AppView>("library");
   const [stats, setStats] = useState<DbStats>({
     roots: 0,
@@ -28,12 +31,41 @@ export function AppShell() {
     data_dir: "",
     clips_dir: "",
   });
+  const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<FolderNode | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [nextStats, tree] = await Promise.all([
+      invoke<DbStats>("db_stats"),
+      invoke<FolderNode[]>("folder_tree", { maxDepth: 6 }),
+    ]);
+    setStats(nextStats);
+    setFolders(tree);
+  }, []);
 
   useEffect(() => {
-    void invoke<DbStats>("db_stats")
-      .then(setStats)
-      .catch((err) => console.error("db_stats", err));
-  }, [view]);
+    void refresh().catch((err) => console.error(err));
+  }, [refresh, view]);
+
+  const addFolder = useCallback(async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: tl("addFolder"),
+    });
+    if (!selected || Array.isArray(selected)) return;
+    await invoke("add_root", { path: selected });
+    await refresh();
+  }, [refresh, tl]);
+
+  const removeSelectedRoot = useCallback(async () => {
+    if (!confirmRemove?.is_root) return;
+    await invoke("remove_root", { rootId: confirmRemove.root_id });
+    setConfirmRemove(null);
+    setSelectedFolder(null);
+    await refresh();
+  }, [confirmRemove, refresh]);
 
   const isEmpty = stats.roots === 0;
 
@@ -42,16 +74,36 @@ export function AppShell() {
       <TitleBar onSettings={() => setView("settings")} onTags={() => setView("tags")} />
 
       {view === "library" && isEmpty ? (
-        <FirstLaunch
-          onAddFolder={() => {
-            /* Phase 04 */
-          }}
-          onPreferences={() => setView("settings")}
-        />
+        <FirstLaunch onAddFolder={() => void addFolder()} onPreferences={() => setView("settings")} />
       ) : null}
 
       {view === "library" && !isEmpty ? (
-        <div className="library-placeholder">{t("appName")}</div>
+        <div className="library-layout">
+          <FolderSidebar
+            nodes={folders}
+            selectedPath={selectedFolder}
+            onSelect={setSelectedFolder}
+            onAddRoot={() => void addFolder()}
+          />
+          <main className="library-main">
+            <div className="library-placeholder">
+              {selectedFolder ?? t("appName")}
+              {selectedFolder && folders.find((f) => f.path === selectedFolder)?.is_root ? (
+                <div style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() =>
+                      setConfirmRemove(folders.find((f) => f.path === selectedFolder) ?? null)
+                    }
+                  >
+                    {tl("removeRootConfirm")}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </main>
+        </div>
       ) : null}
 
       {view === "settings" ? (
@@ -75,12 +127,28 @@ export function AppShell() {
         <div className="overlay-panel">
           <div className="overlay-card">
             <h2>{tt("title")}</h2>
-            <p className="muted">
-              {stats.tags} tags seeded
-            </p>
+            <p className="muted">{stats.tags} tags seeded</p>
             <button type="button" className="btn btn-secondary" onClick={() => setView("library")}>
               {t("close")}
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmRemove ? (
+        <div className="overlay-panel modal">
+          <div className="overlay-card">
+            <h2>{tl("removeRootTitle")}</h2>
+            <p className="muted">{tl("removeRootBody")}</p>
+            <p className="muted mono">{confirmRemove.path}</p>
+            <div className="dialog-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setConfirmRemove(null)}>
+                {t("cancel")}
+              </button>
+              <button type="button" className="btn btn-danger" onClick={() => void removeSelectedRoot()}>
+                {tl("removeRootConfirm")}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

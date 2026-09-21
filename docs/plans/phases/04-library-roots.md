@@ -1,6 +1,10 @@
 # Phase 04 — Library roots + first launch
 
-**Status:** in_progress
+**Status:** complete
+
+## Done
+
+Add/remove roots via dialog, folder tree sidebar, first-launch Add folder, remove-root confirm. Disk untouched on remove.
 
 ## Previous
 
