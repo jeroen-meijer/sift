@@ -14,6 +14,8 @@ use crate::library::{self, FolderNode, RootDto};
 use crate::samples::{self, Query as SampleQuery, SampleDto};
 use crate::state::AppState;
 use crate::tags::{self, TagNode};
+use crate::undo::UndoAction;
+use crate::watch;
 
 #[derive(serde::Serialize)]
 pub struct DbStats {
@@ -22,6 +24,10 @@ pub struct DbStats {
     pub tags: i64,
     pub data_dir: String,
     pub clips_dir: String,
+}
+
+fn restart_watches(app: &AppHandle, state: &AppState) {
+    watch::restart(app, &state.watch_shared, &state.watch_guard);
 }
 
 #[tauri::command]
@@ -60,6 +66,7 @@ pub fn add_root(app: AppHandle, state: State<'_, AppState>, path: String) -> App
     let root = state.db.with_conn(|conn| library::add_root(conn, &path))?;
     let root_id = root.id;
     let db = state.db.clone();
+    restart_watches(&app, &state);
     std::thread::spawn(move || {
         let _ = db.with_conn(|conn| {
             indexer::index_root(conn, root_id, |progress| {
@@ -77,13 +84,18 @@ pub fn add_root(app: AppHandle, state: State<'_, AppState>, path: String) -> App
                 done: true,
             },
         );
+        crate::analyze::enqueue_unanalyzed(app, db);
     });
     Ok(root)
 }
 
 #[tauri::command]
-pub fn remove_root(state: State<'_, AppState>, root_id: i64) -> AppResult<()> {
-    state.db.with_conn(|conn| library::remove_root(conn, root_id))
+pub fn remove_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| library::remove_root(conn, root_id))?;
+    restart_watches(&app, &state);
+    Ok(())
 }
 
 #[tauri::command]
@@ -113,6 +125,7 @@ pub fn reindex_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) ->
                 let _ = app.emit("index-progress", &progress);
             })
         });
+        crate::analyze::enqueue_unanalyzed(app, db);
     });
     Ok(())
 }
@@ -126,6 +139,7 @@ pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> 
                 let _ = app.emit("index-progress", &progress);
             })
         });
+        crate::analyze::enqueue_unanalyzed(app, db);
     });
     Ok(())
 }
@@ -141,9 +155,189 @@ pub fn set_sample_favorite(
     id: i64,
     favorite: bool,
 ) -> AppResult<()> {
+    let before = state.db.with_conn(|conn| {
+        let (fav, _, _, _) = samples::sample_meta_snapshot(conn, id)?;
+        Ok(fav)
+    })?;
     state
         .db
-        .with_conn(|conn| samples::set_sample_favorite(conn, id, favorite))
+        .with_conn(|conn| samples::set_sample_favorite(conn, id, favorite))?;
+    if before != favorite {
+        state.undo.lock().expect("undo lock").push(UndoAction::Favorite {
+            id,
+            before,
+            after: favorite,
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_sample_bpm(
+    state: State<'_, AppState>,
+    id: i64,
+    bpm: Option<f64>,
+) -> AppResult<()> {
+    let before = state.db.with_conn(|conn| {
+        let (_, b, _, _) = samples::sample_meta_snapshot(conn, id)?;
+        Ok(b)
+    })?;
+    state
+        .db
+        .with_conn(|conn| samples::set_sample_bpm(conn, id, bpm))?;
+    if before != bpm {
+        state.undo.lock().expect("undo lock").push(UndoAction::Bpm {
+            id,
+            before,
+            after: bpm,
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_sample_key(
+    state: State<'_, AppState>,
+    id: i64,
+    key: Option<String>,
+) -> AppResult<()> {
+    let before = state.db.with_conn(|conn| {
+        let (_, _, k, _) = samples::sample_meta_snapshot(conn, id)?;
+        Ok(k)
+    })?;
+    state
+        .db
+        .with_conn(|conn| samples::set_sample_key(conn, id, key.as_deref()))?;
+    if before != key {
+        state.undo.lock().expect("undo lock").push(UndoAction::Key {
+            id,
+            before,
+            after: key,
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_sample_type(
+    state: State<'_, AppState>,
+    id: i64,
+    sample_type: Option<String>,
+) -> AppResult<()> {
+    let before = state.db.with_conn(|conn| {
+        let (_, _, _, t) = samples::sample_meta_snapshot(conn, id)?;
+        Ok(t)
+    })?;
+    state
+        .db
+        .with_conn(|conn| samples::set_sample_type(conn, id, sample_type.as_deref()))?;
+    if before != sample_type {
+        state
+            .undo
+            .lock()
+            .expect("undo lock")
+            .push(UndoAction::SampleType {
+                id,
+                before,
+                after: sample_type,
+            });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reanalyze_samples(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> AppResult<u64> {
+    let n = ids.len() as u64;
+    crate::analyze::spawn_analysis_batch(
+        app,
+        state.db.clone(),
+        ids,
+        crate::analyze::AnalyzeMode::Normal,
+    );
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn analyze_samples(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    custom: Option<crate::analyze::CustomOpts>,
+) -> AppResult<u64> {
+    let n = ids.len() as u64;
+    let mode = match custom {
+        Some(opts) => crate::analyze::AnalyzeMode::Custom(opts),
+        None => crate::analyze::AnalyzeMode::Normal,
+    };
+    crate::analyze::spawn_analysis_batch(
+        app,
+        state.db.clone(),
+        ids,
+        mode,
+    );
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn purge_missing(state: State<'_, AppState>) -> AppResult<u64> {
+    state.db.with_conn(samples::purge_missing)
+}
+
+#[tauri::command]
+pub fn remove_sample(state: State<'_, AppState>, id: i64) -> AppResult<()> {
+    state.db.with_conn(|conn| samples::remove_sample(conn, id))
+}
+
+#[tauri::command]
+pub fn respond_ask_index(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+    index: bool,
+) -> AppResult<u64> {
+    if index {
+        let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        let n = state
+            .db
+            .with_conn(|conn| indexer::index_paths(conn, &path_bufs))?;
+        if n > 0 {
+            let _ = app.emit(
+                "library-changed",
+                watch::LibraryChangedPayload {
+                    reason: "ask-index".into(),
+                },
+            );
+            crate::analyze::enqueue_unanalyzed(
+                app,
+                state.db.clone(),
+            );
+        }
+        Ok(n)
+    } else {
+        let mut skip = state.watch_shared.skip_paths.lock().expect("skip lock");
+        for p in paths {
+            skip.insert(p);
+        }
+        Ok(0)
+    }
+}
+
+#[tauri::command]
+pub fn undo_meta(state: State<'_, AppState>) -> AppResult<bool> {
+    let mut stack = state.undo.lock().expect("undo lock");
+    let action = state.db.with_conn(|conn| stack.undo(conn))?;
+    Ok(action.is_some())
+}
+
+#[tauri::command]
+pub fn redo_meta(state: State<'_, AppState>) -> AppResult<bool> {
+    let mut stack = state.undo.lock().expect("undo lock");
+    let action = state.db.with_conn(|conn| stack.redo(conn))?;
+    Ok(action.is_some())
 }
 
 #[tauri::command]
@@ -153,7 +347,6 @@ pub fn get_peaks(state: State<'_, AppState>, sample_id: i64) -> AppResult<PeakDa
         .with_conn(|conn| samples::get_sample(conn, sample_id))?
         .ok_or_else(|| AppError::msg("sample not found"))?;
     let path = Path::new(&sample.path);
-    // Fill technical metadata when missing (first waveform request).
     if sample.sample_rate.is_none() || sample.duration_ms.is_none() {
         let _ = state
             .db
@@ -313,7 +506,13 @@ pub fn add_sample_tag(
 ) -> AppResult<()> {
     state
         .db
-        .with_conn(|conn| tags::add_sample_tag(conn, sample_id, tag_id))
+        .with_conn(|conn| tags::add_sample_tag(conn, sample_id, tag_id))?;
+    state
+        .undo
+        .lock()
+        .expect("undo lock")
+        .push(UndoAction::TagAdd { sample_id, tag_id });
+    Ok(())
 }
 
 #[tauri::command]
@@ -324,11 +523,15 @@ pub fn remove_sample_tag(
 ) -> AppResult<()> {
     state
         .db
-        .with_conn(|conn| tags::remove_sample_tag(conn, sample_id, tag_id))
+        .with_conn(|conn| tags::remove_sample_tag(conn, sample_id, tag_id))?;
+    state
+        .undo
+        .lock()
+        .expect("undo lock")
+        .push(UndoAction::TagRemove { sample_id, tag_id });
+    Ok(())
 }
 
-/// Render a JIT WAV clip for `sample_id` over `[start_secs, end_secs)` and
-/// return the absolute output path under `AppPaths.clips_dir`.
 #[tauri::command]
 pub fn render_jit_clip(
     state: State<'_, AppState>,
@@ -353,14 +556,11 @@ pub fn render_jit_clip(
     Ok(out.to_string_lossy().into_owned())
 }
 
-/// Delete all cached JIT clip files under `clips_dir`.
 #[tauri::command]
 pub fn clear_jit_cache(state: State<'_, AppState>) -> AppResult<()> {
     jit::clear_cache(&state.paths.clips_dir)
 }
 
-/// Start a native file drag with the given absolute paths (list multi-select
-/// or a single JIT clip). Uses `drag` / tauri-plugin-drag under the hood.
 #[tauri::command]
 pub async fn start_drag_files(
     app: AppHandle,

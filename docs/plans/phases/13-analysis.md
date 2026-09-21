@@ -1,14 +1,20 @@
 # Phase 13 — Analysis
 
-**Status:** pending
+**Status:** complete
 
 ## Previous
 
 Phase 12: search works; creative metadata mostly empty/manual.
 
-## This phase
+## Done
 
 Background analysis never blocks UI: file info, BPM, key, loop/one-shot, path/filename auto-tags; normal + custom re-analyze.
+
+- `analyze` module: `Analyzer` trait, `PathTokenAnalyzer`, `HeuristicAnalyzer` (`stratum-dsp` + envelope fallback)
+- Worker thread + `analysis-progress` events; enqueue unanalyzed after `add_root` / reindex
+- Sticky `tag_rejects`; non-null BPM/key/type treated as overrides unless Custom rerun flags
+- Commands: `analyze_samples`; Custom analysis dialog + BPM range presets in settings
+- Phase 14 hook documented: modify-watch → technical probe only, keep creative overrides
 
 ### In scope
 

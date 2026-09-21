@@ -24,11 +24,14 @@
   "loopPreview": "Loop preview",
   "dragFiles": "Drag files",
   "dragClip": "Drag clip",
+  "customAnalysis": "Custom analysis…",
+  "analyzeSelected": "Analyze",
   "previewGain": "Preview gain",
   "snap": "Snap",
   "askIndexTitle": "Index new files?",
   "askIndex": "Index",
   "askSkip": "Skip",
   "askIndexAll": "Index all",
-  "askSkipAll": "Skip all"
+  "askSkipAll": "Skip all",
+  "purgeMissing": "Purge missing"
 }

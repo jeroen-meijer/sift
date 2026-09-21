@@ -17,6 +17,11 @@
   "outputDefault": "Default",
   "bpmRange": "BPM range preset",
   "bpmRangeHint": "Narrower ranges guess octaves less often. The Custom analysis dialog starts from this.",
+  "bpmPreset_60_150": "60-150",
+  "bpmPreset_68_135": "68-135",
+  "bpmPreset_70_180": "70-180 (default)",
+  "bpmPreset_90_180": "90-180",
+  "bpmPreset_98_195": "98-195",
   "newFiles": "New files inside a root",
   "newFilesHint": "Roots are watched continuously. Renames and moves update in place.",
   "autoIndex": "Auto-index",
@@ -30,6 +35,7 @@
   "clearCache": "Clear cache",
   "holdHover": "Hold to hover-preview",
   "holdHoverHint": "Hold this key and sweep the list to audition rows under the pointer.",
+  "holdHoverUnbound": "Unbound",
   "record": "Record…",
   "changesApply": "Changes apply immediately.",
   "customAnalysis": "Custom analysis",
@@ -37,5 +43,6 @@
   "rerunBpm": "Re-run BPM",
   "rerunKey": "Re-run key",
   "rerunType": "Re-run loop vs one-shot",
-  "analyzeN": "Analyze {{count}} samples"
+  "analyzeN": "Analyze {{count}} samples",
+  "purgeMissing": "Purge missing samples"
 }

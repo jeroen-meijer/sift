@@ -311,6 +311,41 @@
   gap: 9px;
 }
 
+.settings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-label {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.settings-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--color-text);
+}
+
+.settings-select {
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--color-divider);
+  background: var(--color-bg-deep, var(--color-bg));
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
 .overlay-panel.modal {
   position: absolute;
   inset: 0;
@@ -385,6 +420,81 @@
 .sample-row.missing .col.name {
   text-decoration: line-through;
   opacity: 0.55;
+}
+
+.missing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-danger, #c44) 18%, transparent);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--color-surface-elevated, var(--color-surface));
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.context-menu button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: var(--color-accent-fill-strong);
+}
+
+.context-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.context-menu button.danger {
+  color: var(--color-danger, #e66);
+}
+
+.settings-card {
+  max-width: 520px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.settings-select {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.ignore-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  opacity: 0.8;
+  max-height: 120px;
+  overflow: auto;
 }
 
 .sample-row .col {

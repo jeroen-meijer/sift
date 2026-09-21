@@ -1,6 +1,6 @@
 # Phase 14 — Watch + polish (v1 complete)
 
-**Status:** pending
+**Status:** complete
 
 ## Previous
 
@@ -37,6 +37,12 @@ Close remaining SPEC Musts: continuous watch, missing files, ask/auto-index, ful
 - Missing file flow works when path deleted outside app
 - Context menu and settings cover SPEC lists
 - All phases 01–14 marked complete in index
+
+## Shipped vs deferred
+
+**Landed:** recursive watch + debounce; auto/ask index; missing mark/purge/remove; modify → technical-only refresh; rename path update; context menu (Open, Favorite, Reveal, copy path/filename, re-analyze, parent folder filter, remove missing); Cmd+Z / Cmd+Shift+Z undo/redo for favorite/tags/bpm/key/type; settings (play on select, loop, BPM presets, new-file mode, ignore list display, JIT clear, output devices, purge missing); missing banner; README dogfood steps.
+
+**Deferred / thin:** hold-hover binding UI (shown unbound only, no recorder); context menu set type/BPM/key/tags (use toolbar/tag manager + analyze instead); pixel-perfect design chrome; Windows dogfood.
 
 ## Next
 

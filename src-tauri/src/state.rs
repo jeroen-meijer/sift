@@ -4,17 +4,23 @@ use crate::audio::PlayerEngine;
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::paths::AppPaths;
+use crate::undo::UndoStack;
+use crate::watch::{WatchGuard, WatchShared};
 
 pub struct AppState {
     pub paths: AppPaths,
     pub db: Arc<Db>,
     pub player: Mutex<PlayerEngine>,
+    pub undo: Mutex<UndoStack>,
+    pub watch_shared: Arc<WatchShared>,
+    pub watch_guard: Mutex<Option<WatchGuard>>,
 }
 
 impl AppState {
     pub fn init() -> AppResult<Self> {
         let paths = AppPaths::resolve()?;
         let db = Arc::new(Db::open(&paths)?);
+        let watch_shared = Arc::new(WatchShared::new(Arc::clone(&db)));
 
         let mut player = PlayerEngine::new();
         // Seed player prefs from settings when present.
@@ -42,6 +48,9 @@ impl AppState {
             paths,
             db,
             player: Mutex::new(player),
+            undo: Mutex::new(UndoStack::default()),
+            watch_shared,
+            watch_guard: Mutex::new(None),
         })
     }
 }

@@ -440,3 +440,179 @@ pub fn get_sample(conn: &Connection, id: i64) -> AppResult<Option<SampleDto>> {
     }
     Ok(sample)
 }
+
+pub fn get_sample_by_path(conn: &Connection, path: &str) -> AppResult<Option<SampleDto>> {
+    let mut stmt = conn.prepare(&format!("{SAMPLE_SELECT} WHERE path = ?1"))?;
+    let mut sample = stmt
+        .query_row(params![path], row_to_sample)
+        .optional()?;
+    if let Some(ref mut s) = sample {
+        load_tags_for(conn, std::slice::from_mut(s))?;
+    }
+    Ok(sample)
+}
+
+pub fn mark_missing(conn: &Connection, path: &str) -> AppResult<bool> {
+    let n = conn.execute(
+        "UPDATE samples SET missing = 1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE path = ?1 AND missing = 0",
+        params![path],
+    )?;
+    Ok(n > 0)
+}
+
+pub fn remove_sample(conn: &Connection, id: i64) -> AppResult<()> {
+    let n = conn.execute("DELETE FROM samples WHERE id = ?1", params![id])?;
+    if n == 0 {
+        return Err(crate::error::AppError::msg("sample not found"));
+    }
+    Ok(())
+}
+
+pub fn purge_missing(conn: &Connection) -> AppResult<u64> {
+    let n = conn.execute("DELETE FROM samples WHERE missing = 1", [])?;
+    Ok(n as u64)
+}
+
+pub fn update_path(conn: &Connection, from: &str, to: &str) -> AppResult<bool> {
+    use std::path::Path;
+    let path = Path::new(to);
+    let filename = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let parent = path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let n = conn.execute(
+        "UPDATE samples SET path = ?1, filename = ?2, parent_path = ?3, extension = ?4,
+         missing = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE path = ?5",
+        params![to, filename, parent, extension, from],
+    )?;
+    Ok(n > 0)
+}
+
+/// Refresh size/mtime/inode (+ probe technical audio fields). Keeps bpm/key/tags/type.
+pub fn refresh_technical(conn: &Connection, path: &str) -> AppResult<bool> {
+    use std::fs;
+    use std::path::Path;
+    use std::time::SystemTime;
+
+    let path_buf = Path::new(path);
+    let meta = match fs::metadata(path_buf) {
+        Ok(m) => m,
+        Err(_) => {
+            mark_missing(conn, path)?;
+            return Ok(false);
+        }
+    };
+    let size = meta.len() as i64;
+    let mtime = meta.modified().ok().and_then(|t| {
+        t.duration_since(SystemTime::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_millis() as i64)
+    });
+    #[cfg(unix)]
+    let inode = {
+        use std::os::unix::fs::MetadataExt;
+        Some(meta.ino() as i64)
+    };
+    #[cfg(not(unix))]
+    let inode: Option<i64> = None;
+
+    let existing: Option<(i64, Option<i64>, Option<i64>)> = conn
+        .query_row(
+            "SELECT id, size_bytes, mtime_ms FROM samples WHERE path = ?1",
+            params![path],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+
+    let Some((id, old_size, old_mtime)) = existing else {
+        return Ok(false);
+    };
+    if old_size == Some(size) && old_mtime == mtime {
+        conn.execute(
+            "UPDATE samples SET missing = 0 WHERE id = ?1",
+            params![id],
+        )?;
+        return Ok(false);
+    }
+
+    conn.execute(
+        "UPDATE samples SET size_bytes = ?1, mtime_ms = ?2, inode = ?3, missing = 0,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?4",
+        params![size, mtime, inode, id],
+    )?;
+    let _ = crate::audio::probe_and_update_sample(conn, id, path_buf);
+    Ok(true)
+}
+
+pub fn set_sample_bpm(conn: &Connection, id: i64, bpm: Option<f64>) -> AppResult<()> {
+    let n = conn.execute(
+        "UPDATE samples SET bpm = ?1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?2",
+        params![bpm, id],
+    )?;
+    if n == 0 {
+        return Err(crate::error::AppError::msg("sample not found"));
+    }
+    Ok(())
+}
+
+pub fn set_sample_key(conn: &Connection, id: i64, key: Option<&str>) -> AppResult<()> {
+    let n = conn.execute(
+        "UPDATE samples SET key_name = ?1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?2",
+        params![key, id],
+    )?;
+    if n == 0 {
+        return Err(crate::error::AppError::msg("sample not found"));
+    }
+    Ok(())
+}
+
+pub fn set_sample_type(conn: &Connection, id: i64, sample_type: Option<&str>) -> AppResult<()> {
+    let n = conn.execute(
+        "UPDATE samples SET sample_type = ?1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?2",
+        params![sample_type, id],
+    )?;
+    if n == 0 {
+        return Err(crate::error::AppError::msg("sample not found"));
+    }
+    Ok(())
+}
+
+pub fn sample_meta_snapshot(
+    conn: &Connection,
+    id: i64,
+) -> AppResult<(bool, Option<f64>, Option<String>, Option<String>)> {
+    conn.query_row(
+        "SELECT favorite, bpm, key_name, sample_type FROM samples WHERE id = ?1",
+        params![id],
+        |r| {
+            Ok((
+                r.get::<_, i64>(0)? != 0,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+            ))
+        },
+    )
+    .map_err(|_| crate::error::AppError::msg("sample not found"))
+}
