@@ -311,3 +311,145 @@
 .app-shell {
   position: relative;
 }
+
+.sample-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sample-table-header,
+.sample-row {
+  display: grid;
+  grid-template-columns: 28px minmax(160px, 2fr) 72px 52px 64px minmax(100px, 1.2fr) minmax(120px, 1.5fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.sample-table-header {
+  height: 28px;
+  flex: none;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sample-table-header button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.sample-table-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.sample-row {
+  height: 28px;
+  font-size: 12px;
+  color: var(--color-neutral-400);
+  border: 0;
+  background: transparent;
+  width: 100%;
+}
+
+.sample-row:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.sample-row.selected,
+.sample-row.focused {
+  background: var(--color-accent-fill-strong);
+  color: var(--color-accent-200);
+}
+
+.sample-row.missing .col.name {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.sample-row .col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sample-row .col.fav,
+.sample-table-header .col.fav {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-dim);
+  padding: 0;
+}
+
+.wave-placeholder {
+  height: 14px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  margin-right: 4px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.detail-pane {
+  flex: none;
+  height: var(--detail-height);
+  border-top: 1px solid var(--color-divider);
+  padding: 12px 14px;
+  background: var(--color-bg-sidebar);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.detail-transport {
+  display: flex;
+  gap: 8px;
+}
+
+.waveform-canvas {
+  display: block;
+  border-radius: 6px;
+  background: var(--color-bg-input);
+  cursor: crosshair;
+}
+
+.detail-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.detail-path {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+

@@ -1,6 +1,10 @@
 # Phase 09 — Waveforms + selection
 
-**Status:** pending
+**Status:** complete
+
+## Done
+
+Click-to-seek, drag selection region on detail waveform. Snap/Z polish deferred to 14 if thin.
 
 ## Previous
 

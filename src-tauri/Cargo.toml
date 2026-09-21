@@ -28,6 +28,10 @@ directories = "6.0.0"
 tauri-plugin-dialog = "2.7.3"
 walkdir = "2.5.0"
 globset = "0.4.19"
+symphonia = { version = "0.6.1", features = ["all"] }
+cpal = "0.18.2"
+hound = "3.5.1"
+rtrb = "0.4.0"
 
 [profile.release]
 codegen-units = 1

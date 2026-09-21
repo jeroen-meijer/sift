@@ -1,6 +1,10 @@
 # Phase 07 — Decode + peaks
 
-**Status:** pending
+**Status:** complete
+
+## Done
+
+Symphonia decode, peakfile cache, get_peaks IPC, WaveformCanvas draw.
 
 ## Previous
 

@@ -1,10 +1,15 @@
-use serde_json::Value;
+use std::path::Path;
+
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 
+use crate::audio::peaks::{self, PeakData, DEFAULT_BUCKETS};
+use crate::audio::player::{OutputDeviceInfo, SamplePlayType};
 use crate::db::settings;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::indexer::{self, IndexProgress};
 use crate::library::{self, FolderNode, RootDto};
+use crate::samples::{self, Query as SampleQuery, SampleDto};
 use crate::state::AppState;
 
 #[derive(serde::Serialize)]
@@ -120,4 +125,116 @@ pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> 
         });
     });
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_samples(state: State<'_, AppState>, query: SampleQuery) -> AppResult<Vec<SampleDto>> {
+    state.db.with_conn(|conn| samples::list_samples(conn, &query))
+}
+
+#[tauri::command]
+pub fn set_sample_favorite(
+    state: State<'_, AppState>,
+    id: i64,
+    favorite: bool,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| samples::set_sample_favorite(conn, id, favorite))
+}
+
+#[tauri::command]
+pub fn get_peaks(state: State<'_, AppState>, sample_id: i64) -> AppResult<PeakData> {
+    let sample = state
+        .db
+        .with_conn(|conn| samples::get_sample(conn, sample_id))?
+        .ok_or_else(|| AppError::msg("sample not found"))?;
+    let path = Path::new(&sample.path);
+    // Fill technical metadata when missing (first waveform request).
+    if sample.sample_rate.is_none() || sample.duration_ms.is_none() {
+        let _ = state
+            .db
+            .with_conn(|conn| crate::audio::probe_and_update_sample(conn, sample_id, path));
+    }
+    peaks::ensure_peaks(&state.paths, sample_id, path, DEFAULT_BUCKETS)
+}
+
+#[tauri::command]
+pub fn play_sample(
+    state: State<'_, AppState>,
+    sample_id: i64,
+    start_secs: Option<f64>,
+) -> AppResult<()> {
+    let sample = state
+        .db
+        .with_conn(|conn| samples::get_sample(conn, sample_id))?
+        .ok_or_else(|| AppError::msg("sample not found"))?;
+    if sample.missing {
+        return Err(AppError::msg("sample file is missing"));
+    }
+    let play_type = SamplePlayType::from_str_opt(sample.sample_type.as_deref());
+    let mut player = state.player.lock().expect("player lock");
+    player.play_file(
+        Path::new(&sample.path),
+        start_secs.unwrap_or(0.0),
+        play_type,
+    )
+}
+
+#[tauri::command]
+pub fn stop_playback(state: State<'_, AppState>) -> AppResult<()> {
+    state.player.lock().expect("player lock").stop();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn pause_playback(state: State<'_, AppState>) -> AppResult<()> {
+    state.player.lock().expect("player lock").pause();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn resume_playback(state: State<'_, AppState>) -> AppResult<()> {
+    state.player.lock().expect("player lock").resume()
+}
+
+#[tauri::command]
+pub fn list_output_devices(state: State<'_, AppState>) -> AppResult<Vec<OutputDeviceInfo>> {
+    state.player.lock().expect("player lock").list_devices()
+}
+
+#[tauri::command]
+pub fn set_output_device(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    state
+        .player
+        .lock()
+        .expect("player lock")
+        .set_device(&id)?;
+    state
+        .db
+        .with_conn(|conn| settings::set(conn, "output_device", &json!(id)))
+}
+
+#[tauri::command]
+pub fn set_preview_gain(state: State<'_, AppState>, db: f64) -> AppResult<()> {
+    state
+        .player
+        .lock()
+        .expect("player lock")
+        .set_gain_db(db as f32);
+    state
+        .db
+        .with_conn(|conn| settings::set(conn, "preview_gain_db", &json!(db)))
+}
+
+#[tauri::command]
+pub fn set_loop_preview(state: State<'_, AppState>, on: bool) -> AppResult<()> {
+    state
+        .player
+        .lock()
+        .expect("player lock")
+        .set_loop_preview(on);
+    state
+        .db
+        .with_conn(|conn| settings::set(conn, "loop_preview", &json!(on)))
 }
