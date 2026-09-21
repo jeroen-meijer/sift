@@ -1,3 +1,4 @@
+mod analyze;
 mod audio;
 mod commands;
 mod db;
@@ -8,8 +9,11 @@ mod paths;
 mod samples;
 mod state;
 mod tags;
+mod undo;
+mod watch;
 
 use state::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +24,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
         .manage(app_state)
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let state = app.state::<AppState>();
+            watch::restart(&handle, &state.watch_shared, &state.watch_guard);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::set_setting,
@@ -33,6 +43,15 @@ pub fn run() {
             commands::reindex_all,
             commands::list_samples,
             commands::set_sample_favorite,
+            commands::set_sample_bpm,
+            commands::set_sample_key,
+            commands::set_sample_type,
+            commands::reanalyze_samples,
+            commands::purge_missing,
+            commands::remove_sample,
+            commands::respond_ask_index,
+            commands::undo_meta,
+            commands::redo_meta,
             commands::get_peaks,
             commands::play_sample,
             commands::stop_playback,
@@ -54,6 +73,7 @@ pub fn run() {
             commands::set_sample_tags,
             commands::add_sample_tag,
             commands::remove_sample_tag,
+            commands::analyze_samples,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

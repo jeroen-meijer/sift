@@ -20,5 +20,17 @@
   "columns": "Columns",
   "statusRoots": "{{count}} roots",
   "statusFiles": "{{count}} files indexed",
-  "statusAnalyzing": "Analyzing…"
+  "statusAnalyzing": "Analyzing…",
+  "statusAnalyzingProgress": "Analyzing {{done}} / {{total}}",
+  "undo": "Undo",
+  "redo": "Redo",
+  "ctxOpen": "Open",
+  "ctxFavorite": "Favorite",
+  "ctxUnfavorite": "Unfavorite",
+  "ctxReveal": "Reveal in Finder",
+  "ctxCopyPath": "Copy path",
+  "ctxCopyFilename": "Copy filename",
+  "ctxReanalyze": "Re-analyze",
+  "ctxShowParent": "Show only files from parent folder",
+  "ctxRemoveMissing": "Remove from library"
 }

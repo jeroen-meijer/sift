@@ -1,6 +1,6 @@
 # Sift v1 — master plan index
 
-**Status:** planning complete; implementation in progress  
+**Status:** implementation complete (v1)  
 **SoT:** [SPEC.md](../../SPEC.md) (behavior) → [docs/design/](../design/) (chrome) → [docs/TECH_STACK.md](../TECH_STACK.md) (stack)  
 **Rules:** [RULES.md](RULES.md) — read at the start of every phase
 
@@ -17,15 +17,15 @@ Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers SPEC Mus
 | 03 DB + settings | [phases/03-db-settings.md](phases/03-db-settings.md) | complete |
 | 04 Library roots + first launch | [phases/04-library-roots.md](phases/04-library-roots.md) | complete |
 | 05 Indexer | [phases/05-indexer.md](phases/05-indexer.md) | complete |
-| 06 Sample table | complete | in_progress |
-| 07 Decode + peaks | complete | pending |
-| 08 Playback | complete | pending |
-| 09 Waveforms + selection | complete | pending |
-| 10 JIT + drag | in_progress | pending |
+| 06 Sample table | [phases/06-sample-table.md](phases/06-sample-table.md) | complete |
+| 07 Decode + peaks | [phases/07-decode-peaks.md](phases/07-decode-peaks.md) | complete |
+| 08 Playback | [phases/08-playback.md](phases/08-playback.md) | complete |
+| 09 Waveforms + selection | [phases/09-waveforms-selection.md](phases/09-waveforms-selection.md) | complete |
+| 10 JIT + drag | [phases/10-jit-drag.md](phases/10-jit-drag.md) | complete |
 | 11 Tags | [phases/11-tags.md](phases/11-tags.md) | complete |
 | 12 Omni search | [phases/12-omni-search.md](phases/12-omni-search.md) | complete |
-| 13 Analysis | [phases/13-analysis.md](phases/13-analysis.md) | pending |
-| 14 Watch + polish | [phases/14-watch-polish.md](phases/14-watch-polish.md) | pending |
+| 13 Analysis | [phases/13-analysis.md](phases/13-analysis.md) | complete |
+| 14 Watch + polish | [phases/14-watch-polish.md](phases/14-watch-polish.md) | complete |
 
 ## Architecture sketch
 
@@ -39,7 +39,7 @@ Rust core: SQLite index · notify watch · symphonia decode · cpal play
 
 ## Out of v1 (do not implement)
 
-Collections, saved searches, light mode, query language, Web Audio preview, Electron, metadata write-back to audio files, full shortcut editor, Linux, store/accounts, MIDI mode, preview stretch/FX.
+Collections, saved searches, light mode, query language, Web Audio preview, Electron, metadata write-back to audio files, full shortcut editor, Linux, store/accounts.
 
 ## Workflow
 

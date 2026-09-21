@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Star } from "@phosphor-icons/react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export type TagChip = { path: string; color: string | null };
@@ -26,6 +26,16 @@ export type SampleRow = {
 
 type SortCol = "name" | "type" | "bpm" | "key" | "created_at" | "favorite";
 
+export type ContextAction =
+  | "open"
+  | "favorite"
+  | "reveal"
+  | "copyPath"
+  | "copyFilename"
+  | "reanalyze"
+  | "showParent"
+  | "removeMissing";
+
 type Props = {
   samples: SampleRow[];
   selectedIds: Set<number>;
@@ -36,6 +46,7 @@ type Props = {
   onSelect: (id: number, e: React.MouseEvent) => void;
   onToggleFavorite: (id: number, favorite: boolean) => void;
   onSort: (col: SortCol) => void;
+  onContextAction: (action: ContextAction, sample: SampleRow) => void;
 };
 
 function highlightName(name: string, query: string | undefined) {
@@ -58,6 +69,8 @@ function sortMark(active: boolean, dir: "asc" | "desc" | "clear") {
   return dir === "asc" ? " ↓" : " ↑";
 }
 
+type MenuState = { x: number; y: number; sample: SampleRow };
+
 export function SampleTable({
   samples,
   selectedIds,
@@ -68,15 +81,35 @@ export function SampleTable({
   onSelect,
   onToggleFavorite,
   onSort,
+  onContextAction,
 }: Props) {
   const { t } = useTranslation("library");
+  const { t: tc } = useTranslation("common");
   const parentRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<MenuState | null>(null);
   const rowVirtualizer = useVirtualizer({
     count: samples.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 28,
     overscan: 20,
   });
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [menu]);
+
+  const run = (action: ContextAction) => {
+    if (!menu) return;
+    onContextAction(action, menu.sample);
+    setMenu(null);
+  };
 
   return (
     <div className="sample-table">
@@ -128,6 +161,13 @@ export function SampleTable({
                   transform: `translateY(${virt.start}px)`,
                 }}
                 onClick={(e) => onSelect(sample.id, e)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (!selectedIds.has(sample.id)) {
+                    onSelect(sample.id, e);
+                  }
+                  setMenu({ x: e.clientX, y: e.clientY, sample });
+                }}
               >
                 <button
                   type="button"
@@ -165,6 +205,41 @@ export function SampleTable({
           })}
         </div>
       </div>
+
+      {menu ? (
+        <div
+          className="context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button type="button" onClick={() => run("open")} disabled={menu.sample.missing}>
+            {tc("ctxOpen")}
+          </button>
+          <button type="button" onClick={() => run("favorite")}>
+            {menu.sample.favorite ? tc("ctxUnfavorite") : tc("ctxFavorite")}
+          </button>
+          <button type="button" onClick={() => run("reveal")} disabled={menu.sample.missing}>
+            {tc("ctxReveal")}
+          </button>
+          <button type="button" onClick={() => run("copyPath")}>
+            {tc("ctxCopyPath")}
+          </button>
+          <button type="button" onClick={() => run("copyFilename")}>
+            {tc("ctxCopyFilename")}
+          </button>
+          <button type="button" onClick={() => run("reanalyze")} disabled={menu.sample.missing}>
+            {tc("ctxReanalyze")}
+          </button>
+          <button type="button" onClick={() => run("showParent")}>
+            {tc("ctxShowParent")}
+          </button>
+          {menu.sample.missing ? (
+            <button type="button" className="danger" onClick={() => run("removeMissing")}>
+              {tc("ctxRemoveMissing")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
