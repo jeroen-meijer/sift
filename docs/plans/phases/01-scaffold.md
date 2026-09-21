@@ -1,6 +1,10 @@
 # Phase 01 — Scaffold
 
-**Status:** pending
+**Status:** complete
+
+## Done
+
+Tauri 2 + React 19 + Vite 8 + Bun app at repo root. `bun run build` and `cargo check` pass. Scripts: `tauri:dev` / `tauri:build`.
 
 ## Previous
 
