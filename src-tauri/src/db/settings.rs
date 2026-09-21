@@ -1,7 +1,10 @@
-use rusqlite::{params, Connection};
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use serde_json::{json, Value};
 
-use crate::error::AppResult;
+use crate::db::models::Setting;
+use crate::db::schema::settings::dsl as settings_dsl;
+use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
 
 pub const DEFAULT_IGNORE: &[&str] = &[
@@ -14,7 +17,7 @@ pub const DEFAULT_IGNORE: &[&str] = &[
     "**/*.asd",
 ];
 
-pub fn ensure_defaults(conn: &Connection, paths: &AppPaths) -> AppResult<()> {
+pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResult<()> {
     let defaults = json!({
         "play_on_select": true,
         "loop_preview": true,
@@ -40,61 +43,60 @@ pub fn ensure_defaults(conn: &Connection, paths: &AppPaths) -> AppResult<()> {
 
     if let Value::Object(map) = defaults {
         for (key, value) in map {
-            let exists: bool = conn.query_row(
-                "SELECT 1 FROM settings WHERE key = ?1",
-                params![key],
-                |_| Ok(true),
-            )
-            .unwrap_or(false);
-            if !exists {
-                conn.execute(
-                    "INSERT INTO settings(key, value) VALUES (?1, ?2)",
-                    params![key, value.to_string()],
-                )?;
+            let exists = settings_dsl::settings
+                .find(&key)
+                .select(settings_dsl::key)
+                .first::<String>(conn)
+                .optional()
+                .map_err(AppError::from)?;
+            if exists.is_none() {
+                diesel::insert_into(settings_dsl::settings)
+                    .values(Setting {
+                        key: key.clone(),
+                        value: value.to_string(),
+                    })
+                    .execute(conn)
+                    .map_err(AppError::from)?;
             }
         }
     }
     Ok(())
 }
 
-pub fn get_all(conn: &Connection) -> AppResult<Value> {
-    let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
-    let rows = stmt.query_map([], |row| {
-        let key: String = row.get(0)?;
-        let value: String = row.get(1)?;
-        Ok((key, value))
-    })?;
+pub fn get_all(conn: &mut SqliteConnection) -> AppResult<Value> {
+    let rows: Vec<(String, String)> = settings_dsl::settings
+        .select((settings_dsl::key, settings_dsl::value))
+        .load(conn)
+        .map_err(AppError::from)?;
 
     let mut map = serde_json::Map::new();
-    for row in rows {
-        let (key, value) = row?;
+    for (key, value) in rows {
         let parsed: Value = serde_json::from_str(&value).unwrap_or(Value::String(value));
         map.insert(key, parsed);
     }
     Ok(Value::Object(map))
 }
 
-pub fn get(conn: &Connection, key: &str) -> AppResult<Option<Value>> {
-    let result = conn.query_row(
-        "SELECT value FROM settings WHERE key = ?1",
-        params![key],
-        |row| row.get::<_, String>(0),
-    );
-    match result {
-        Ok(value) => {
-            let parsed: Value = serde_json::from_str(&value).unwrap_or(Value::String(value));
-            Ok(Some(parsed))
-        }
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
+pub fn get(conn: &mut SqliteConnection, key: &str) -> AppResult<Option<Value>> {
+    let value = settings_dsl::settings
+        .find(key)
+        .select(settings_dsl::value)
+        .first::<String>(conn)
+        .optional()
+        .map_err(AppError::from)?;
+    Ok(value.map(|v| serde_json::from_str(&v).unwrap_or(Value::String(v))))
 }
 
-pub fn set(conn: &Connection, key: &str, value: &Value) -> AppResult<()> {
-    conn.execute(
-        "INSERT INTO settings(key, value) VALUES (?1, ?2)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        params![key, value.to_string()],
-    )?;
+pub fn set(conn: &mut SqliteConnection, key: &str, value: &Value) -> AppResult<()> {
+    diesel::insert_into(settings_dsl::settings)
+        .values(Setting {
+            key: key.to_string(),
+            value: value.to_string(),
+        })
+        .on_conflict(settings_dsl::key)
+        .do_update()
+        .set(settings_dsl::value.eq(value.to_string()))
+        .execute(conn)
+        .map_err(AppError::from)?;
     Ok(())
 }

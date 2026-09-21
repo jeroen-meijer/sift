@@ -89,7 +89,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 | Shell / IPC | `tauri` 2.x, `tauri-plugin-dialog`, `tauri-plugin-fs` (scoped), `tauri-plugin-drag` | Still correct. Loudline already on Tauri 2. |
 | Output devices + RT stream | **`cpal`** | Still the low-level standard (CoreAudio / WASAPI). Prefer over `rodio` for Sift: device picker, buffer control, and select→play need the stream API, not a high-level player. `rodio` sits on `cpal` + Symphonia and is fine for simple play-a-file apps, not ideal as the engine. |
 | Decode | **`symphonia` 0.6.x** | Still the pure-Rust decode default. Enable format features for SPEC codecs. **Opus:** no solid native decoder yet; use `symphonia-adapter-libopus` (bundles libopus) until first-party lands. **HE-AAC:** native incomplete; `symphonia-adapter-fdk-aac` if those files matter. AAC-LC / M4A via `aac` + `isomp4` is in good shape. |
-| Index DB | **`rusqlite`** + `bundled` | Still the right fit for an embedded local library DB. Prefer over `sqlx` here: sync access from workers, no pool-of-servers model. `sqlx` only if you later want compile-time SQL checks more than simplicity. |
+| Index DB | **Diesel** (SQLite) + `diesel_migrations` + bundled `libsqlite3-sys` | Sync ORM with CLI migrations and typed schema. Prefer over hand-written `rusqlite` SQL. Sync fits worker/`Mutex` access; SeaORM is the async alternative if the core goes fully async later. |
 | FS watch | **`notify`** + **`notify-debouncer-full`** (or similar debouncer) | Still the cross-platform watch stack. Debounce in Rust before applying Ask/Auto-index. |
 | JIT WAV write | **`hound`** | Still fine for 8/16/24/32-bit PCM and float WAV write (exact rate/bit depth/channels). No strong successor; keep unless a spike finds a gap (e.g. exotic WAVEFORMATEXTENSIBLE edge cases). |
 | IPC DTOs | `serde` / `serde_json` | Unchanged. |
@@ -221,3 +221,4 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 | 2026-09-22 | Locale + theme file layout (SPEC Q70) |
 | 2026-09-22 | Crate currency pass: keep cpal/symphonia/rusqlite/notify/hound; Opus via libopus adapter; analysis still behind trait (`stratum-dsp` candidate) |
 | 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72–Q75) |
+| 2026-09-22 | Index DB: Diesel + embedded migrations (replace rusqlite hand SQL) |

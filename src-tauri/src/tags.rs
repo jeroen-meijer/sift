@@ -1,8 +1,15 @@
 use std::collections::HashMap;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use diesel::dsl::count_star;
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use serde::Serialize;
 
+use crate::db::models::{NewTag, SampleTag, Tag, TagReject};
+use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
+use crate::db::schema::samples::dsl as samples_dsl;
+use crate::db::schema::tag_rejects::dsl as rejects_dsl;
+use crate::db::schema::tags::dsl as tags_dsl;
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, Serialize)]
@@ -26,31 +33,37 @@ struct TagRow {
     sample_count: i64,
 }
 
-pub fn list_tags(conn: &Connection) -> AppResult<Vec<TagNode>> {
-    let mut stmt = conn.prepare(
-        "SELECT t.id, t.path, t.name, t.parent_id, t.color,
-                (SELECT COUNT(*) FROM sample_tags st WHERE st.tag_id = t.id) AS sample_count
-         FROM tags t
-         ORDER BY t.path COLLATE NOCASE",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        Ok(TagRow {
-            id: row.get(0)?,
-            path: row.get(1)?,
-            name: row.get(2)?,
-            parent_id: row.get(3)?,
-            color: row.get(4)?,
-            sample_count: row.get(5)?,
-        })
-    })?;
+pub fn list_tags(conn: &mut SqliteConnection) -> AppResult<Vec<TagNode>> {
+    let tags: Vec<Tag> = tags_dsl::tags
+        .select(Tag::as_select())
+        .order(tags_dsl::path.asc())
+        .load(conn)?;
+
+    let mut rows = Vec::with_capacity(tags.len());
+    for tag in tags {
+        let sample_count: i64 = sample_tags_dsl::sample_tags
+            .filter(sample_tags_dsl::tag_id.eq(tag.id))
+            .select(count_star())
+            .first(conn)?;
+        rows.push(TagRow {
+            id: tag.id as i64,
+            path: tag.path,
+            name: tag.name,
+            parent_id: tag.parent_id.map(|p| p as i64),
+            color: tag.color,
+            sample_count,
+        });
+    }
 
     let mut by_parent: HashMap<Option<i64>, Vec<TagRow>> = HashMap::new();
     for row in rows {
-        let row = row?;
         by_parent.entry(row.parent_id).or_default().push(row);
     }
 
-    fn build(by_parent: &mut HashMap<Option<i64>, Vec<TagRow>>, parent: Option<i64>) -> Vec<TagNode> {
+    fn build(
+        by_parent: &mut HashMap<Option<i64>, Vec<TagRow>>,
+        parent: Option<i64>,
+    ) -> Vec<TagNode> {
         let mut kids = by_parent.remove(&parent).unwrap_or_default();
         kids.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
         kids.into_iter()
@@ -72,7 +85,11 @@ pub fn list_tags(conn: &Connection) -> AppResult<Vec<TagNode>> {
     Ok(build(&mut by_parent, None))
 }
 
-pub fn create_tag(conn: &Connection, path: &str, color: Option<&str>) -> AppResult<TagNode> {
+pub fn create_tag(
+    conn: &mut SqliteConnection,
+    path: &str,
+    color: Option<&str>,
+) -> AppResult<TagNode> {
     let path = path.trim().trim_matches('/');
     if path.is_empty() {
         return Err(AppError::msg("tag path is empty"));
@@ -83,92 +100,98 @@ pub fn create_tag(conn: &Connection, path: &str, color: Option<&str>) -> AppResu
 
     let name = path.rsplit('/').next().unwrap_or(path);
     let parent_id = if let Some((parent_path, _)) = path.rsplit_once('/') {
-        Some(tag_id_by_path(conn, parent_path)?.ok_or_else(|| {
-            AppError::msg(format!("parent tag not found: {parent_path}"))
-        })?)
+        Some(
+            tag_id_by_path(conn, parent_path)?
+                .ok_or_else(|| AppError::msg(format!("parent tag not found: {parent_path}")))?
+                as i32,
+        )
     } else {
         None
     };
 
-    conn.execute(
-        "INSERT INTO tags(path, name, parent_id, color) VALUES (?1, ?2, ?3, ?4)",
-        params![path, name, parent_id, color],
-    )?;
-    let id = conn.last_insert_rowid();
+    let id: i32 = diesel::insert_into(tags_dsl::tags)
+        .values(NewTag {
+            path,
+            name,
+            parent_id,
+            color,
+        })
+        .returning(tags_dsl::id)
+        .get_result(conn)?;
+
     Ok(TagNode {
-        id,
+        id: id as i64,
         path: path.to_string(),
         name: name.to_string(),
-        parent_id,
+        parent_id: parent_id.map(|p| p as i64),
         color: color.map(|c| c.to_string()),
         sample_count: 0,
         children: Vec::new(),
     })
 }
 
-pub fn rename_tag(conn: &Connection, id: i64, name: &str) -> AppResult<()> {
+pub fn rename_tag(conn: &mut SqliteConnection, id: i64, name: &str) -> AppResult<()> {
     let name = name.trim();
     if name.is_empty() || name.contains('/') {
         return Err(AppError::msg("invalid tag name"));
     }
-    let (old_path, parent_id): (String, Option<i64>) = conn
-        .query_row(
-            "SELECT path, parent_id FROM tags WHERE id = ?1",
-            params![id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
+    let (old_path, parent_id): (String, Option<i32>) = tags_dsl::tags
+        .find(id as i32)
+        .select((tags_dsl::path, tags_dsl::parent_id))
+        .first(conn)
         .optional()?
         .ok_or_else(|| AppError::msg("tag not found"))?;
 
     let new_path = match parent_id {
         Some(pid) => {
-            let parent_path: String = conn.query_row(
-                "SELECT path FROM tags WHERE id = ?1",
-                params![pid],
-                |r| r.get(0),
-            )?;
+            let parent_path: String = tags_dsl::tags
+                .find(pid)
+                .select(tags_dsl::path)
+                .first(conn)?;
             format!("{parent_path}/{name}")
         }
         None => name.to_string(),
     };
 
     if new_path == old_path {
-        conn.execute("UPDATE tags SET name = ?1 WHERE id = ?2", params![name, id])?;
+        diesel::update(tags_dsl::tags.find(id as i32))
+            .set(tags_dsl::name.eq(name))
+            .execute(conn)?;
         return Ok(());
     }
 
     rewrite_paths(conn, &old_path, &new_path)?;
-    conn.execute(
-        "UPDATE tags SET name = ?1, path = ?2 WHERE id = ?3",
-        params![name, new_path, id],
-    )?;
+    diesel::update(tags_dsl::tags.find(id as i32))
+        .set((tags_dsl::name.eq(name), tags_dsl::path.eq(new_path)))
+        .execute(conn)?;
     Ok(())
 }
 
-pub fn move_tag(conn: &Connection, id: i64, new_parent_id: Option<i64>) -> AppResult<()> {
-    let (old_path, name, old_parent): (String, String, Option<i64>) = conn
-        .query_row(
-            "SELECT path, name, parent_id FROM tags WHERE id = ?1",
-            params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
+pub fn move_tag(
+    conn: &mut SqliteConnection,
+    id: i64,
+    new_parent_id: Option<i64>,
+) -> AppResult<()> {
+    let (old_path, name, old_parent): (String, String, Option<i32>) = tags_dsl::tags
+        .find(id as i32)
+        .select((tags_dsl::path, tags_dsl::name, tags_dsl::parent_id))
+        .first(conn)
         .optional()?
         .ok_or_else(|| AppError::msg("tag not found"))?;
 
-    if old_parent == new_parent_id {
+    let new_parent_i32 = new_parent_id.map(|p| p as i32);
+    if old_parent == new_parent_i32 {
         return Ok(());
     }
 
-    if let Some(pid) = new_parent_id {
-        if pid == id {
+    if let Some(pid) = new_parent_i32 {
+        if pid == id as i32 {
             return Err(AppError::msg("cannot move tag under itself"));
         }
-        let parent_path: String = conn
-            .query_row(
-                "SELECT path FROM tags WHERE id = ?1",
-                params![pid],
-                |r| r.get(0),
-            )
+        let parent_path: String = tags_dsl::tags
+            .find(pid)
+            .select(tags_dsl::path)
+            .first(conn)
             .optional()?
             .ok_or_else(|| AppError::msg("parent tag not found"))?;
         if parent_path == old_path || parent_path.starts_with(&format!("{old_path}/")) {
@@ -176,45 +199,51 @@ pub fn move_tag(conn: &Connection, id: i64, new_parent_id: Option<i64>) -> AppRe
         }
         let new_path = format!("{parent_path}/{name}");
         rewrite_paths(conn, &old_path, &new_path)?;
-        conn.execute(
-            "UPDATE tags SET parent_id = ?1, path = ?2 WHERE id = ?3",
-            params![pid, new_path, id],
-        )?;
+        diesel::update(tags_dsl::tags.find(id as i32))
+            .set((
+                tags_dsl::parent_id.eq(Some(pid)),
+                tags_dsl::path.eq(new_path),
+            ))
+            .execute(conn)?;
     } else {
         let new_path = name.clone();
         rewrite_paths(conn, &old_path, &new_path)?;
-        conn.execute(
-            "UPDATE tags SET parent_id = NULL, path = ?1 WHERE id = ?2",
-            params![new_path, id],
-        )?;
+        diesel::update(tags_dsl::tags.find(id as i32))
+            .set((
+                tags_dsl::parent_id.eq(None::<i32>),
+                tags_dsl::path.eq(new_path),
+            ))
+            .execute(conn)?;
     }
     Ok(())
 }
 
-pub fn set_tag_color(conn: &Connection, id: i64, color: Option<&str>) -> AppResult<()> {
-    let n = conn.execute(
-        "UPDATE tags SET color = ?1 WHERE id = ?2",
-        params![color, id],
-    )?;
+pub fn set_tag_color(
+    conn: &mut SqliteConnection,
+    id: i64,
+    color: Option<&str>,
+) -> AppResult<()> {
+    let n = diesel::update(tags_dsl::tags.find(id as i32))
+        .set(tags_dsl::color.eq(color))
+        .execute(conn)?;
     if n == 0 {
         return Err(AppError::msg("tag not found"));
     }
     Ok(())
 }
 
-pub fn delete_tag(conn: &Connection, id: i64, cascade: bool) -> AppResult<()> {
-    let path: String = conn
-        .query_row("SELECT path FROM tags WHERE id = ?1", params![id], |r| {
-            r.get(0)
-        })
+pub fn delete_tag(conn: &mut SqliteConnection, id: i64, cascade: bool) -> AppResult<()> {
+    let path: String = tags_dsl::tags
+        .find(id as i32)
+        .select(tags_dsl::path)
+        .first(conn)
         .optional()?
         .ok_or_else(|| AppError::msg("tag not found"))?;
 
-    let child_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM tags WHERE path LIKE ?1",
-        params![format!("{path}/%")],
-        |r| r.get(0),
-    )?;
+    let child_count: i64 = tags_dsl::tags
+        .filter(tags_dsl::path.like(format!("{path}/%")))
+        .select(count_star())
+        .first(conn)?;
 
     if child_count > 0 && !cascade {
         return Err(AppError::msg(
@@ -223,84 +252,115 @@ pub fn delete_tag(conn: &Connection, id: i64, cascade: bool) -> AppResult<()> {
     }
 
     // FK ON DELETE CASCADE strips sample_tags / tag_rejects and child tags.
-    let n = conn.execute("DELETE FROM tags WHERE id = ?1", params![id])?;
+    let n = diesel::delete(tags_dsl::tags.find(id as i32)).execute(conn)?;
     if n == 0 {
         return Err(AppError::msg("tag not found"));
     }
     Ok(())
 }
 
-pub fn set_sample_tags(conn: &Connection, sample_id: i64, tag_ids: &[i64]) -> AppResult<()> {
+pub fn set_sample_tags(
+    conn: &mut SqliteConnection,
+    sample_id: i64,
+    tag_ids: &[i64],
+) -> AppResult<()> {
+    let sample_id = sample_id as i32;
     ensure_sample(conn, sample_id)?;
-    conn.execute(
-        "DELETE FROM sample_tags WHERE sample_id = ?1",
-        params![sample_id],
-    )?;
+    diesel::delete(sample_tags_dsl::sample_tags.filter(sample_tags_dsl::sample_id.eq(sample_id)))
+        .execute(conn)?;
     for tag_id in tag_ids {
-        ensure_tag(conn, *tag_id)?;
-        conn.execute(
-            "INSERT INTO sample_tags(sample_id, tag_id, source) VALUES (?1, ?2, 'user')",
-            params![sample_id, tag_id],
-        )?;
-        conn.execute(
-            "DELETE FROM tag_rejects WHERE sample_id = ?1 AND tag_id = ?2",
-            params![sample_id, tag_id],
-        )?;
+        let tag_id = *tag_id as i32;
+        ensure_tag(conn, tag_id)?;
+        diesel::insert_into(sample_tags_dsl::sample_tags)
+            .values(SampleTag {
+                sample_id,
+                tag_id,
+                source: "user".into(),
+            })
+            .execute(conn)?;
+        diesel::delete(
+            rejects_dsl::tag_rejects
+                .filter(rejects_dsl::sample_id.eq(sample_id))
+                .filter(rejects_dsl::tag_id.eq(tag_id)),
+        )
+        .execute(conn)?;
     }
     Ok(())
 }
 
-pub fn add_sample_tag(conn: &Connection, sample_id: i64, tag_id: i64) -> AppResult<()> {
+pub fn add_sample_tag(
+    conn: &mut SqliteConnection,
+    sample_id: i64,
+    tag_id: i64,
+) -> AppResult<()> {
+    let sample_id = sample_id as i32;
+    let tag_id = tag_id as i32;
     ensure_sample(conn, sample_id)?;
     ensure_tag(conn, tag_id)?;
-    conn.execute(
-        "INSERT INTO sample_tags(sample_id, tag_id, source) VALUES (?1, ?2, 'user')
-         ON CONFLICT(sample_id, tag_id) DO UPDATE SET source = 'user'",
-        params![sample_id, tag_id],
-    )?;
-    conn.execute(
-        "DELETE FROM tag_rejects WHERE sample_id = ?1 AND tag_id = ?2",
-        params![sample_id, tag_id],
-    )?;
+    diesel::insert_into(sample_tags_dsl::sample_tags)
+        .values(SampleTag {
+            sample_id,
+            tag_id,
+            source: "user".into(),
+        })
+        .on_conflict((sample_tags_dsl::sample_id, sample_tags_dsl::tag_id))
+        .do_update()
+        .set(sample_tags_dsl::source.eq("user"))
+        .execute(conn)?;
+    diesel::delete(
+        rejects_dsl::tag_rejects
+            .filter(rejects_dsl::sample_id.eq(sample_id))
+            .filter(rejects_dsl::tag_id.eq(tag_id)),
+    )
+    .execute(conn)?;
     Ok(())
 }
 
-pub fn remove_sample_tag(conn: &Connection, sample_id: i64, tag_id: i64) -> AppResult<()> {
-    let source: Option<String> = conn
-        .query_row(
-            "SELECT source FROM sample_tags WHERE sample_id = ?1 AND tag_id = ?2",
-            params![sample_id, tag_id],
-            |r| r.get(0),
-        )
+pub fn remove_sample_tag(
+    conn: &mut SqliteConnection,
+    sample_id: i64,
+    tag_id: i64,
+) -> AppResult<()> {
+    let sample_id = sample_id as i32;
+    let tag_id = tag_id as i32;
+    let source: Option<String> = sample_tags_dsl::sample_tags
+        .filter(sample_tags_dsl::sample_id.eq(sample_id))
+        .filter(sample_tags_dsl::tag_id.eq(tag_id))
+        .select(sample_tags_dsl::source)
+        .first(conn)
         .optional()?;
 
     let Some(source) = source else {
         return Ok(());
     };
 
-    conn.execute(
-        "DELETE FROM sample_tags WHERE sample_id = ?1 AND tag_id = ?2",
-        params![sample_id, tag_id],
-    )?;
+    diesel::delete(
+        sample_tags_dsl::sample_tags
+            .filter(sample_tags_dsl::sample_id.eq(sample_id))
+            .filter(sample_tags_dsl::tag_id.eq(tag_id)),
+    )
+    .execute(conn)?;
 
     if source == "auto" {
-        conn.execute(
-            "INSERT OR IGNORE INTO tag_rejects(sample_id, tag_id) VALUES (?1, ?2)",
-            params![sample_id, tag_id],
-        )?;
+        diesel::insert_into(rejects_dsl::tag_rejects)
+            .values(TagReject {
+                sample_id,
+                tag_id,
+            })
+            .on_conflict_do_nothing()
+            .execute(conn)?;
     }
     Ok(())
 }
 
 /// Resolve stored color walking ancestors (nearest non-null wins).
-pub fn resolve_color(conn: &Connection, tag_id: i64) -> AppResult<Option<String>> {
-    let mut current = Some(tag_id);
+pub fn resolve_color(conn: &mut SqliteConnection, tag_id: i64) -> AppResult<Option<String>> {
+    let mut current = Some(tag_id as i32);
     while let Some(id) = current {
-        let (color, parent_id): (Option<String>, Option<i64>) = conn.query_row(
-            "SELECT color, parent_id FROM tags WHERE id = ?1",
-            params![id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
+        let (color, parent_id): (Option<String>, Option<i32>) = tags_dsl::tags
+            .find(id)
+            .select((tags_dsl::color, tags_dsl::parent_id))
+            .first(conn)?;
         if color.is_some() {
             return Ok(color);
         }
@@ -309,19 +369,20 @@ pub fn resolve_color(conn: &Connection, tag_id: i64) -> AppResult<Option<String>
     Ok(None)
 }
 
-fn rewrite_paths(conn: &Connection, old_path: &str, new_path: &str) -> AppResult<()> {
+fn rewrite_paths(
+    conn: &mut SqliteConnection,
+    old_path: &str,
+    new_path: &str,
+) -> AppResult<()> {
     if tag_id_by_path(conn, new_path)?.is_some() {
         return Err(AppError::msg(format!("tag path already exists: {new_path}")));
     }
     // Descendants first (longer paths) so unique path constraint stays happy.
-    let mut stmt = conn.prepare(
-        "SELECT id, path FROM tags WHERE path LIKE ?1 ORDER BY length(path) DESC",
-    )?;
-    let kids: Vec<(i64, String)> = stmt
-        .query_map(params![format!("{old_path}/%")], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut kids: Vec<(i32, String)> = tags_dsl::tags
+        .filter(tags_dsl::path.like(format!("{old_path}/%")))
+        .select((tags_dsl::id, tags_dsl::path))
+        .load(conn)?;
+    kids.sort_by_key(|(_, p)| std::cmp::Reverse(p.len()));
 
     for (kid_id, kid_path) in kids {
         let suffix = &kid_path[old_path.len()..];
@@ -329,41 +390,41 @@ fn rewrite_paths(conn: &Connection, old_path: &str, new_path: &str) -> AppResult
         if tag_id_by_path(conn, &updated)?.is_some() {
             return Err(AppError::msg(format!("tag path already exists: {updated}")));
         }
-        conn.execute(
-            "UPDATE tags SET path = ?1 WHERE id = ?2",
-            params![updated, kid_id],
-        )?;
+        diesel::update(tags_dsl::tags.find(kid_id))
+            .set(tags_dsl::path.eq(updated))
+            .execute(conn)?;
     }
     Ok(())
 }
 
-fn tag_id_by_path(conn: &Connection, path: &str) -> AppResult<Option<i64>> {
-    Ok(conn
-        .query_row(
-            "SELECT id FROM tags WHERE path = ?1",
-            params![path],
-            |r| r.get(0),
-        )
-        .optional()?)
+fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i64>> {
+    let id: Option<i32> = tags_dsl::tags
+        .filter(tags_dsl::path.eq(path))
+        .select(tags_dsl::id)
+        .first(conn)
+        .optional()?;
+    Ok(id.map(|i| i as i64))
 }
 
-fn ensure_tag(conn: &Connection, id: i64) -> AppResult<()> {
-    let exists: bool = conn
-        .query_row("SELECT 1 FROM tags WHERE id = ?1", params![id], |_| Ok(true))
-        .optional()?
-        .unwrap_or(false);
-    if !exists {
+fn ensure_tag(conn: &mut SqliteConnection, id: i32) -> AppResult<()> {
+    let exists: Option<i32> = tags_dsl::tags
+        .find(id)
+        .select(tags_dsl::id)
+        .first(conn)
+        .optional()?;
+    if exists.is_none() {
         return Err(AppError::msg("tag not found"));
     }
     Ok(())
 }
 
-fn ensure_sample(conn: &Connection, id: i64) -> AppResult<()> {
-    let exists: bool = conn
-        .query_row("SELECT 1 FROM samples WHERE id = ?1", params![id], |_| Ok(true))
-        .optional()?
-        .unwrap_or(false);
-    if !exists {
+fn ensure_sample(conn: &mut SqliteConnection, id: i32) -> AppResult<()> {
+    let exists: Option<i32> = samples_dsl::samples
+        .find(id)
+        .select(samples_dsl::id)
+        .first(conn)
+        .optional()?;
+    if exists.is_none() {
         return Err(AppError::msg("sample not found"));
     }
     Ok(())

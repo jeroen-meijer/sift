@@ -21,6 +21,14 @@ Then in the app:
 4. Drag a row (full files) or a waveform selection (JIT clip) into a DAW.
 5. Copy a new audio file into a watched root → it should auto-index (or ask, per Settings).
 
+If you previously ran a pre-Diesel build and the app fails on migrate, delete the old DB once:
+
+```bash
+rm -f ~/Library/Application\ Support/dev.jfk.Sift/library.sqlite3*
+```
+
+(That only removes Sift’s index; sample files on disk are untouched.)
+
 Build:
 
 ```bash

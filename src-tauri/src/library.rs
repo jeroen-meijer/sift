@@ -1,10 +1,16 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{params, Connection};
+use diesel::dsl::count_star;
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use serde::Serialize;
 
+use crate::db::models::{FavoriteFolder, NewRoot};
+use crate::db::schema::favorite_folders::dsl as fav_dsl;
+use crate::db::schema::roots::dsl as roots_dsl;
+use crate::db::schema::samples::dsl as samples_dsl;
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, Serialize)]
@@ -25,21 +31,25 @@ pub struct FolderNode {
     pub sample_count: i64,
 }
 
-pub fn list_roots(conn: &Connection) -> AppResult<Vec<RootDto>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, path, COALESCE(label, path) FROM roots ORDER BY path COLLATE NOCASE",
-    )?;
-    let rows = stmt.query_map([], |row| {
-        Ok(RootDto {
-            id: row.get(0)?,
-            path: row.get(1)?,
-            label: row.get(2)?,
+pub fn list_roots(conn: &mut SqliteConnection) -> AppResult<Vec<RootDto>> {
+    let rows: Vec<(i32, String, Option<String>)> = roots_dsl::roots
+        .select((roots_dsl::id, roots_dsl::path, roots_dsl::label))
+        .order(roots_dsl::path.asc())
+        .load(conn)?;
+
+    let mut out: Vec<RootDto> = rows
+        .into_iter()
+        .map(|(id, path, label)| RootDto {
+            id: id as i64,
+            label: label.unwrap_or_else(|| path.clone()),
+            path,
         })
-    })?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+        .collect();
+    out.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+    Ok(out)
 }
 
-pub fn add_root(conn: &Connection, path: &str) -> AppResult<RootDto> {
+pub fn add_root(conn: &mut SqliteConnection, path: &str) -> AppResult<RootDto> {
     let path_buf = PathBuf::from(path);
     if !path_buf.is_dir() {
         return Err(AppError::msg("path is not a directory"));
@@ -52,53 +62,62 @@ pub fn add_root(conn: &Connection, path: &str) -> AppResult<RootDto> {
         .unwrap_or(&path_str)
         .to_string();
 
-    conn.execute(
-        "INSERT INTO roots(path, label) VALUES (?1, ?2)
-         ON CONFLICT(path) DO UPDATE SET label = excluded.label",
-        params![path_str, label],
-    )?;
-    let id: i64 = conn.query_row(
-        "SELECT id FROM roots WHERE path = ?1",
-        params![path_str],
-        |r| r.get(0),
-    )?;
+    diesel::insert_into(roots_dsl::roots)
+        .values(NewRoot {
+            path: &path_str,
+            label: Some(&label),
+        })
+        .on_conflict(roots_dsl::path)
+        .do_update()
+        .set(roots_dsl::label.eq(&label))
+        .execute(conn)?;
+
+    let id: i32 = roots_dsl::roots
+        .filter(roots_dsl::path.eq(&path_str))
+        .select(roots_dsl::id)
+        .first(conn)?;
+
     Ok(RootDto {
-        id,
+        id: id as i64,
         path: path_str,
         label,
     })
 }
 
-pub fn remove_root(conn: &Connection, root_id: i64) -> AppResult<()> {
-    let n = conn.execute("DELETE FROM roots WHERE id = ?1", params![root_id])?;
+pub fn remove_root(conn: &mut SqliteConnection, root_id: i64) -> AppResult<()> {
+    let n = diesel::delete(roots_dsl::roots.find(root_id as i32)).execute(conn)?;
     if n == 0 {
         return Err(AppError::msg("root not found"));
     }
     Ok(())
 }
 
-pub fn set_folder_favorite(conn: &Connection, path: &str, favorite: bool) -> AppResult<()> {
+pub fn set_folder_favorite(
+    conn: &mut SqliteConnection,
+    path: &str,
+    favorite: bool,
+) -> AppResult<()> {
     if favorite {
-        conn.execute(
-            "INSERT OR IGNORE INTO favorite_folders(path) VALUES (?1)",
-            params![path],
-        )?;
+        diesel::insert_into(fav_dsl::favorite_folders)
+            .values(FavoriteFolder {
+                path: path.to_string(),
+                created_at: crate::db::utc_now(),
+            })
+            .on_conflict_do_nothing()
+            .execute(conn)?;
     } else {
-        conn.execute(
-            "DELETE FROM favorite_folders WHERE path = ?1",
-            params![path],
-        )?;
+        diesel::delete(fav_dsl::favorite_folders.find(path)).execute(conn)?;
     }
     Ok(())
 }
 
-pub fn folder_tree(conn: &Connection, max_depth: u32) -> AppResult<Vec<FolderNode>> {
+pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec<FolderNode>> {
     let roots = list_roots(conn)?;
-    let favs: std::collections::HashSet<String> = {
-        let mut stmt = conn.prepare("SELECT path FROM favorite_folders")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-        rows.filter_map(|r| r.ok()).collect()
-    };
+    let favs: HashSet<String> = fav_dsl::favorite_folders
+        .select(fav_dsl::path)
+        .load::<String>(conn)?
+        .into_iter()
+        .collect();
 
     let mut out = Vec::new();
     for root in roots {
@@ -124,30 +143,26 @@ pub fn folder_tree(conn: &Connection, max_depth: u32) -> AppResult<Vec<FolderNod
     Ok(out)
 }
 
-fn count_under(conn: &Connection, prefix: &str) -> AppResult<i64> {
-    let like = format!("{prefix}%");
-    let n: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM samples WHERE path = ?1 OR path LIKE ?2",
-        params![prefix, format!("{like}/")],
-        |r| r.get(0),
-    )?;
-    // Simpler: path starts with prefix
-    let n2: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM samples WHERE path = ?1 OR path LIKE ?2",
-        params![prefix, format!("{prefix}{}%", std::path::MAIN_SEPARATOR)],
-        |r| r.get(0),
-    )?;
-    let _ = n;
-    Ok(n2)
+fn count_under(conn: &mut SqliteConnection, prefix: &str) -> AppResult<i64> {
+    let like = format!("{}{}%", prefix, std::path::MAIN_SEPARATOR);
+    let n: i64 = samples_dsl::samples
+        .filter(
+            samples_dsl::path
+                .eq(prefix)
+                .or(samples_dsl::path.like(like)),
+        )
+        .select(count_star())
+        .first(conn)?;
+    Ok(n)
 }
 
 fn walk_dirs(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     dir: &Path,
     root_id: i64,
     depth: u32,
     max_depth: u32,
-    favs: &std::collections::HashSet<String>,
+    favs: &HashSet<String>,
     out: &mut Vec<FolderNode>,
 ) -> AppResult<()> {
     if depth > max_depth {

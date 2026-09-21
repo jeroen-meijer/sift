@@ -3,12 +3,18 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::audio::{decode_file, probe_and_update_sample, DecodedAudio};
-use crate::db::{settings, Db};
+use crate::db::models::SampleTag;
+use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
+use crate::db::schema::samples::dsl as samples_dsl;
+use crate::db::schema::tag_rejects::dsl as rejects_dsl;
+use crate::db::schema::tags::dsl as tags_dsl;
+use crate::db::{settings, utc_now, Db};
 use crate::error::{AppError, AppResult};
 
 const BPM_CONF_MIN: f64 = 0.08;
@@ -395,7 +401,7 @@ struct SampleRow {
 
 /// Analyze one sample and write results respecting overrides / rejects.
 pub fn analyze_sample(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     sample_id: i64,
     mode: &AnalyzeMode,
     bpm_range: (f64, f64),
@@ -438,55 +444,47 @@ pub fn analyze_sample(
     let write_key = row.key_name.is_none() || rerun_key;
     let write_type = row.sample_type.is_none() || rerun_type;
 
-    let bpm = if write_bpm { audio_result.bpm } else { None };
-    let bpm_confidence = if write_bpm {
-        audio_result.bpm_confidence
-    } else {
-        None
-    };
-    let key_name = if write_key {
-        audio_result.key_name.clone()
-    } else {
-        None
-    };
-    let key_confidence = if write_key {
-        audio_result.key_confidence
-    } else {
-        None
-    };
-    let sample_type = if write_type { detected_type } else { None };
+    let now = utc_now();
+    let id = sample_id as i32;
 
-    if write_bpm || write_key || write_type {
-        conn.execute(
-            "UPDATE samples SET
-                bpm = CASE WHEN ?1 THEN COALESCE(?2, bpm) ELSE bpm END,
-                bpm_confidence = CASE WHEN ?1 THEN COALESCE(?3, bpm_confidence) ELSE bpm_confidence END,
-                key_name = CASE WHEN ?4 THEN COALESCE(?5, key_name) ELSE key_name END,
-                key_confidence = CASE WHEN ?4 THEN COALESCE(?6, key_confidence) ELSE key_confidence END,
-                sample_type = CASE WHEN ?7 THEN COALESCE(?8, sample_type) ELSE sample_type END,
-                analyzed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?9",
-            params![
-                write_bpm as i64,
-                bpm,
-                bpm_confidence,
-                write_key as i64,
-                key_name,
-                key_confidence,
-                write_type as i64,
-                sample_type,
-                sample_id,
-            ],
-        )?;
-    } else {
-        conn.execute(
-            "UPDATE samples SET analyzed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
-             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE id = ?1",
-            params![sample_id],
-        )?;
+    if write_bpm {
+        if let Some(v) = audio_result.bpm {
+            diesel::update(samples_dsl::samples.find(id))
+                .set(samples_dsl::bpm.eq(v))
+                .execute(conn)?;
+        }
+        if let Some(v) = audio_result.bpm_confidence {
+            diesel::update(samples_dsl::samples.find(id))
+                .set(samples_dsl::bpm_confidence.eq(v))
+                .execute(conn)?;
+        }
     }
+    if write_key {
+        if let Some(ref v) = audio_result.key_name {
+            diesel::update(samples_dsl::samples.find(id))
+                .set(samples_dsl::key_name.eq(v))
+                .execute(conn)?;
+        }
+        if let Some(v) = audio_result.key_confidence {
+            diesel::update(samples_dsl::samples.find(id))
+                .set(samples_dsl::key_confidence.eq(v))
+                .execute(conn)?;
+        }
+    }
+    if write_type {
+        if let Some(ref v) = detected_type {
+            diesel::update(samples_dsl::samples.find(id))
+                .set(samples_dsl::sample_type.eq(v))
+                .execute(conn)?;
+        }
+    }
+
+    diesel::update(samples_dsl::samples.find(id))
+        .set((
+            samples_dsl::analyzed_at.eq(&now),
+            samples_dsl::updated_at.eq(&now),
+        ))
+        .execute(conn)?;
 
     apply_suggested_tags(
         conn,
@@ -499,7 +497,7 @@ pub fn analyze_sample(
 }
 
 fn apply_suggested_tags(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     sample_id: i64,
     suggested: &[String],
     overwrite_tags: bool,
@@ -508,28 +506,27 @@ fn apply_suggested_tags(
         return Ok(());
     }
 
+    let sample_id_i32 = sample_id as i32;
+
     if overwrite_tags {
         // Drop previous auto tags; keep user tags. Clear rejects so suggestions can return.
-        conn.execute(
-            "DELETE FROM sample_tags WHERE sample_id = ?1 AND source = 'auto'",
-            params![sample_id],
-        )?;
-        conn.execute(
-            "DELETE FROM tag_rejects WHERE sample_id = ?1",
-            params![sample_id],
-        )?;
+        diesel::delete(
+            sample_tags_dsl::sample_tags
+                .filter(sample_tags_dsl::sample_id.eq(sample_id_i32))
+                .filter(sample_tags_dsl::source.eq("auto")),
+        )
+        .execute(conn)?;
+        diesel::delete(rejects_dsl::tag_rejects.filter(rejects_dsl::sample_id.eq(sample_id_i32)))
+            .execute(conn)?;
     }
 
-    let rejects: Vec<i64> = if overwrite_tags {
+    let rejects: Vec<i32> = if overwrite_tags {
         Vec::new()
     } else {
-        let mut stmt =
-            conn.prepare("SELECT tag_id FROM tag_rejects WHERE sample_id = ?1")?;
-        let rows: Vec<i64> = stmt
-            .query_map(params![sample_id], |r| r.get(0))?
-            .filter_map(|r| r.ok())
-            .collect();
-        rows
+        rejects_dsl::tag_rejects
+            .filter(rejects_dsl::sample_id.eq(sample_id_i32))
+            .select(rejects_dsl::tag_id)
+            .load(conn)?
     };
 
     for path in suggested {
@@ -539,53 +536,57 @@ fn apply_suggested_tags(
         if rejects.contains(&tag_id) {
             continue;
         }
-        let exists: bool = conn
-            .query_row(
-                "SELECT 1 FROM sample_tags WHERE sample_id = ?1 AND tag_id = ?2",
-                params![sample_id, tag_id],
-                |_| Ok(true),
-            )
-            .optional()?
-            .unwrap_or(false);
-        if exists {
+        let exists: Option<i32> = sample_tags_dsl::sample_tags
+            .filter(sample_tags_dsl::sample_id.eq(sample_id_i32))
+            .filter(sample_tags_dsl::tag_id.eq(tag_id))
+            .select(sample_tags_dsl::sample_id)
+            .first(conn)
+            .optional()?;
+        if exists.is_some() {
             continue;
         }
-        conn.execute(
-            "INSERT INTO sample_tags(sample_id, tag_id, source) VALUES (?1, ?2, 'auto')",
-            params![sample_id, tag_id],
-        )?;
+        diesel::insert_into(sample_tags_dsl::sample_tags)
+            .values(SampleTag {
+                sample_id: sample_id_i32,
+                tag_id,
+                source: "auto".into(),
+            })
+            .execute(conn)?;
     }
     Ok(())
 }
 
-fn tag_id_by_path(conn: &Connection, path: &str) -> AppResult<Option<i64>> {
-    Ok(conn
-        .query_row(
-            "SELECT id FROM tags WHERE path = ?1",
-            params![path],
-            |r| r.get(0),
-        )
+fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i32>> {
+    Ok(tags_dsl::tags
+        .filter(tags_dsl::path.eq(path))
+        .select(tags_dsl::id)
+        .first(conn)
         .optional()?)
 }
 
-fn load_sample_row(conn: &Connection, id: i64) -> AppResult<Option<SampleRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT path, missing, bpm, key_name, sample_type FROM samples WHERE id = ?1",
-    )?;
-    Ok(stmt
-        .query_row(params![id], |r| {
-            Ok(SampleRow {
-                path: r.get(0)?,
-                missing: r.get::<_, i64>(1)? != 0,
-                bpm: r.get(2)?,
-                key_name: r.get(3)?,
-                sample_type: r.get(4)?,
-            })
-        })
-        .optional()?)
+fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleRow>> {
+    let row: Option<(String, i32, Option<f64>, Option<String>, Option<String>)> =
+        samples_dsl::samples
+            .find(id as i32)
+            .select((
+                samples_dsl::path,
+                samples_dsl::missing,
+                samples_dsl::bpm,
+                samples_dsl::key_name,
+                samples_dsl::sample_type,
+            ))
+            .first(conn)
+            .optional()?;
+    Ok(row.map(|(path, missing, bpm, key_name, sample_type)| SampleRow {
+        path,
+        missing: missing != 0,
+        bpm,
+        key_name,
+        sample_type,
+    }))
 }
 
-pub fn bpm_range_from_settings(conn: &Connection) -> AppResult<(f64, f64)> {
+pub fn bpm_range_from_settings(conn: &mut SqliteConnection) -> AppResult<(f64, f64)> {
     let min = settings::get(conn, "bpm_range_min")?
         .and_then(|v| v.as_f64())
         .unwrap_or(70.0);
@@ -595,15 +596,14 @@ pub fn bpm_range_from_settings(conn: &Connection) -> AppResult<(f64, f64)> {
     Ok((min, max))
 }
 
-pub fn list_unanalyzed_ids(conn: &Connection) -> AppResult<Vec<i64>> {
-    let mut stmt = conn.prepare(
-        "SELECT id FROM samples WHERE analyzed_at IS NULL AND missing = 0 ORDER BY id",
-    )?;
-    let ids = stmt
-        .query_map([], |r| r.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
-    Ok(ids)
+pub fn list_unanalyzed_ids(conn: &mut SqliteConnection) -> AppResult<Vec<i64>> {
+    let ids: Vec<i32> = samples_dsl::samples
+        .filter(samples_dsl::analyzed_at.is_null())
+        .filter(samples_dsl::missing.eq(0))
+        .select(samples_dsl::id)
+        .order(samples_dsl::id.asc())
+        .load(conn)?;
+    Ok(ids.into_iter().map(|id| id as i64).collect())
 }
 
 /// Fire-and-forget batch on a background thread.

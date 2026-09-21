@@ -1,7 +1,8 @@
 use std::fs::File;
 use std::path::Path;
 
-use rusqlite::{params, Connection};
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use symphonia::core::codecs::audio::AudioDecoderOptions;
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::probe::Hint;
@@ -9,6 +10,8 @@ use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
+use crate::db::schema::samples::dsl as samples_dsl;
+use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
 
 /// Fully decoded PCM, interleaved f32 in [-1.0, 1.0].
@@ -139,7 +142,7 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
 
 /// Probe a file, decode enough to know duration/rate/channels, write technical columns.
 pub fn probe_and_update_sample(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     sample_id: i64,
     path: &Path,
 ) -> AppResult<DecodedAudio> {
@@ -149,26 +152,28 @@ pub fn probe_and_update_sample(
         .and_then(|e| e.to_str())
         .map(|e| e.to_ascii_lowercase());
     let duration_ms = decoded.duration_ms();
-    let bit_depth = decoded.bit_depth_hint.map(|b| b as i64);
+    let bit_depth = decoded.bit_depth_hint.map(|b| b as i32);
+    let id = sample_id as i32;
 
-    conn.execute(
-        "UPDATE samples SET
-            sample_rate = ?1,
-            channels = ?2,
-            duration_ms = ?3,
-            format = COALESCE(?4, format),
-            bit_depth = COALESCE(?5, bit_depth),
-            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-         WHERE id = ?6",
-        params![
-            decoded.sample_rate as i64,
-            decoded.channels as i64,
-            duration_ms,
-            format,
-            bit_depth,
-            sample_id,
-        ],
-    )?;
+    diesel::update(samples_dsl::samples.find(id))
+        .set((
+            samples_dsl::sample_rate.eq(Some(decoded.sample_rate as i32)),
+            samples_dsl::channels.eq(Some(decoded.channels as i32)),
+            samples_dsl::duration_ms.eq(Some(duration_ms)),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
+
+    if let Some(ref f) = format {
+        diesel::update(samples_dsl::samples.find(id))
+            .set(samples_dsl::format.eq(f))
+            .execute(conn)?;
+    }
+    if let Some(b) = bit_depth {
+        diesel::update(samples_dsl::samples.find(id))
+            .set(samples_dsl::bit_depth.eq(b))
+            .execute(conn)?;
+    }
 
     Ok(decoded)
 }

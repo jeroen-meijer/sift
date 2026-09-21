@@ -2,12 +2,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use walkdir::WalkDir;
 
+use crate::db::models::NewSample;
+use crate::db::schema::roots::dsl as roots_dsl;
+use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::settings;
+use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
 
 const AUDIO_EXTS: &[&str] = &[
@@ -31,7 +36,7 @@ pub fn is_audio_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn build_ignore_set(conn: &Connection) -> AppResult<GlobSet> {
+fn build_ignore_set(conn: &mut SqliteConnection) -> AppResult<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     let list = settings::get(conn, "ignore_list")?
         .and_then(|v| v.as_array().cloned())
@@ -43,7 +48,9 @@ fn build_ignore_set(conn: &Connection) -> AppResult<GlobSet> {
             }
         }
     }
-    Ok(builder.build().map_err(|e| AppError::msg(e.to_string()))?)
+    Ok(builder
+        .build()
+        .map_err(|e| AppError::msg(e.to_string()))?)
 }
 
 fn mtime_ms(meta: &fs::Metadata) -> Option<i64> {
@@ -66,16 +73,14 @@ fn inode_of(_meta: &fs::Metadata) -> Option<i64> {
 }
 
 pub fn index_root(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     root_id: i64,
     mut on_progress: impl FnMut(IndexProgress),
 ) -> AppResult<IndexProgress> {
-    let root_path: String = conn
-        .query_row(
-            "SELECT path FROM roots WHERE id = ?1",
-            params![root_id],
-            |r| r.get(0),
-        )
+    let root_path: String = roots_dsl::roots
+        .find(root_id as i32)
+        .select(roots_dsl::path)
+        .first(conn)
         .map_err(|_| AppError::msg("root not found"))?;
 
     let ignore = build_ignore_set(conn)?;
@@ -83,8 +88,13 @@ pub fn index_root(
     let mut scanned = 0u64;
     let mut indexed = 0u64;
     let mut skipped = 0u64;
+    let root_id_i32 = root_id as i32;
 
-    for entry in WalkDir::new(&root).follow_links(false).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(&root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         let path = entry.path();
         let path_str = path.to_string_lossy().to_string();
 
@@ -127,40 +137,54 @@ pub fn index_root(
         let mtime = mtime_ms(&meta);
         let inode = inode_of(&meta);
 
-        let existing: Option<(i64, Option<i64>, Option<i64>)> = conn
-            .query_row(
-                "SELECT id, size_bytes, mtime_ms FROM samples WHERE path = ?1",
-                params![path_str],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            )
+        let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
+            .filter(samples_dsl::path.eq(&path_str))
+            .select((
+                samples_dsl::id,
+                samples_dsl::size_bytes,
+                samples_dsl::mtime_ms,
+            ))
+            .first(conn)
             .optional()?;
 
         match existing {
-            Some((id, old_size, old_mtime))
-                if old_size == Some(size) && old_mtime == mtime =>
-            {
-                // unchanged
-                conn.execute(
-                    "UPDATE samples SET missing = 0, root_id = ?1 WHERE id = ?2",
-                    params![root_id, id],
-                )?;
+            Some((id, old_size, old_mtime)) if old_size == Some(size) && old_mtime == mtime => {
+                diesel::update(samples_dsl::samples.find(id))
+                    .set((
+                        samples_dsl::missing.eq(0),
+                        samples_dsl::root_id.eq(root_id_i32),
+                    ))
+                    .execute(conn)?;
             }
             Some((id, _, _)) => {
-                conn.execute(
-                    "UPDATE samples SET root_id = ?1, filename = ?2, parent_path = ?3, extension = ?4,
-                     size_bytes = ?5, mtime_ms = ?6, inode = ?7, missing = 0,
-                     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-                     WHERE id = ?8",
-                    params![root_id, filename, parent, extension, size, mtime, inode, id],
-                )?;
+                diesel::update(samples_dsl::samples.find(id))
+                    .set((
+                        samples_dsl::root_id.eq(root_id_i32),
+                        samples_dsl::filename.eq(&filename),
+                        samples_dsl::parent_path.eq(&parent),
+                        samples_dsl::extension.eq(&extension),
+                        samples_dsl::size_bytes.eq(Some(size)),
+                        samples_dsl::mtime_ms.eq(mtime),
+                        samples_dsl::inode.eq(inode),
+                        samples_dsl::missing.eq(0),
+                        samples_dsl::updated_at.eq(utc_now()),
+                    ))
+                    .execute(conn)?;
                 indexed += 1;
             }
             None => {
-                conn.execute(
-                    "INSERT INTO samples(root_id, path, filename, parent_path, extension, size_bytes, mtime_ms, inode)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                    params![root_id, path_str, filename, parent, extension, size, mtime, inode],
-                )?;
+                diesel::insert_into(samples_dsl::samples)
+                    .values(NewSample {
+                        root_id: root_id_i32,
+                        path: &path_str,
+                        filename: &filename,
+                        parent_path: &parent,
+                        extension: &extension,
+                        size_bytes: Some(size),
+                        mtime_ms: mtime,
+                        inode,
+                    })
+                    .execute(conn)?;
                 indexed += 1;
             }
         }
@@ -177,9 +201,6 @@ pub fn index_root(
         }
     }
 
-    // Mark missing files under this root that were not seen — skip for first full index pass
-    // (Phase 14 watch handles continuous missing). Optional: could compare set.
-
     let done = IndexProgress {
         root_id,
         scanned,
@@ -193,22 +214,18 @@ pub fn index_root(
 }
 
 pub fn index_all_roots(
-    conn: &Connection,
+    conn: &mut SqliteConnection,
     mut on_progress: impl FnMut(IndexProgress),
 ) -> AppResult<()> {
-    let mut stmt = conn.prepare("SELECT id FROM roots")?;
-    let ids: Vec<i64> = stmt
-        .query_map([], |r| r.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+    let ids: Vec<i32> = roots_dsl::roots.select(roots_dsl::id).load(conn)?;
     for id in ids {
-        index_root(conn, id, &mut on_progress)?;
+        index_root(conn, id as i64, &mut on_progress)?;
     }
     Ok(())
 }
 
 /// Index one or more absolute file paths that already live under a known root.
-pub fn index_paths(conn: &Connection, paths: &[PathBuf]) -> AppResult<u64> {
+pub fn index_paths(conn: &mut SqliteConnection, paths: &[PathBuf]) -> AppResult<u64> {
     let ignore = build_ignore_set(conn)?;
     let roots = list_root_paths(conn)?;
     let mut indexed = 0u64;
@@ -231,10 +248,14 @@ pub fn index_paths(conn: &Connection, paths: &[PathBuf]) -> AppResult<u64> {
     Ok(indexed)
 }
 
-fn list_root_paths(conn: &Connection) -> AppResult<Vec<(i64, PathBuf)>> {
-    let mut stmt = conn.prepare("SELECT id, path FROM roots")?;
-    let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, PathBuf::from(r.get::<_, String>(1)?))))?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+fn list_root_paths(conn: &mut SqliteConnection) -> AppResult<Vec<(i64, PathBuf)>> {
+    let rows: Vec<(i32, String)> = roots_dsl::roots
+        .select((roots_dsl::id, roots_dsl::path))
+        .load(conn)?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, path)| (id as i64, PathBuf::from(path)))
+        .collect())
 }
 
 fn find_root_for(roots: &[(i64, PathBuf)], path: &Path) -> Option<(i64, PathBuf)> {
@@ -246,7 +267,11 @@ fn find_root_for(roots: &[(i64, PathBuf)], path: &Path) -> Option<(i64, PathBuf)
 }
 
 /// Insert or update a sample row from disk metadata. Returns true when a row was written.
-pub fn upsert_sample(conn: &Connection, root_id: i64, path: &Path) -> AppResult<bool> {
+pub fn upsert_sample(
+    conn: &mut SqliteConnection,
+    root_id: i64,
+    path: &Path,
+) -> AppResult<bool> {
     let meta = match fs::metadata(path) {
         Ok(m) => m,
         Err(_) => return Ok(false),
@@ -269,39 +294,57 @@ pub fn upsert_sample(conn: &Connection, root_id: i64, path: &Path) -> AppResult<
     let size = meta.len() as i64;
     let mtime = mtime_ms(&meta);
     let inode = inode_of(&meta);
+    let root_id_i32 = root_id as i32;
 
-    let existing: Option<(i64, Option<i64>, Option<i64>)> = conn
-        .query_row(
-            "SELECT id, size_bytes, mtime_ms FROM samples WHERE path = ?1",
-            params![path_str],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
+    let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
+        .filter(samples_dsl::path.eq(&path_str))
+        .select((
+            samples_dsl::id,
+            samples_dsl::size_bytes,
+            samples_dsl::mtime_ms,
+        ))
+        .first(conn)
         .optional()?;
 
     match existing {
         Some((id, old_size, old_mtime)) if old_size == Some(size) && old_mtime == mtime => {
-            conn.execute(
-                "UPDATE samples SET missing = 0, root_id = ?1 WHERE id = ?2",
-                params![root_id, id],
-            )?;
+            diesel::update(samples_dsl::samples.find(id))
+                .set((
+                    samples_dsl::missing.eq(0),
+                    samples_dsl::root_id.eq(root_id_i32),
+                ))
+                .execute(conn)?;
             Ok(false)
         }
         Some((id, _, _)) => {
-            conn.execute(
-                "UPDATE samples SET root_id = ?1, filename = ?2, parent_path = ?3, extension = ?4,
-                 size_bytes = ?5, mtime_ms = ?6, inode = ?7, missing = 0,
-                 updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-                 WHERE id = ?8",
-                params![root_id, filename, parent, extension, size, mtime, inode, id],
-            )?;
+            diesel::update(samples_dsl::samples.find(id))
+                .set((
+                    samples_dsl::root_id.eq(root_id_i32),
+                    samples_dsl::filename.eq(&filename),
+                    samples_dsl::parent_path.eq(&parent),
+                    samples_dsl::extension.eq(&extension),
+                    samples_dsl::size_bytes.eq(Some(size)),
+                    samples_dsl::mtime_ms.eq(mtime),
+                    samples_dsl::inode.eq(inode),
+                    samples_dsl::missing.eq(0),
+                    samples_dsl::updated_at.eq(utc_now()),
+                ))
+                .execute(conn)?;
             Ok(true)
         }
         None => {
-            conn.execute(
-                "INSERT INTO samples(root_id, path, filename, parent_path, extension, size_bytes, mtime_ms, inode)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![root_id, path_str, filename, parent, extension, size, mtime, inode],
-            )?;
+            diesel::insert_into(samples_dsl::samples)
+                .values(NewSample {
+                    root_id: root_id_i32,
+                    path: &path_str,
+                    filename: &filename,
+                    parent_path: &parent,
+                    extension: &extension,
+                    size_bytes: Some(size),
+                    mtime_ms: mtime,
+                    inode,
+                })
+                .execute(conn)?;
             Ok(true)
         }
     }

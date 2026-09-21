@@ -286,12 +286,10 @@ pub fn restart(app: &AppHandle, shared: &Arc<WatchShared>, guard_slot: &Mutex<Op
     let roots: Vec<PathBuf> = shared
         .db
         .with_conn(|conn| {
-            let mut stmt = conn.prepare("SELECT path FROM roots")?;
-            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-            Ok(rows
-                .filter_map(|r| r.ok())
-                .map(PathBuf::from)
-                .collect::<Vec<_>>())
+            use diesel::prelude::*;
+            use crate::db::schema::roots::dsl as roots_dsl;
+            let paths: Vec<String> = roots_dsl::roots.select(roots_dsl::path).load(conn)?;
+            Ok(paths.into_iter().map(PathBuf::from).collect::<Vec<_>>())
         })
         .unwrap_or_default();
 

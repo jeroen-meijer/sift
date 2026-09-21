@@ -1,6 +1,9 @@
-use rusqlite::{params, Connection};
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 
-use crate::error::AppResult;
+use crate::db::models::NewTag;
+use crate::db::schema::tags::dsl as tags_dsl;
+use crate::error::{AppError, AppResult};
 
 /// Default taxonomy from docs/DEFAULT_TAXONOMY.md
 const TAXONOMY: &[(&str, Option<&str>)] = &[
@@ -59,13 +62,16 @@ const TAXONOMY: &[(&str, Option<&str>)] = &[
     ("Genre/Funk", None),
 ];
 
-pub fn seed_if_empty(conn: &Connection) -> AppResult<()> {
-    let count: i64 = conn.query_row("SELECT COUNT(*) FROM tags", [], |r| r.get(0))?;
+pub fn seed_if_empty(conn: &mut SqliteConnection) -> AppResult<()> {
+    let count: i64 = tags_dsl::tags
+        .count()
+        .get_result(conn)
+        .map_err(AppError::from)?;
     if count > 0 {
         return Ok(());
     }
 
-    let mut id_by_path = std::collections::HashMap::<String, i64>::new();
+    let mut id_by_path = std::collections::HashMap::<String, i32>::new();
 
     for (path, color) in TAXONOMY {
         let name = path.rsplit('/').next().unwrap_or(path);
@@ -73,11 +79,21 @@ pub fn seed_if_empty(conn: &Connection) -> AppResult<()> {
             .rsplit_once('/')
             .and_then(|(parent, _)| id_by_path.get(parent).copied());
 
-        conn.execute(
-            "INSERT INTO tags(path, name, parent_id, color) VALUES (?1, ?2, ?3, ?4)",
-            params![path, name, parent_id, color],
-        )?;
-        let id = conn.last_insert_rowid();
+        diesel::insert_into(tags_dsl::tags)
+            .values(NewTag {
+                path,
+                name,
+                parent_id,
+                color: *color,
+            })
+            .execute(conn)
+            .map_err(AppError::from)?;
+
+        let id: i32 = tags_dsl::tags
+            .filter(tags_dsl::path.eq(path))
+            .select(tags_dsl::id)
+            .first(conn)
+            .map_err(AppError::from)?;
         id_by_path.insert((*path).to_string(), id);
     }
     Ok(())
