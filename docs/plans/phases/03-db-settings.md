@@ -1,6 +1,10 @@
 # Phase 03 — DB + settings
 
-**Status:** in_progress
+**Status:** complete
+
+## Done
+
+SQLite schema, settings defaults, taxonomy seed, `get_settings` / `set_setting` / `db_stats` IPC. App data under ProjectDirs `dev.jfk.Sift`.
 
 ## Previous
 

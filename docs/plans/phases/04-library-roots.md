@@ -1,6 +1,6 @@
 # Phase 04 — Library roots + first launch
 
-**Status:** pending
+**Status:** in_progress
 
 ## Previous
 
