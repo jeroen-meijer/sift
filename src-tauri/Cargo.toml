@@ -25,6 +25,7 @@ anyhow = "1.0.104"
 uuid = { version = "1.20.0", features = ["v4"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
+tauri-plugin-dialog = "2.7.3"
 
 [profile.release]
 codegen-units = 1

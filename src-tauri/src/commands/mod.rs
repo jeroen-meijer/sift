@@ -3,6 +3,7 @@ use tauri::State;
 
 use crate::db::settings;
 use crate::error::AppResult;
+use crate::library::{self, FolderNode, RootDto};
 use crate::state::AppState;
 
 #[derive(serde::Serialize)]
@@ -38,4 +39,37 @@ pub fn db_stats(state: State<'_, AppState>) -> AppResult<DbStats> {
             clips_dir: state.paths.clips_dir.to_string_lossy().into_owned(),
         })
     })
+}
+
+#[tauri::command]
+pub fn list_roots(state: State<'_, AppState>) -> AppResult<Vec<RootDto>> {
+    state.db.with_conn(library::list_roots)
+}
+
+#[tauri::command]
+pub fn add_root(state: State<'_, AppState>, path: String) -> AppResult<RootDto> {
+    state.db.with_conn(|conn| library::add_root(conn, &path))
+}
+
+#[tauri::command]
+pub fn remove_root(state: State<'_, AppState>, root_id: i64) -> AppResult<()> {
+    state.db.with_conn(|conn| library::remove_root(conn, root_id))
+}
+
+#[tauri::command]
+pub fn folder_tree(state: State<'_, AppState>, max_depth: Option<u32>) -> AppResult<Vec<FolderNode>> {
+    state
+        .db
+        .with_conn(|conn| library::folder_tree(conn, max_depth.unwrap_or(6)))
+}
+
+#[tauri::command]
+pub fn set_folder_favorite(
+    state: State<'_, AppState>,
+    path: String,
+    favorite: bool,
+) -> AppResult<()> {
+    state
+        .db
+        .with_conn(|conn| library::set_folder_favorite(conn, &path, favorite))
 }

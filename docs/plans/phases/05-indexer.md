@@ -1,6 +1,6 @@
 # Phase 05 — Indexer
 
-**Status:** pending
+**Status:** in_progress
 
 ## Previous
 
