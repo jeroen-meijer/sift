@@ -67,3 +67,9 @@ Companion to [SPEC.md](SPEC.md). Answers from requirements gathering (2026-09-21
 | Q67 | Hotkey customization | **C** - only hold-to-hover rebindable in v1; full shortcut editor later |
 | Q68 | Product name | **Sift** |
 | Q69 | Pause + cleanup | Spec → v0.3; Q&A paused; humanize pass |
+| Q70 | Locales + themes | Copy in locale files; colors/tokens in theme files. v1: `en` + one dark theme. Structure ready for more languages/themes later |
+| Q71 | Column sort | Header click cycles asc (↓) → desc (↑) → clear (default Name A-Z). Persists. One column at a time |
+| Q72 | Design authority | Provided Claude Design artifacts are visual source of truth for chrome; SPEC wins on behavior |
+| Q73 | Default taxonomy | Ship [docs/DEFAULT_TAXONOMY.md](docs/DEFAULT_TAXONOMY.md); tunable after dogfood |
+| Q74 | Analysis + packages | Auto-tags: filename/path first. BPM/key: existing Rust crate behind trait; imperfect OK. Prefer crates/React libs over custom DSP/OS code |
+| Q75 | v1 delivery | Complete Must + designs; you test once “done”; tune after. Icon mocks OK. macOS host for build; assume stack spikes pass unless they fail |
