@@ -1,5 +1,6 @@
-import { CheckIcon } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { CaretRightIcon, CheckIcon } from "@phosphor-icons/react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { motionMs } from "./motion";
 
 export interface MenuItem {
   kind: "item";
@@ -20,11 +21,7 @@ export interface MenuSubmenu {
   options: { id: string; label: string; checked?: boolean }[];
 }
 
-/**
- * A flyout holding real controls rather than a list of choices. It opens on
- * click, not hover: hovering something with a text field in it and losing it
- * again on the way to that field is the worst kind of menu.
- */
+/** A flyout holding real controls rather than a list of choices. */
 export interface MenuPanel {
   kind: "panel";
   id: string;
@@ -53,9 +50,36 @@ const EDGE_GAP = 8;
 /** The design's 256px context menu, clamped to stay inside the window. */
 export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef(0);
   const [pos, setPos] = useState({ left: x, top: y });
   const [openSub, setOpenSub] = useState<string | null>(null);
   const [flyoutsLeft, setFlyoutsLeft] = useState(false);
+
+  /*
+   * Flyouts open on hover but close on a delay. Without the grace period a
+   * diagonal sweep from the trigger towards the flyout crosses a sibling row
+   * and the flyout vanishes from under the pointer.
+   */
+  const cancelClose = useCallback(() => {
+    window.clearTimeout(closeTimer.current);
+  }, []);
+
+  const openFlyout = useCallback(
+    (id: string) => {
+      cancelClose();
+      setOpenSub(id);
+    },
+    [cancelClose],
+  );
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => {
+      setOpenSub(null);
+    }, motionMs("--motion-hover-grace"));
+  }, [cancelClose]);
+
+  useEffect(() => cancelClose, [cancelClose]);
 
   const widestFlyout = entries.reduce(
     (widest, entry) => (entry.kind === "panel" ? Math.max(widest, entry.width) : widest),
@@ -117,7 +141,14 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
         entry.kind === "rule" ? (
           <div key={`rule-${String(index)}`} className="menu-rule" role="separator" />
         ) : entry.kind === "panel" ? (
-          <div key={entry.id} className="menu-sub">
+          <div
+            key={entry.id}
+            className="menu-sub"
+            onMouseEnter={() => {
+              if (!entry.disabled) openFlyout(entry.id);
+            }}
+            onMouseLeave={scheduleClose}
+          >
             <button
               type="button"
               role="menuitem"
@@ -125,13 +156,15 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
               disabled={entry.disabled}
               aria-haspopup="true"
               aria-expanded={openSub === entry.id}
-              onClick={() => {
-                setOpenSub((open) => (open === entry.id ? null : entry.id));
+              onClick={(e) => {
+                openFlyout(entry.id);
+                // A deliberate click means the field is what you came for.
+                e.currentTarget.parentElement?.querySelector("input")?.focus();
               }}
             >
               <span className="menu-icon">{entry.icon}</span>
               <span className="menu-label">{entry.label}</span>
-              <span className="menu-hint">▸</span>
+              <CaretRightIcon size={12} weight="bold" className="menu-caret" />
             </button>
             {openSub === entry.id ? (
               <div
@@ -139,6 +172,7 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
                 role="group"
                 aria-label={entry.label}
                 style={{ width: entry.width }}
+                onMouseEnter={cancelClose}
               >
                 {entry.content}
               </div>
@@ -149,11 +183,9 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
             key={entry.id}
             className="menu-sub"
             onMouseEnter={() => {
-              setOpenSub(entry.id);
+              if (!entry.disabled) openFlyout(entry.id);
             }}
-            onMouseLeave={() => {
-              setOpenSub((prev) => (prev === entry.id ? null : prev));
-            }}
+            onMouseLeave={scheduleClose}
           >
             <button
               type="button"
@@ -165,13 +197,14 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
             >
               <span className="menu-icon">{entry.icon}</span>
               <span className="menu-label">{entry.label}</span>
-              <span className="menu-hint">▸</span>
+              <CaretRightIcon size={12} weight="bold" className="menu-caret" />
             </button>
             {openSub === entry.id ? (
               <div
                 className={`menu menu-flyout${flyoutsLeft ? " left" : ""}`}
                 role="menu"
                 aria-label={entry.label}
+                onMouseEnter={cancelClose}
               >
                 {entry.options.map((option) => (
                   <button
@@ -200,6 +233,7 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
             role="menuitem"
             className={`menu-item${entry.danger ? " danger" : ""}`}
             disabled={entry.disabled}
+            onMouseEnter={scheduleClose}
             onClick={() => {
               pick(entry.id);
             }}
