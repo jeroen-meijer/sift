@@ -56,10 +56,13 @@ impl DecodeCache {
         }
 
         let audio = Arc::new(decode_file(path)?);
-        self.insert(key, Entry {
-            audio: Arc::clone(&audio),
-            mtime,
-        });
+        self.insert(
+            key,
+            Entry {
+                audio: Arc::clone(&audio),
+                mtime,
+            },
+        );
         Ok((audio, false))
     }
 
@@ -109,7 +112,9 @@ mod tests {
     use std::path::PathBuf;
 
     fn fixture(rel: &str) -> Option<PathBuf> {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples").join(rel);
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../example_samples")
+            .join(rel);
         path.exists().then_some(path)
     }
 
