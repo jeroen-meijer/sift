@@ -70,6 +70,7 @@ pub fn run() {
             commands::redo_meta,
             commands::get_peaks,
             commands::play_sample,
+            commands::prefetch_decode,
             commands::set_play_region,
             commands::stop_playback,
             commands::pause_playback,
