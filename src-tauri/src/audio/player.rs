@@ -2,13 +2,14 @@
 //!
 //! Decode happens on the control thread (via [`crate::audio::decode_cache`]);
 //! the audio callback only reads a shared interleaved f32 buffer and applies
-//! gain. Same-file seeks reuse the last converted PCM and only retarget the
-//! playhead when the stream is already live.
+//! gain. The output stream stays alive across sample changes: new PCM is swapped
+//! in under a short lock so audition avoids the ~35 ms cpal stream rebuild.
+//! Same-file seeks only retarget the playhead.
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -45,7 +46,9 @@ impl SamplePlayType {
 
 struct SharedPlayback {
     /// Interleaved f32 at the device sample rate / channel count.
-    pcm: Arc<[f32]>,
+    /// Swapped on sample change without rebuilding the cpal stream.
+    pcm: RwLock<Arc<[f32]>>,
+    /// Device layout for the live stream (fixed until teardown).
     channels: usize,
     sample_rate: u32,
     /// Frame index into pcm.
@@ -64,6 +67,51 @@ struct SharedPlayback {
 impl SharedPlayback {
     fn gain_linear(&self) -> f32 {
         f32::from_bits(self.gain.load(Ordering::Relaxed))
+    }
+
+    fn pcm_arc(&self) -> Arc<[f32]> {
+        self.pcm
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn frame_count(&self) -> usize {
+        self.pcm_arc()
+            .len()
+            .checked_div(self.channels.max(1))
+            .unwrap_or(0)
+    }
+
+    /// Replace PCM and retarget transport. Brief `playing=false` avoids reading
+    /// a half-swapped buffer in the audio callback.
+    fn load_buffer(
+        &self,
+        pcm: Arc<[f32]>,
+        start_frame: usize,
+        region: (usize, usize),
+        looping: bool,
+    ) {
+        self.playing.store(false, Ordering::Relaxed);
+        *self
+            .pcm
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = pcm;
+        self.region_start.store(region.0, Ordering::Relaxed);
+        self.region_end.store(region.1, Ordering::Relaxed);
+        self.position.store(start_frame, Ordering::Relaxed);
+        self.looping.store(looping, Ordering::Relaxed);
+        self.paused.store(false, Ordering::Relaxed);
+        self.playing.store(true, Ordering::Relaxed);
+    }
+
+    fn retarget_playhead(&self, start_frame: usize, region: (usize, usize), looping: bool) {
+        self.region_start.store(region.0, Ordering::Relaxed);
+        self.region_end.store(region.1, Ordering::Relaxed);
+        self.position.store(start_frame, Ordering::Relaxed);
+        self.looping.store(looping, Ordering::Relaxed);
+        self.paused.store(false, Ordering::Relaxed);
+        self.playing.store(true, Ordering::Relaxed);
     }
 }
 
@@ -168,7 +216,7 @@ impl PlayerEngine {
         }
 
         self.last_converted = None;
-        self.stop();
+        self.teardown_stream();
         Ok(())
     }
 
@@ -201,7 +249,8 @@ impl PlayerEngine {
     /// window, which is what a waveform selection loops over.
     ///
     /// When `path` matches the last converted buffer, skips convert and (when
-    /// the stream is still live) only retargets the playhead.
+    /// the stream is still live) only retargets the playhead. Otherwise converts
+    /// and swaps PCM into the live stream when the device layout still matches.
     pub fn play_decoded(
         &mut self,
         path: &Path,
@@ -240,9 +289,7 @@ impl PlayerEngine {
         let (region, start_frame, should_loop) =
             play_window(frames, out_rate, start_secs, sample_type, region_secs, self.loop_preview);
 
-        let stream_start = Instant::now();
-        self.stop_stream_only();
-        self.start_stream(
+        self.apply_pcm(
             Arc::clone(&pcm),
             channels,
             out_rate,
@@ -253,7 +300,6 @@ impl PlayerEngine {
             &config,
             sample_format,
         )?;
-        crate::profile_log::event("play.stream_start", stream_start.elapsed(), "cold");
 
         self.last_converted = Some(ConvertedBuffer {
             path: path.to_path_buf(),
@@ -290,18 +336,14 @@ impl PlayerEngine {
 
         let reuse_start = Instant::now();
         if let Some(shared) = &self.shared
-            && Arc::ptr_eq(&shared.pcm, &conv.pcm)
+            && self.stream.is_some()
+            && shared.channels == conv.channels
+            && shared.sample_rate == conv.sample_rate
+            && Arc::ptr_eq(&shared.pcm_arc(), &conv.pcm)
         {
-            shared.region_start.store(region.0, Ordering::Relaxed);
-            shared.region_end.store(region.1, Ordering::Relaxed);
-            shared.position.store(start_frame, Ordering::Relaxed);
-            shared.looping.store(should_loop, Ordering::Relaxed);
-            shared.paused.store(false, Ordering::Relaxed);
-            shared.playing.store(true, Ordering::Relaxed);
-            if self.stream.is_some() {
-                crate::profile_log::event("play.reuse", reuse_start.elapsed(), "seek");
-                return Ok(());
-            }
+            shared.retarget_playhead(start_frame, region, should_loop);
+            crate::profile_log::event("play.reuse", reuse_start.elapsed(), "seek");
+            return Ok(());
         }
 
         let device = self.resolve_device()?;
@@ -310,8 +352,7 @@ impl PlayerEngine {
             .map_err(|e| AppError::msg(format!("default output config: {e}")))?;
         let sample_format = supported.sample_format();
         let config: StreamConfig = supported.into();
-        self.stop_stream_only();
-        self.start_stream(
+        self.apply_pcm(
             Arc::clone(&conv.pcm),
             conv.channels,
             conv.sample_rate,
@@ -322,7 +363,48 @@ impl PlayerEngine {
             &config,
             sample_format,
         )?;
-        crate::profile_log::event("play.stream_start", reuse_start.elapsed(), "reuse_pcm");
+        Ok(())
+    }
+
+    /// Swap into the live stream when layout matches; otherwise cold-start cpal.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_pcm(
+        &mut self,
+        pcm: Arc<[f32]>,
+        channels: usize,
+        sample_rate: u32,
+        start_frame: usize,
+        region: (usize, usize),
+        should_loop: bool,
+        device: &Device,
+        config: &StreamConfig,
+        sample_format: SampleFormat,
+    ) -> AppResult<()> {
+        if let Some(shared) = &self.shared
+            && self.stream.is_some()
+            && shared.channels == channels
+            && shared.sample_rate == sample_rate
+        {
+            let swap_start = Instant::now();
+            shared.load_buffer(pcm, start_frame, region, should_loop);
+            crate::profile_log::event("play.buffer_swap", swap_start.elapsed(), "");
+            return Ok(());
+        }
+
+        let stream_start = Instant::now();
+        self.teardown_stream();
+        self.start_stream(
+            pcm,
+            channels,
+            sample_rate,
+            start_frame,
+            region,
+            should_loop,
+            device,
+            config,
+            sample_format,
+        )?;
+        crate::profile_log::event("play.stream_start", stream_start.elapsed(), "cold");
         Ok(())
     }
 
@@ -331,11 +413,7 @@ impl PlayerEngine {
         let Some(shared) = &self.shared else {
             return;
         };
-        let frames = shared
-            .pcm
-            .len()
-            .checked_div(shared.channels.max(1))
-            .unwrap_or(0);
+        let frames = shared.frame_count();
         let rate = f64::from(shared.sample_rate.max(1));
         let (start, end) = region_secs.map_or((0, frames), |(start, end)| {
             let start_frame = f64_to_usize(start.max(0.0) * rate).min(frames);
@@ -358,11 +436,7 @@ impl PlayerEngine {
         let Some(shared) = self.shared.clone() else {
             return Err(AppError::msg("nothing to resume"));
         };
-        let frames = shared
-            .pcm
-            .len()
-            .checked_div(shared.channels.max(1))
-            .unwrap_or(0);
+        let frames = shared.frame_count();
         let region_start = shared.region_start.load(Ordering::Relaxed);
         let region_end = shared.region_end.load(Ordering::Relaxed).min(frames);
         let pos = shared.position.load(Ordering::Relaxed);
@@ -386,7 +460,7 @@ impl PlayerEngine {
                 shared.region_end.load(Ordering::Relaxed),
             );
             self.start_stream(
-                Arc::clone(&shared.pcm),
+                shared.pcm_arc(),
                 shared.channels,
                 shared.sample_rate,
                 pos,
@@ -400,9 +474,12 @@ impl PlayerEngine {
         Ok(())
     }
 
-    pub fn stop(&mut self) {
-        self.stop_stream_only();
-        self.shared = None;
+    /// Soft stop: silence output but keep the cpal stream warm for the next play.
+    pub fn stop(&self) {
+        if let Some(shared) = &self.shared {
+            shared.playing.store(false, Ordering::Relaxed);
+            shared.paused.store(false, Ordering::Relaxed);
+        }
     }
 
     /// Current playhead in seconds, and whether audio is actively outputting.
@@ -410,8 +487,7 @@ impl PlayerEngine {
         let Some(shared) = &self.shared else {
             return (0.0, false);
         };
-        let channels = shared.channels.max(1);
-        let frames = shared.pcm.len().checked_div(channels).unwrap_or(0);
+        let frames = shared.frame_count();
         let pos = shared.position.load(Ordering::Relaxed);
         #[allow(
             clippy::as_conversions,
@@ -434,11 +510,7 @@ impl PlayerEngine {
         let Some(shared) = &self.shared else {
             return;
         };
-        let frames = shared
-            .pcm
-            .len()
-            .checked_div(shared.channels.max(1))
-            .unwrap_or(0);
+        let frames = shared.frame_count();
         let frame = f64_to_usize(secs.max(0.0) * f64::from(shared.sample_rate)).min(frames);
         shared.position.store(frame, Ordering::Relaxed);
         if frame < frames {
@@ -446,11 +518,12 @@ impl PlayerEngine {
         }
     }
 
-    fn stop_stream_only(&mut self) {
+    fn teardown_stream(&mut self) {
         if let Some(shared) = &self.shared {
             shared.playing.store(false, Ordering::Relaxed);
         }
         self.stream = None;
+        self.shared = None;
     }
 
     fn resolve_device(&self) -> AppResult<Device> {
@@ -491,7 +564,7 @@ impl PlayerEngine {
         sample_format: SampleFormat,
     ) -> AppResult<()> {
         let shared = Arc::new(SharedPlayback {
-            pcm,
+            pcm: RwLock::new(pcm),
             channels,
             sample_rate,
             position: AtomicUsize::new(start_frame),
@@ -557,7 +630,6 @@ where
 {
     let gain = shared.gain_linear();
     let src_ch = shared.channels.max(1);
-    let frames_total = shared.pcm.len().checked_div(src_ch).unwrap_or(0);
     let out_ch = out_channels.max(1);
 
     if !shared.playing.load(Ordering::Relaxed) || shared.paused.load(Ordering::Relaxed) {
@@ -566,6 +638,11 @@ where
         }
         return;
     }
+
+    // Clone the Arc under a short read lock so the callback does not hold the
+    // lock while writing samples (control thread may swap buffers).
+    let pcm = shared.pcm_arc();
+    let frames_total = pcm.len().checked_div(src_ch).unwrap_or(0);
 
     let mut pos = shared.position.load(Ordering::Relaxed);
     let looping = shared.looping.load(Ordering::Relaxed);
@@ -603,8 +680,7 @@ where
             } else {
                 c.checked_rem(src_ch).unwrap_or(0)
             };
-            let src = shared
-                .pcm
+            let src = pcm
                 .get(base.saturating_add(offset))
                 .copied()
                 .unwrap_or(0.0);
