@@ -84,6 +84,7 @@ export function RowWaveform({
           colored,
           bands,
           ink,
+          style: "gradient",
           maxColorStops: 32,
         },
       );
@@ -102,6 +103,13 @@ export function RowWaveform({
   }
   if (missing) {
     return <div className="row-wave row-wave-missing" aria-hidden />;
+  }
+  if (!peaks) {
+    return (
+      <div className="row-wave row-wave-analyzing" aria-hidden>
+        <span className="row-wave-shimmer" />
+      </div>
+    );
   }
 
   const fractionAt = (e: React.MouseEvent<HTMLDivElement>) => {

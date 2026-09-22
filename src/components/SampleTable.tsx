@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   CaretDownIcon,
   CaretUpIcon,
+  CircleNotchIcon,
   MagnifyingGlassIcon,
   PlayIcon,
   StarIcon,
@@ -24,7 +25,9 @@ import { RowWaveform } from "./RowWaveform";
 
 const ROW_HEIGHT = 28;
 /** Extra rows above/below the viewport so scroll rarely paints an empty slot. */
-const ROW_OVERSCAN = 28;
+const ROW_OVERSCAN = 40;
+/** Prefetch peaks this far past the overscan window (first-pass scroll). */
+const PEAK_PREFETCH_PAD = 80;
 const EM_DASH = "—";
 
 function visibleColumns(hidden: Set<OptionalColumn>, showWaveforms: boolean): ResizableColumn[] {
@@ -75,6 +78,8 @@ function splitFilename(filename: string): { base: string; ext: string } {
 interface Props {
   samples: SampleRow[];
   indexedCount: number;
+  /** True while the first (or empty) list query is in flight. */
+  loading?: boolean;
   selectedIds: Set<number>;
   playingId: number | null;
   /** 0-1 position of the playhead in the playing row. */
@@ -101,6 +106,7 @@ interface Props {
 export function SampleTable({
   samples,
   indexedCount,
+  loading = false,
   selectedIds,
   playingId,
   playingProgress,
@@ -144,15 +150,28 @@ export function SampleTable({
   const rangeStart = virtualItems[0]?.index ?? 0;
   const rangeEnd = virtualItems.at(-1)?.index ?? -1;
 
-  /* Prefetch peaks for the mounted window so waveforms are warm before paint. */
+  /* Prefetch peaks for the mounted window + lookahead so first scroll stays warm. */
   useEffect(() => {
-    if (!showWaveforms || rangeEnd < rangeStart) return;
-    const ids: number[] = [];
-    for (let index = rangeStart; index <= rangeEnd; index++) {
+    if (!showWaveforms || samples.length === 0) return;
+    const last = samples.length - 1;
+    const urgentStart = rangeEnd < rangeStart ? 0 : rangeStart;
+    const urgentEnd = rangeEnd < rangeStart ? Math.min(last, 40) : rangeEnd;
+    const urgentIds: number[] = [];
+    for (let index = urgentStart; index <= urgentEnd; index++) {
       const sample = samples[index];
-      if (sample && !sample.missing) ids.push(sample.id);
+      if (sample && !sample.missing) urgentIds.push(sample.id);
     }
-    prefetchRowPeaks(ids);
+    prefetchRowPeaks(urgentIds, { urgent: true });
+
+    const padStart = Math.max(0, urgentStart - PEAK_PREFETCH_PAD);
+    const padEnd = Math.min(last, urgentEnd + PEAK_PREFETCH_PAD);
+    const warmIds: number[] = [];
+    for (let index = padStart; index <= padEnd; index++) {
+      if (index >= urgentStart && index <= urgentEnd) continue;
+      const sample = samples[index];
+      if (sample && !sample.missing) warmIds.push(sample.id);
+    }
+    prefetchRowPeaks(warmIds);
   }, [showWaveforms, samples, rangeStart, rangeEnd]);
 
   useEffect(() => {
@@ -379,7 +398,16 @@ export function SampleTable({
             );
           })}
 
-          {samples.length === 0 ? (
+          {loading && samples.length === 0 ? (
+            <div className="sample-table-empty" role="status" aria-live="polite">
+              <div className="sample-table-loading">
+                <CircleNotchIcon size={28} className="sample-table-spin" aria-hidden />
+                <div className="sample-table-empty-title">{t("loadingSamples")}</div>
+              </div>
+            </div>
+          ) : null}
+
+          {!loading && samples.length === 0 ? (
             <div className="sample-table-empty">
               <div>
                 <MagnifyingGlassIcon size={26} />

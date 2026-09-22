@@ -124,27 +124,52 @@ export function readSpectralBands(el: Element): SpectralBandColors {
 }
 
 /**
- * Blend Classic weights with theme band colors. Soft floor keeps quiet
- * spectral energy visible; saturation push keeps bands vivid on dark chrome.
+ * Blend Classic weights with theme band colors.
+ *
+ * Moodbar stores independent band energies (not a palette). Equal high R/G/B
+ * used to paint white because we added three bright theme hues. Instead:
+ * 1. turn weights into proportions,
+ * 2. raise to a power so the dominant band wins (808 → bass hue),
+ * 3. scale by overall energy so quiet frames stay dim.
  */
 export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
-  const wb = weights[0] / 255;
-  const wm = weights[1] / 255;
-  const wt = weights[2] / 255;
-  let r = wb * bands.bass[0] + wm * bands.mid[0] + wt * bands.treble[0];
-  let g = wb * bands.bass[1] + wm * bands.mid[1] + wt * bands.treble[1];
-  let b = wb * bands.bass[2] + wm * bands.mid[2] + wt * bands.treble[2];
+  const rawB = weights[0] / 255;
+  const rawM = weights[1] / 255;
+  const rawT = weights[2] / 255;
+  const sum = rawB + rawM + rawT;
+  if (sum < 1e-6) {
+    return [0, 0, 0];
+  }
 
-  /* Push away from grey so mixed frames stay punchy. */
+  /* Emphasize the winner; 2.4 keeps overlap mixes (bass+treble pink) possible. */
+  const emphasis = 2.4;
+  let pB = (rawB / sum) ** emphasis;
+  let pM = (rawM / sum) ** emphasis;
+  let pT = (rawT / sum) ** emphasis;
+  const pSum = pB + pM + pT || 1;
+  pB /= pSum;
+  pM /= pSum;
+  pT /= pSum;
+
+  const intensity = Math.min(1, Math.max(rawB, rawM, rawT));
+
+  let r =
+    (pB * bands.bass[0] + pM * bands.mid[0] + pT * bands.treble[0]) * intensity;
+  let g =
+    (pB * bands.bass[1] + pM * bands.mid[1] + pT * bands.treble[1]) * intensity;
+  let b =
+    (pB * bands.bass[2] + pM * bands.mid[2] + pT * bands.treble[2]) * intensity;
+
+  /* Push away from grey so residual mixes stay punchy. */
   const avg = (r + g + b) / 3;
-  const sat = 1.45;
+  const sat = 1.35;
   r = avg + (r - avg) * sat;
   g = avg + (g - avg) * sat;
   b = avg + (b - avg) * sat;
 
   const peak = Math.max(r, g, b, 0);
-  if (peak > 0.5 && peak < 110) {
-    const lift = 110 / peak;
+  if (peak > 0.5 && peak < 120) {
+    const lift = 120 / peak;
     r *= lift;
     g *= lift;
     b *= lift;

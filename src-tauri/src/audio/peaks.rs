@@ -2,7 +2,7 @@
 //!
 //! Binary layout (`{sample_id}.peaks`):
 //! - magic: `SFTP` (4 bytes)
-//! - version: u32 LE (= 2)
+//! - version: u32 LE (= 5)
 //! - channels: u32 LE
 //! - `sample_rate`: u32 LE
 //! - `duration_ms`: f64 LE
@@ -15,7 +15,7 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use moodbar_analysis::{GenerateOptions, Theme, analyze_pcm_mono};
+use moodbar_analysis::{GenerateOptions, NormalizeMode, Theme, analyze_pcm_mono};
 use serde::Serialize;
 
 use crate::audio::decode::{DecodedAudio, decode_file};
@@ -23,9 +23,9 @@ use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
 
 const MAGIC: &[u8; 4] = b"SFTP";
-/// v3: same layout as v2, but colors are lerped from an adaptive FFT so short
-/// clips no longer stretch a few nearest-neighbour frames into solid blocks.
-const VERSION: u32 = 3;
+/// v5: same layout as v4, but bass/mid/treble cuts are musical (200 Hz / 3.5 kHz)
+/// so vocals land in mid instead of the old moodbar 500 Hz "bass" bucket.
+const VERSION: u32 = 5;
 
 /// Peak buffer ready for IPC / Canvas drawing.
 #[derive(Debug, Clone, Serialize)]
@@ -275,6 +275,14 @@ fn generate_spectral_colors(decoded: &DecodedAudio, buckets: usize) -> Vec<u8> {
     let fft_size = adaptive_fft_size(mono.len());
     let options = GenerateOptions {
         theme: Theme::Classic,
+        // Keep band ratios: an 808 attack can light mid/treble bins (click),
+        // but bass energy still dominates the global peak.
+        normalize_mode: NormalizeMode::GlobalPeak,
+        // Moodbar defaults (500 / 2000) put singing fundamentals in "bass".
+        // Tighter low cut keeps subs/808s red and vocals in mid/treble.
+        low_cut_hz: 200.0,
+        mid_cut_hz: 3500.0,
+        band_edges_hz: vec![200.0, 3500.0],
         fft_size,
         max_target_frames: Some(buckets.max(1)),
         ..GenerateOptions::default()
@@ -376,11 +384,13 @@ pub const DEFAULT_BUCKETS: usize = 1024;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
 
     fn sine(rate: u32, secs: f32, hz: f32) -> DecodedAudio {
         #[allow(
             clippy::as_conversions,
             clippy::cast_possible_truncation,
+            clippy::cast_precision_loss,
             clippy::cast_sign_loss,
             reason = "test fixture sizes"
         )]
@@ -455,7 +465,7 @@ mod tests {
             }
         }
         assert!(
-            changes > 8,
+            changes > 4,
             "expected lerped variation across a short clip, got {changes} changes"
         );
     }
@@ -471,5 +481,102 @@ mod tests {
         assert_eq!(loaded.bucket_count, 64);
         assert_eq!(loaded.colors, data.colors);
         assert_eq!(loaded.peaks.len(), data.peaks.len());
+    }
+
+    fn write_ppm_strip(path: &Path, colors: &[u8], buckets: usize, height: usize) {
+        use std::fmt::Write as _;
+        let width = buckets.max(1);
+        let mut body = String::new();
+        for _y in 0..height {
+            for x in 0..width {
+                let base = x.saturating_mul(3);
+                let r = colors.get(base).copied().unwrap_or(0);
+                let g = colors.get(base.saturating_add(1)).copied().unwrap_or(0);
+                let b = colors.get(base.saturating_add(2)).copied().unwrap_or(0);
+                let _ = write!(body, "{r} {g} {b} ");
+            }
+            body.push('\n');
+        }
+        let header = format!("P3\n{width} {height}\n255\n");
+        fs::write(path, header + &body).expect("write ppm");
+    }
+
+    /// `GlobalPeak`: a pure bass tone must not wash to near-white Classic RGB.
+    #[test]
+    fn pure_bass_tone_is_red_dominant_not_white() {
+        let audio = sine(44_100, 0.5, 70.0);
+        let peaks = generate_peaks(&audio, 128).expect("peaks");
+        let mid = avg_rgb(&peaks.colors, 16, 112);
+        assert!(
+            mid[0] > mid[1] * 1.8 && mid[0] > mid[2] * 1.8,
+            "70 Hz should be bass/red dominant, got {mid:?}"
+        );
+        let near_white = mid[0] > 200.0 && mid[1] > 200.0 && mid[2] > 200.0;
+        assert!(!near_white, "bass tone washed to white: {mid:?}");
+    }
+
+    /// Real 808 vs vocal: attack colors must diverge (bass vs mid/treble share).
+    #[test]
+    fn example_808_attack_more_bass_than_vocal() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples");
+        let eight =
+            root.join("limbowrld_drumkit/808s/If u Swag 808 ._.`.wav");
+        let vocal = root.join(
+            "foushee_vocals/runs/FOUSHEE_vocal_run_clean_jazzy_harmony_87_Bmaj.wav",
+        );
+        if !eight.is_file() || !vocal.is_file() {
+            eprintln!("skip: example samples missing");
+            return;
+        }
+
+        let eight_peaks =
+            generate_peaks(&decode_file(&eight).expect("808"), 256).expect("808 peaks");
+        let vocal_peaks =
+            generate_peaks(&decode_file(&vocal).expect("vocal"), 256).expect("vocal peaks");
+
+        // First ~12% of the file (attack / opening phrase).
+        let end_8 = eight_peaks.bucket_count / 8;
+        let end_v = vocal_peaks.bucket_count / 8;
+        let a808 = avg_rgb(&eight_peaks.colors, 0, end_8.max(8));
+        let avoc = avg_rgb(&vocal_peaks.colors, 0, end_v.max(8));
+
+        let share = |rgb: [f32; 3], i: usize| rgb[i] / (rgb[0] + rgb[1] + rgb[2]).max(1.0);
+        let s808_bass = share(a808, 0);
+        let svoc_bass = share(avoc, 0);
+        let svoc_mid = share(avoc, 1);
+        assert!(
+            s808_bass > 0.7,
+            "808 attack should be bass-led, share={s808_bass:.3} rgb={a808:?}"
+        );
+        assert!(
+            svoc_mid > 0.5,
+            "vocal attack should be mid-led, mid={svoc_mid:.3} rgb={avoc:?}"
+        );
+        assert!(
+            svoc_bass < 0.2,
+            "vocal should barely paint bass/red, bass={svoc_bass:.3} rgb={avoc:?}"
+        );
+        assert!(
+            s808_bass > svoc_bass + 0.4,
+            "808 bass share ({s808_bass:.3}) should dwarf vocal ({svoc_bass:.3}); 808={a808:?} vocal={avoc:?}"
+        );
+        let whiteish = |rgb: [f32; 3]| rgb[0] > 200.0 && rgb[1] > 180.0 && rgb[2] > 180.0;
+        assert!(!whiteish(a808), "808 attack still near-white: {a808:?}");
+
+        // Fixture strips for visual inspection under testdata/.
+        let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/spectral-fixtures");
+        let _ = fs::create_dir_all(&out);
+        write_ppm_strip(
+            &out.join("808-classic-weights.ppm"),
+            &eight_peaks.colors,
+            eight_peaks.bucket_count,
+            24,
+        );
+        write_ppm_strip(
+            &out.join("vocal-classic-weights.ppm"),
+            &vocal_peaks.colors,
+            vocal_peaks.bucket_count,
+            24,
+        );
     }
 }

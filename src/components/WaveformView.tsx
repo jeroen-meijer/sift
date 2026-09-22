@@ -149,7 +149,7 @@ export function WaveformView({
           colored,
           bands,
           ink,
-          maxColorStops: 64,
+          style: "columns",
         });
       }
 

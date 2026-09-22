@@ -77,6 +77,7 @@ export function LibraryView({
   const { t } = useTranslation("library");
   const [omni, setOmni] = useState<OmniState>(EMPTY_OMNI);
   const [samples, setSamples] = useState<SampleRow[]>([]);
+  const [samplesLoading, setSamplesLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [focusedId, setFocusedId] = useState<number | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -118,23 +119,29 @@ export function LibraryView({
   /* ── data ──────────────────────────────────────────────────────────── */
 
   const refreshSamples = useCallback(async () => {
-    const rows = await ipc.listSamples({
-      folder_prefix: omni.folder,
-      text: omni.text || null,
-      tag_path: omni.tags[0] ?? null,
-      tag_paths: omni.tags,
-      bpm_min: omni.bpmMin,
-      bpm_max: omni.bpmMax,
-      key: omni.key,
-      half_double: settings.half_double_bpm,
-      relative_key: settings.relative_key,
-      favorites_only: favoritesOnly,
-      sort_column: settings.sort_column,
-      sort_direction: settings.sort_direction,
-      limit: 5000,
-      offset: 0,
-    });
-    setSamples(rows);
+    /* Keep showing rows while a filter refreshes; only spin when the list is empty. */
+    if (samplesRef.current.length === 0) setSamplesLoading(true);
+    try {
+      const rows = await ipc.listSamples({
+        folder_prefix: omni.folder,
+        text: omni.text || null,
+        tag_path: omni.tags[0] ?? null,
+        tag_paths: omni.tags,
+        bpm_min: omni.bpmMin,
+        bpm_max: omni.bpmMax,
+        key: omni.key,
+        half_double: settings.half_double_bpm,
+        relative_key: settings.relative_key,
+        favorites_only: favoritesOnly,
+        sort_column: settings.sort_column,
+        sort_direction: settings.sort_direction,
+        limit: 5000,
+        offset: 0,
+      });
+      setSamples(rows);
+    } finally {
+      setSamplesLoading(false);
+    }
   }, [
     omni,
     favoritesOnly,
@@ -678,6 +685,7 @@ export function LibraryView({
           <SampleTable
             samples={samples}
             indexedCount={stats.samples}
+            loading={samplesLoading}
             selectedIds={selectedIds}
             playingId={playingId}
             playingProgress={

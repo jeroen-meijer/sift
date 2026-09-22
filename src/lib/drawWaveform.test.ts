@@ -56,7 +56,18 @@ describe.runIf(canvasOk)("drawWaveform", () => {
       colored: true,
       bands,
       ink: "#888",
+      style: "gradient",
       maxColorStops: 16,
+    });
+    paintWaveLane(ctx, lane, {
+      width: 160,
+      midY: 12,
+      ampScale: 10,
+      channelIndex: 0,
+      colored: true,
+      bands,
+      ink: "#888",
+      style: "columns",
     });
     paintWaveLane(ctx, lane, {
       width: 160,
@@ -66,6 +77,7 @@ describe.runIf(canvasOk)("drawWaveform", () => {
       colored: false,
       bands,
       ink: "#888",
+      style: "columns",
     });
   });
 });
