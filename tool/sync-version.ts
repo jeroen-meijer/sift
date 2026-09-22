@@ -8,9 +8,10 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG_PATH = join(ROOT, "package.json");
 const TAURI_CONF_PATH = join(ROOT, "src-tauri/tauri.conf.json");
 const CARGO_PATH = join(ROOT, "src-tauri/Cargo.toml");

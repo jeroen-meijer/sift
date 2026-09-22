@@ -259,11 +259,7 @@ impl PlayerEngine {
         sample_type: SamplePlayType,
         region_secs: Option<(f64, f64)>,
     ) -> AppResult<()> {
-        if self
-            .last_converted
-            .as_ref()
-            .is_some_and(|c| c.path == path)
-        {
+        if self.last_converted.as_ref().is_some_and(|c| c.path == path) {
             return self.restart_converted(start_secs, sample_type, region_secs);
         }
 
@@ -281,13 +277,22 @@ impl PlayerEngine {
         crate::profile_log::event(
             "play.convert",
             convert_start.elapsed(),
-            &format!("frames={}", pcm.len().checked_div(out_channels.max(1)).unwrap_or(0)),
+            &format!(
+                "frames={}",
+                pcm.len().checked_div(out_channels.max(1)).unwrap_or(0)
+            ),
         );
 
         let channels = out_channels.max(1);
         let frames = pcm.len().checked_div(channels).unwrap_or(0);
-        let (region, start_frame, should_loop) =
-            play_window(frames, out_rate, start_secs, sample_type, region_secs, self.loop_preview);
+        let (region, start_frame, should_loop) = play_window(
+            frames,
+            out_rate,
+            start_secs,
+            sample_type,
+            region_secs,
+            self.loop_preview,
+        );
 
         self.apply_pcm(
             Arc::clone(&pcm),
@@ -680,10 +685,7 @@ where
             } else {
                 c.checked_rem(src_ch).unwrap_or(0)
             };
-            let src = pcm
-                .get(base.saturating_add(offset))
-                .copied()
-                .unwrap_or(0.0);
+            let src = pcm.get(base.saturating_add(offset)).copied().unwrap_or(0.0);
             *slot = T::from_sample(src * gain);
         }
         pos = pos.saturating_add(1);
