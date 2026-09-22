@@ -478,9 +478,18 @@ mod tests {
         let low = avg_rgb(&peaks.colors, 0, third);
         let mid = avg_rgb(&peaks.colors, third, third * 2);
         let high = avg_rgb(&peaks.colors, third * 2, peaks.bucket_count);
-        assert!(low[0] > low[1] && low[0] > low[2], "bass should be red-dominant: {low:?}");
-        assert!(mid[1] > mid[0] && mid[1] > mid[2], "mids should be green-dominant: {mid:?}");
-        assert!(high[2] > high[0] && high[2] > high[1], "treble should be blue-dominant: {high:?}");
+        assert!(
+            low[0] > low[1] && low[0] > low[2],
+            "bass should be red-dominant: {low:?}"
+        );
+        assert!(
+            mid[1] > mid[0] && mid[1] > mid[2],
+            "mids should be green-dominant: {mid:?}"
+        );
+        assert!(
+            high[2] > high[0] && high[2] > high[1],
+            "treble should be blue-dominant: {high:?}"
+        );
     }
 
     #[test]
@@ -513,7 +522,9 @@ mod tests {
         let data = generate_peaks(&audio, 64).expect("peaks");
         let path = dir.path().join("1.peaks");
         write_peakfile(&path, &data).expect("write");
-        let loaded = read_peakfile(&path, Some(64)).expect("read").expect("present");
+        let loaded = read_peakfile(&path, Some(64))
+            .expect("read")
+            .expect("present");
         assert_eq!(loaded.bucket_count, 64);
         assert_eq!(loaded.colors, data.colors);
         assert_eq!(loaded.peaks.len(), data.peaks.len());
@@ -556,9 +567,8 @@ mod tests {
     fn example_samples_have_distinct_spectral_shapes() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples");
         let eight = root.join("limbowrld_drumkit/808s/If u Swag 808 ._.`.wav");
-        let vocal = root.join(
-            "foushee_vocals/runs/FOUSHEE_vocal_run_clean_jazzy_harmony_87_Bmaj.wav",
-        );
+        let vocal =
+            root.join("foushee_vocals/runs/FOUSHEE_vocal_run_clean_jazzy_harmony_87_Bmaj.wav");
         let amen = root.join("amen_breaks/cw_amen_updown.wav");
         if !eight.is_file() || !vocal.is_file() || !amen.is_file() {
             eprintln!("skip: example samples missing");
@@ -609,8 +619,20 @@ mod tests {
         for i in 0..amen_peaks.bucket_count {
             let base = i.saturating_mul(3);
             let r = i32::from(amen_peaks.colors.get(base).copied().unwrap_or(0));
-            let g = i32::from(amen_peaks.colors.get(base.saturating_add(1)).copied().unwrap_or(0));
-            let b = i32::from(amen_peaks.colors.get(base.saturating_add(2)).copied().unwrap_or(0));
+            let g = i32::from(
+                amen_peaks
+                    .colors
+                    .get(base.saturating_add(1))
+                    .copied()
+                    .unwrap_or(0),
+            );
+            let b = i32::from(
+                amen_peaks
+                    .colors
+                    .get(base.saturating_add(2))
+                    .copied()
+                    .unwrap_or(0),
+            );
             if g >= r && g >= b {
                 mid_dom = mid_dom.saturating_add(1);
             } else if b >= r && b >= g {

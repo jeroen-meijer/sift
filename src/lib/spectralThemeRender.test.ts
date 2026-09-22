@@ -1,29 +1,37 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  fixturesDir,
-  parseClassicPpm,
   themeBands,
   themeClassicStrip,
   writeThemedPpm,
 } from "./spectralThemeRender";
 
+/** Mid-heavy drum-break Classic weights (amen-shaped), no on-disk ppm. */
+function amenLikeClassicWeights(n = 128): number[] {
+  const colors: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    /* Snare body (mid) with hi-hat/cymbal treble bursts, low bass. */
+    const midPulse = 0.55 + 0.45 * Math.sin(t * Math.PI * 6);
+    const trebleBurst = t % 0.18 < 0.04 ? 180 : 40 + 50 * Math.sin(t * Math.PI * 14);
+    const bass = 12 + 8 * Math.sin(t * Math.PI * 2);
+    const mid = Math.round(80 + 120 * midPulse);
+    const treble = Math.round(Math.min(220, Math.max(20, trebleBurst)));
+    colors.push(bass, mid, treble);
+  }
+  return colors;
+}
+
 describe("nocturne themed spectral strips", () => {
   it("renders amen with mid+treble variety (not flat violet ink)", () => {
-    const ppm = readFileSync(
-      join(fixturesDir(), "amen-classic-weights.ppm"),
-      "utf8",
-    );
-    const { colors } = parseClassicPpm(ppm);
+    const colors = amenLikeClassicWeights();
     const bands = themeBands("nocturne");
     const strip = themeClassicStrip(colors, bands);
     writeThemedPpm("amen-nocturne-themed.ppm", strip.pixels);
 
     /*
-     * Classic amen fixture is mid-heavy with treble accents. After Nocturne
-     * remap that must read as green stretches + violet accents — never a
-     * single purple (that was --color-wave-ink when colors failed to paint).
+     * Amen-shaped Classic weights are mid-heavy with treble accents. After
+     * Nocturne remap that must read as green stretches + violet accents —
+     * never a single purple (that was --color-wave-ink when colors failed).
      */
     expect(strip.midLed).toBeGreaterThan(strip.width * 0.35);
     expect(strip.trebleLed).toBeGreaterThan(strip.width * 0.08);

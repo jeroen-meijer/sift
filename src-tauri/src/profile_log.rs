@@ -16,8 +16,7 @@ static FILE: OnceLock<Mutex<fs::File>> = OnceLock::new();
 
 fn enabled() -> bool {
     *ENABLED.get_or_init(|| {
-        std::env::var_os("SIFT_PROFILE")
-            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        std::env::var_os("SIFT_PROFILE").is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
     })
 }
 
