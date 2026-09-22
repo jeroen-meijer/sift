@@ -1,0 +1,24 @@
+name: Setup Rust for Tauri
+description: Nightly Rust (matches src-tauri/rust-toolchain.toml) + rust-cache for desktop builds.
+
+inputs:
+  cache-key:
+    description: Suffix for rust-cache shared-key (e.g. macOS or Windows).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly
+        components: rustfmt, clippy
+
+    - name: Rust cache
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri
+        shared-key: sift-tauri-${{ inputs.cache-key }}
+        cache-workspace-crates: true
+        cache-on-failure: true

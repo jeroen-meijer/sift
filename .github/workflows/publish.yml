@@ -1,0 +1,202 @@
+name: Publish Release
+
+# Publish when a "chore: prepare release x.y.z" commit lands on main
+# (./tool/prepare_release.sh), or via workflow_dispatch retry.
+# Optional: squash-merge of a release-labeled PR (prepare_release.sh --pr).
+# Do not trigger on tag push: the pipeline creates the version tag after success.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver to publish (already on main)
+        required: true
+        type: string
+
+concurrency:
+  group: publish-${{ github.event.pull_request.number || github.event.inputs.version || github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  verify-release:
+    name: Verify release
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       startsWith(github.event.head_commit.message, 'chore: prepare release ')) ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       contains(github.event.pull_request.labels.*.name, 'release'))
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+      version: ${{ steps.verify.outputs.version }}
+      sha: ${{ steps.verify.outputs.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run release sanity checks
+        id: verify
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_MERGED: ${{ github.event.pull_request.merged }}
+          RELEASE_PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          RELEASE_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+        run: ./tool/verify_release_publish.sh
+
+  desktop:
+    name: Desktop (${{ matrix.label }})
+    needs: verify-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS
+            os: macos-latest
+          - label: Windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify-release.outputs.sha }}
+
+      - name: Setup Bun dependencies
+        uses: ./.github/actions/setup-bun-deps
+
+      - name: Setup Rust for Tauri
+        uses: ./.github/actions/setup-rust-tauri
+        with:
+          cache-key: ${{ matrix.label }}
+
+      - name: Sync version from package.json
+        run: bun tool/sync-version.ts
+
+      - name: Setup Apple signing
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/setup-apple-signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+
+      - name: Build Tauri app
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_API_ISSUER: ${{ runner.os == 'macOS' && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY: ${{ runner.os == 'macOS' && secrets.APPLE_API_KEY || '' }}
+        run: bun run tauri build
+
+      - name: Collect macOS installer artifacts
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find src-tauri/target/release/bundle -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.zip' \) -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - name: Collect Windows installer artifacts
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - name: Require at least one installer
+        shell: bash
+        run: |
+          if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
+            echo "No desktop bundles found"
+            find src-tauri/target/release/bundle -type f 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.label }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    needs: [verify-release, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify-release.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-macOS
+          path: release-assets
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-Windows
+          path: release-assets
+
+      - name: Create release and upload assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.verify-release.outputs.version }}"
+          SHA="${{ needs.verify-release.outputs.sha }}"
+          gh release create "$VERSION" \
+            --target "$SHA" \
+            --title "$VERSION" \
+            --generate-notes \
+            release-assets/*
+
+  tag-release:
+    name: Tag release commit
+    needs: [verify-release, desktop, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push version tag
+        run: |
+          VERSION="${{ needs.verify-release.outputs.version }}"
+          SHA="${{ needs.verify-release.outputs.sha }}"
+          short_sha() { printf '%.7s' "$1"; }
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+
+          REMOTE_SHA="$(git ls-remote --tags origin "refs/tags/${VERSION}" | awk '{print $1}' | head -1 || true)"
+          if [ -n "$REMOTE_SHA" ]; then
+            if [ "$REMOTE_SHA" != "$SHA" ]; then
+              echo "error: tag $VERSION on origin points to $(short_sha "$REMOTE_SHA"), expected $(short_sha "$SHA")"
+              exit 1
+            fi
+            echo "Tag $VERSION already on origin at $(short_sha "$SHA")"
+            exit 0
+          fi
+
+          git tag "$VERSION" "$SHA"
+          git push origin "refs/tags/${VERSION}"
