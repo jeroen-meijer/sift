@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::audio::PlayerEngine;
@@ -14,6 +15,8 @@ pub struct AppState {
     pub undo: Mutex<UndoStack>,
     pub watch_shared: Arc<WatchShared>,
     pub watch_guard: Mutex<Option<WatchGuard>>,
+    /// Where JIT clips are written. Settings can move it, so it is not in `paths`.
+    clips_dir: Mutex<PathBuf>,
 }
 
 impl AppState {
@@ -22,6 +25,7 @@ impl AppState {
         let db = Arc::new(Db::open(&paths)?);
         let watch_shared = Arc::new(WatchShared::new(Arc::clone(&db)));
 
+        let mut clips_dir = paths.clips_dir.clone();
         let mut player = PlayerEngine::new();
         // Seed player prefs from settings when present.
         let _ = db.with_conn(|conn| {
@@ -41,6 +45,12 @@ impl AppState {
             {
                 let _ = player.set_device(id);
             }
+            if let Some(v) = settings::get(conn, "clips_dir")?
+                && let Some(dir) = v.as_str()
+                && !dir.is_empty()
+            {
+                clips_dir = PathBuf::from(dir);
+            }
             Ok(())
         });
 
@@ -51,6 +61,21 @@ impl AppState {
             undo: Mutex::new(UndoStack::default()),
             watch_shared,
             watch_guard: Mutex::new(None),
+            clips_dir: Mutex::new(clips_dir),
         })
+    }
+
+    pub fn clips_dir(&self) -> PathBuf {
+        self.clips_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn set_clips_dir(&self, dir: PathBuf) {
+        *self
+            .clips_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = dir;
     }
 }

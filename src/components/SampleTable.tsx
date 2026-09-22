@@ -1,268 +1,399 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { StarIcon, WarningCircleIcon } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import {
+  CaretDownIcon,
+  CaretUpIcon,
+  MagnifyingGlassIcon,
+  PlayIcon,
+  StarIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  clampColumnWidth,
+  FAV_COLUMN_WIDTH,
+  type ColumnWidths,
+  type ResizableColumn,
+} from "../lib/columnWidths";
+import { formatCount } from "../lib/format";
+import type { SampleRow, SortColumn, SortDirection } from "../lib/ipc";
+import { tagPalette } from "../lib/tagColors";
+import type { OptionalColumn } from "../lib/omni";
+import { prefetchRowPeaks } from "../lib/rowPeaks";
 import { RowWaveform } from "./RowWaveform";
 
-export interface TagChip { path: string; color: string | null }
-export interface SampleRow {
-  id: number;
-  root_id: number;
-  path: string;
-  filename: string;
-  parent_path: string;
-  extension: string;
-  missing: boolean;
-  sample_rate: number | null;
-  bit_depth: number | null;
-  channels: number | null;
-  duration_ms: number | null;
-  format: string | null;
-  bpm: number | null;
-  key_name: string | null;
-  sample_type: string | null;
-  favorite: boolean;
-  tags: TagChip[];
+const ROW_HEIGHT = 28;
+/** Extra rows above/below the viewport so scroll rarely paints an empty slot. */
+const ROW_OVERSCAN = 28;
+const EM_DASH = "—";
+
+function visibleColumns(hidden: Set<OptionalColumn>, showWaveforms: boolean): ResizableColumn[] {
+  const columns: ResizableColumn[] = ["name"];
+  for (const column of ["type", "bpm", "key"] as const) {
+    if (!hidden.has(column)) columns.push(column);
+  }
+  if (showWaveforms) columns.push("wave");
+  if (!hidden.has("tags")) columns.push("tags");
+  return columns;
 }
 
-type SortCol = "name" | "type" | "bpm" | "key" | "created_at" | "favorite";
-
-export type ContextAction =
-  | "open"
-  | "favorite"
-  | "reveal"
-  | "copyPath"
-  | "copyFilename"
-  | "reanalyze"
-  | "showParent"
-  | "removeMissing";
-
-interface Props {
-  samples: SampleRow[];
-  selectedIds: Set<number>;
-  focusedId: number | null;
-  analyzingIds: Set<number>;
-  showWaveforms: boolean;
-  sortColumn: SortCol;
-  sortDirection: "asc" | "desc" | "clear";
-  highlightText?: string;
-  onSelect: (id: number, e: React.MouseEvent) => void;
-  onToggleFavorite: (id: number, favorite: boolean) => void;
-  onSort: (col: SortCol) => void;
-  onContextAction: (action: ContextAction, sample: SampleRow) => void;
+function gridTemplate(
+  hidden: Set<OptionalColumn>,
+  showWaveforms: boolean,
+  widths: ColumnWidths,
+): string {
+  const parts = [`${String(FAV_COLUMN_WIDTH)}px`];
+  for (const column of visibleColumns(hidden, showWaveforms)) {
+    parts.push(`${String(widths[column])}px`);
+  }
+  /* Absorb leftover width so the table still fills the pane. */
+  parts.push("minmax(0, 1fr)");
+  return parts.join(" ");
 }
 
-function highlightName(name: string, query: string | undefined) {
-  if (!query?.trim()) return name;
-  const q = query.trim();
-  const lower = name.toLowerCase();
-  const idx = lower.indexOf(q.toLowerCase());
-  if (idx < 0) return name;
+function highlight(name: string, query: string): ReactNode {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return name;
+  const at = name.toLowerCase().indexOf(needle);
+  if (at < 0) return name;
   return (
     <>
-      {name.slice(0, idx)}
-      <mark>{name.slice(idx, idx + q.length)}</mark>
-      {name.slice(idx + q.length)}
+      {name.slice(0, at)}
+      <mark>{name.slice(at, at + needle.length)}</mark>
+      {name.slice(at + needle.length)}
     </>
   );
 }
 
-function sortMark(active: boolean, dir: "asc" | "desc" | "clear") {
-  if (!active || dir === "clear") return "";
-  return dir === "asc" ? " ↓" : " ↑";
+/** Split `kick.wav` so the extension can sit in a quieter span. */
+function splitFilename(filename: string): { base: string; ext: string } {
+  const at = filename.lastIndexOf(".");
+  if (at <= 0 || at === filename.length - 1) return { base: filename, ext: "" };
+  return { base: filename.slice(0, at), ext: filename.slice(at) };
 }
 
-interface MenuState { x: number; y: number; sample: SampleRow }
+interface Props {
+  samples: SampleRow[];
+  indexedCount: number;
+  selectedIds: Set<number>;
+  playingId: number | null;
+  /** 0-1 position of the playhead in the playing row. */
+  playingProgress: number | null;
+  analyzingIds: Set<number>;
+  showWaveforms: boolean;
+  hiddenColumns: Set<OptionalColumn>;
+  columnWidths: ColumnWidths;
+  sortColumn: SortColumn;
+  sortDirection: SortDirection;
+  highlightText: string;
+  hoverPreviewHeld: boolean;
+  onSelect: (id: number, e: React.MouseEvent) => void;
+  onHoverPreview: (id: number) => void;
+  onToggleFavorite: (id: number, favorite: boolean) => void;
+  onSort: (column: SortColumn) => void;
+  onColumnWidthsChange: (widths: ColumnWidths) => void;
+  onOpenMenu: (x: number, y: number, sample: SampleRow) => void;
+  onDragSelected: () => void;
+  onScrubRow: (sample: SampleRow, fraction: number) => void;
+}
 
 export function SampleTable({
   samples,
+  indexedCount,
   selectedIds,
-  focusedId,
+  playingId,
+  playingProgress,
   analyzingIds,
   showWaveforms,
+  hiddenColumns,
+  columnWidths,
   sortColumn,
   sortDirection,
   highlightText,
+  hoverPreviewHeld,
   onSelect,
+  onHoverPreview,
   onToggleFavorite,
   onSort,
-  onContextAction,
+  onColumnWidthsChange,
+  onOpenMenu,
+  onDragSelected,
+  onScrubRow,
 }: Props) {
   const { t } = useTranslation("library");
   const { t: tc } = useTranslation("common");
-  const parentRef = useRef<HTMLDivElement>(null);
-  const [menu, setMenu] = useState<MenuState | null>(null);
-  const rowVirtualizer = useVirtualizer({
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    column: ResizableColumn;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const widthsRef = useRef(columnWidths);
+  widthsRef.current = columnWidths;
+
+  const virtualizer = useVirtualizer({
     count: samples.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 28,
-    overscan: 20,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: ROW_OVERSCAN,
   });
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => void setMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("scroll", close, true);
-    };
-  }, [menu]);
+  const virtualItems = virtualizer.getVirtualItems();
+  const rangeStart = virtualItems[0]?.index ?? 0;
+  const rangeEnd = virtualItems.at(-1)?.index ?? -1;
 
-  const run = (action: ContextAction) => {
-    if (!menu) return;
-    onContextAction(action, menu.sample);
-    setMenu(null);
+  /* Prefetch peaks for the mounted window so waveforms are warm before paint. */
+  useEffect(() => {
+    if (!showWaveforms || rangeEnd < rangeStart) return;
+    const ids: number[] = [];
+    for (let index = rangeStart; index <= rangeEnd; index++) {
+      const sample = samples[index];
+      if (sample && !sample.missing) ids.push(sample.id);
+    }
+    prefetchRowPeaks(ids);
+  }, [showWaveforms, samples, rangeStart, rangeEnd]);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const next = clampColumnWidth(drag.column, drag.startWidth + (e.clientX - drag.startX));
+      onColumnWidthsChange({ ...widthsRef.current, [drag.column]: next });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.body.classList.remove("col-resizing");
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [onColumnWidthsChange]);
+
+  const template = gridTemplate(hiddenColumns, showWaveforms, columnWidths);
+
+  const startResize = (column: ResizableColumn, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = {
+      column,
+      startX: e.clientX,
+      startWidth: widthsRef.current[column],
+    };
+    document.body.classList.add("col-resizing");
   };
+
+  const header = (column: "name" | "type" | "bpm" | "key", label: string) => {
+    const active = sortColumn === column;
+    return (
+      <div className="col-header">
+        <button
+          type="button"
+          className="col"
+          aria-sort={active ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onClick={() => {
+            onSort(column);
+          }}
+        >
+          {label}
+          {active ? (
+            sortDirection === "asc" ? (
+              <CaretUpIcon size={8} weight="bold" className="sort-mark" />
+            ) : (
+              <CaretDownIcon size={8} weight="bold" className="sort-mark" />
+            )
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className="col-resize"
+          tabIndex={-1}
+          aria-label={t("resizeColumn", { column: label })}
+          onPointerDown={(e) => {
+            startResize(column, e);
+          }}
+        />
+      </div>
+    );
+  };
+
+  const plainHeader = (column: ResizableColumn, label: string) => (
+    <div className="col-header">
+      <span className="col">{label}</span>
+      <button
+        type="button"
+        className="col-resize"
+        tabIndex={-1}
+        aria-label={t("resizeColumn", { column: label })}
+        onPointerDown={(e) => {
+          startResize(column, e);
+        }}
+      />
+    </div>
+  );
 
   return (
     <div className="sample-table">
-      <div className="sample-table-header">
-        <button type="button" className="col fav" onClick={() => void onSort("favorite")}>
-          {sortMark(sortColumn === "favorite", sortDirection)}
-        </button>
-        <button type="button" className="col name" onClick={() => void onSort("name")}>
-          {t("colName")}
-          {sortMark(sortColumn === "name", sortDirection)}
-        </button>
-        <button type="button" className="col type" onClick={() => void onSort("type")}>
-          {t("colType")}
-          {sortMark(sortColumn === "type", sortDirection)}
-        </button>
-        <button type="button" className="col bpm" onClick={() => void onSort("bpm")}>
-          {t("colBpm")}
-          {sortMark(sortColumn === "bpm", sortDirection)}
-        </button>
-        <button type="button" className="col key" onClick={() => void onSort("key")}>
-          {t("colKey")}
-          {sortMark(sortColumn === "key", sortDirection)}
-        </button>
-        <div className="col wave">{t("colWaveform")}</div>
-        <div className="col tags">{t("colTags")}</div>
+      <div className="sample-table-header" style={{ gridTemplateColumns: template }}>
+        <span />
+        {header("name", t("colName"))}
+        {hiddenColumns.has("type") ? null : header("type", t("colType"))}
+        {hiddenColumns.has("bpm") ? null : header("bpm", t("colBpm"))}
+        {hiddenColumns.has("key") ? null : header("key", t("colKey"))}
+        {showWaveforms ? plainHeader("wave", t("colWaveform")) : null}
+        {hiddenColumns.has("tags") ? null : plainHeader("tags", t("colTags"))}
+        <span aria-hidden />
       </div>
-      <div className="sample-table-body" ref={parentRef}>
-        <div
-          style={{
-            height: rowVirtualizer.getTotalSize(),
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virt) => {
-            const sample = samples[virt.index];
+
+      <div className="sample-table-body" ref={scrollRef}>
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualItems.map((virtual) => {
+            const sample = samples[virtual.index];
             if (!sample) return null;
             const selected = selectedIds.has(sample.id);
-            const focused = focusedId === sample.id;
             const analyzing = analyzingIds.has(sample.id);
+            const playing = playingId === sample.id;
             return (
               <div
-                key={sample.id}
-                className={`sample-row${selected ? " selected" : ""}${focused ? " focused" : ""}${sample.missing ? " missing" : ""}${analyzing ? " analyzing" : ""}`}
+                key={virtual.key}
+                data-index={virtual.index}
+                data-sample-id={sample.id}
+                className={`sample-row${selected ? " selected" : ""}${sample.missing ? " missing" : ""}`}
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: virt.size,
-                  transform: `translateY(${virt.start}px)`,
+                  gridTemplateColumns: template,
+                  transform: `translateY(${String(virtual.start)}px)`,
                 }}
-                onClick={(e) => void onSelect(sample.id, e)}
+                draggable={!sample.missing}
+                onDragStart={(e) => {
+                  if (sample.missing) {
+                    e.preventDefault();
+                    return;
+                  }
+                  if (!selectedIds.has(sample.id)) onSelect(sample.id, e);
+                  e.dataTransfer.effectAllowed = "copy";
+                  e.dataTransfer.setData("text/plain", sample.path);
+                  onDragSelected();
+                }}
+                onClick={(e) => {
+                  onSelect(sample.id, e);
+                }}
+                onMouseEnter={() => {
+                  if (hoverPreviewHeld && !sample.missing) onHoverPreview(sample.id);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  if (!selectedIds.has(sample.id)) {
-                    onSelect(sample.id, e);
-                  }
-                  setMenu({ x: e.clientX, y: e.clientY, sample });
+                  if (!selectedIds.has(sample.id)) onSelect(sample.id, e);
+                  onOpenMenu(e.clientX, e.clientY, sample);
                 }}
               >
                 <button
                   type="button"
-                  className="col fav"
+                  className={`col fav${playing ? " playing" : ""}`}
+                  tabIndex={-1}
+                  aria-label={sample.favorite ? tc("ctxUnfavorite") : tc("ctxFavorite")}
+                  aria-pressed={sample.favorite}
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleFavorite(sample.id, !sample.favorite);
                   }}
                 >
-                  <StarIcon size={12} weight={sample.favorite ? "fill" : "regular"} />
+                  <PlayIcon size={11} weight="fill" className="fav-play" aria-hidden />
+                  <StarIcon
+                    size={11}
+                    weight={sample.favorite ? "fill" : "regular"}
+                    className="fav-star"
+                  />
                 </button>
+
                 <div className="col name" title={sample.path}>
                   {sample.missing ? (
-                    <WarningCircleIcon size={11} weight="fill" className="missing-icon" />
+                    <WarningCircleIcon size={11} weight="fill" className="row-missing-icon" />
                   ) : null}
-                  <span className="name-text">
-                    {highlightName(sample.filename, highlightText)}
-                  </span>
-                </div>
-                <div className="col type">{sample.sample_type ?? ""}</div>
-                <div className="col bpm">{sample.bpm != null ? Math.round(sample.bpm) : ""}</div>
-                <div className="col key">{sample.key_name ?? ""}</div>
-                <div className="col wave">
-                  <RowWaveform
-                    sampleId={sample.id}
-                    missing={sample.missing}
-                    analyzing={analyzing}
-                    showWaveform={showWaveforms}
-                  />
-                </div>
-                <div className="col tags">
-                  {analyzing ? (
-                    <span className="analyzing-label">{tc("statusAnalyzing")}</span>
-                  ) : (
-                    sample.tags.map((tag) => (
-                      <span
-                        key={tag.path}
-                        className="tag-chip"
-                        style={{
-                          background: tag.color ? `${tag.color}33` : undefined,
-                          borderColor: tag.color ?? undefined,
-                        }}
-                      >
-                        {tag.path}
+                  {(() => {
+                    const { base, ext } = splitFilename(sample.filename);
+                    return (
+                      <span className="name-text">
+                        {highlight(base, highlightText)}
+                        {ext ? <span className="name-ext">{ext}</span> : null}
                       </span>
-                    ))
-                  )}
+                    );
+                  })()}
                 </div>
+
+                {hiddenColumns.has("type") ? null : (
+                  <div className="col type">{sample.missing ? "" : (sample.sample_type ?? "")}</div>
+                )}
+                {hiddenColumns.has("bpm") ? null : (
+                  <div className="col mono-cell">
+                    {sample.bpm == null ? EM_DASH : Math.round(sample.bpm)}
+                  </div>
+                )}
+                {hiddenColumns.has("key") ? null : (
+                  <div className="col mono-cell">{sample.key_name ?? EM_DASH}</div>
+                )}
+
+                {showWaveforms ? (
+                  <div className="col wave">
+                    <RowWaveform
+                      sampleId={sample.id}
+                      missing={sample.missing}
+                      analyzing={analyzing}
+                      selected={selected}
+                      progress={playing ? playingProgress : null}
+                      onScrub={(fraction) => {
+                        onScrubRow(sample, fraction);
+                      }}
+                    />
+                  </div>
+                ) : null}
+
+                {hiddenColumns.has("tags") ? null : (
+                  <div className="col tags">
+                    {analyzing ? (
+                      <span className="analyzing-label">{tc("statusAnalyzing")}</span>
+                    ) : (
+                      sample.tags.map((tag) => {
+                        const palette = tagPalette(tag.path, tag.color);
+                        return (
+                          <span
+                            key={tag.id}
+                            className="tag-chip"
+                            style={{ background: palette.bg, color: palette.fg }}
+                          >
+                            {tag.path}
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+                <span aria-hidden />
               </div>
             );
           })}
-        </div>
-      </div>
 
-      {menu ? (
-        <div
-          className="context-menu"
-          style={{ left: menu.x, top: menu.y }}
-          onClick={(e) => void e.stopPropagation()}
-        >
-          <button type="button" onClick={() => void run("open")} disabled={menu.sample.missing}>
-            {tc("ctxOpen")}
-          </button>
-          <button type="button" onClick={() => void run("favorite")}>
-            {menu.sample.favorite ? tc("ctxUnfavorite") : tc("ctxFavorite")}
-          </button>
-          <button type="button" onClick={() => void run("reveal")} disabled={menu.sample.missing}>
-            {tc("ctxReveal")}
-          </button>
-          <button type="button" onClick={() => void run("copyPath")}>
-            {tc("ctxCopyPath")}
-          </button>
-          <button type="button" onClick={() => void run("copyFilename")}>
-            {tc("ctxCopyFilename")}
-          </button>
-          <button type="button" onClick={() => void run("reanalyze")} disabled={menu.sample.missing}>
-            {tc("ctxReanalyze")}
-          </button>
-          <button type="button" onClick={() => void run("showParent")}>
-            {tc("ctxShowParent")}
-          </button>
-          {menu.sample.missing ? (
-            <button type="button" className="danger" onClick={() => void run("removeMissing")}>
-              {tc("ctxRemoveMissing")}
-            </button>
+          {samples.length === 0 ? (
+            <div className="sample-table-empty">
+              <div>
+                <MagnifyingGlassIcon size={26} />
+                <div className="sample-table-empty-title">{t("emptyTitle")}</div>
+                <div className="sample-table-empty-body">
+                  {t("emptyBody")}
+                  <br />
+                  {t("emptyCount", {
+                    count: indexedCount,
+                    formatted: formatCount(indexedCount),
+                  })}
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

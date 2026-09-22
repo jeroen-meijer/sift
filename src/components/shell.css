@@ -1,0 +1,174 @@
+/* Window chrome: title bar, status bar, first launch. */
+
+.app-shell {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+}
+
+/* — title bar ——————————————————————————————————————— */
+
+.titlebar {
+  height: var(--titlebar-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  background: var(--color-bg-title);
+  border-bottom: 1px solid var(--color-divider);
+  user-select: none;
+  cursor: default;
+}
+
+[data-tauri-drag-region] {
+  app-region: drag;
+}
+
+.titlebar-spacer,
+.titlebar-actions {
+  width: 74px;
+  flex: none;
+}
+
+.titlebar-title {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--color-text-muted);
+}
+
+.titlebar-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  app-region: no-drag;
+}
+
+/* — status bar —————————————————————————————————————— */
+
+.statusbar {
+  height: var(--statusbar-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: var(--color-bg-sidebar);
+  border-top: 1px solid var(--color-divider);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-dim-2);
+}
+
+.statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.statusbar-lead {
+  color: var(--color-text-muted);
+}
+
+.statusbar-analysis {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.statusbar-analysis-label {
+  color: var(--color-neutral-400);
+}
+
+.statusbar-spin {
+  flex: none;
+  color: var(--color-accent);
+  animation: sift-spin 0.9s linear infinite;
+}
+
+.statusbar-bar {
+  width: 118px;
+  height: 3px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--color-neutral-900);
+  overflow: hidden;
+}
+
+.statusbar-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.2s ease-out;
+}
+
+.statusbar-hint {
+  color: var(--color-text-faint);
+}
+
+/* — first launch ———————————————————————————————————— */
+
+.first-launch {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.first-launch-main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg);
+}
+
+.first-launch-card {
+  width: 430px;
+  text-align: center;
+}
+
+.first-launch-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 20px;
+  border-radius: var(--radius-lg);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
+  color: var(--color-accent);
+}
+
+.first-launch-card h1 {
+  margin: 0 0 9px;
+  font-family: var(--font-heading);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.first-launch-card p {
+  margin: 0 0 22px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-text-muted);
+}
+
+.first-launch-actions {
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+}
+
+.first-launch-hint {
+  margin-top: 30px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--color-text-faint);
+}

@@ -1,0 +1,427 @@
+/* Detail pane: header, waveform well, transport. */
+
+.detail-pane {
+  height: var(--detail-height);
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-detail);
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  user-select: none;
+}
+
+.detail-placeholder {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  color: var(--color-text-faint);
+}
+
+.detail-header {
+  height: 46px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.detail-fav {
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-faint);
+}
+
+.detail-fav:hover,
+.detail-fav.on {
+  color: var(--color-accent-soft);
+}
+
+.detail-identity {
+  min-width: 0;
+}
+
+.detail-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.detail-name {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.detail-badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--color-danger-ink) 16%, transparent);
+  color: color-mix(in srgb, var(--color-danger) 80%, white);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.detail-path {
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-dim-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-meta {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-tag-add {
+  position: relative;
+}
+
+.tag-add-btn {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px dashed color-mix(in srgb, var(--color-text) 24%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-dim);
+}
+
+.tag-add-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-soft);
+}
+
+.detail-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 3px;
+  background: var(--color-border);
+}
+
+.detail-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-pill {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-neutral-400);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* --- missing file --- */
+
+.detail-missing {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  padding: 34px 40px 0;
+  color: var(--color-danger-ink);
+}
+
+.detail-missing > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.detail-missing > div {
+  max-width: 560px;
+}
+
+.detail-missing-title {
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.detail-missing-body {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--color-text-muted);
+}
+
+.detail-missing-volume {
+  color: var(--color-neutral-400);
+}
+
+.detail-missing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* --- waveform well --- */
+
+.detail-wave {
+  flex: 1;
+  min-height: 0;
+  padding: 11px 14px 9px;
+}
+
+.wave-stack {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: 7px;
+  background: var(--color-bg-input);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 7%, transparent);
+  overflow: hidden;
+}
+
+.wave-time-ruler {
+  position: relative;
+  flex: none;
+  height: 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
+  pointer-events: none;
+}
+
+.wave-ruler-mark {
+  position: absolute;
+  top: 2px;
+  padding-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-ghost);
+  white-space: nowrap;
+}
+
+.wave-well {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.wave-grid,
+.wave-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.wave-grid {
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wave-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 2;
+}
+
+.wave-lane-label {
+  position: absolute;
+  left: 7px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--color-text-ghost);
+  pointer-events: none;
+}
+
+.wave-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  background: color-mix(in srgb, var(--color-bg-deep) 62%, transparent);
+  pointer-events: none;
+}
+
+.wave-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-soft) 55%, transparent);
+  cursor: default;
+}
+
+.wave-selection.draggable {
+  cursor: grab;
+}
+
+.wave-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 9px;
+  margin-left: -4.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ew-resize;
+}
+
+.wave-handle span {
+  width: 3px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--color-accent-soft);
+}
+
+.wave-clip-pill {
+  position: absolute;
+  top: 6px;
+  z-index: 5;
+  margin-left: 4px;
+  height: 19px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--color-bg-deep) 78%, transparent);
+  color: var(--color-neutral-100);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 12%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.wave-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 1.5px;
+  background: var(--color-text);
+  pointer-events: none;
+  will-change: left;
+}
+
+.wave-hover-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 1px;
+  background: color-mix(in srgb, var(--color-text) 42%, transparent);
+  pointer-events: none;
+}
+
+.wave-playhead-cap {
+  position: absolute;
+  top: 0;
+  z-index: 6;
+  width: 9px;
+  height: 5px;
+  margin-left: -4px;
+  background: var(--color-text);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  pointer-events: none;
+}
+
+/* --- transport --- */
+
+.transport {
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
+  font-size: 11.5px;
+}
+
+.transport-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+}
+
+.transport-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.transport-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.transport-toggle:hover:not(.on) {
+  color: var(--color-text);
+  border-color: color-mix(in srgb, var(--color-text) 26%, transparent);
+}
+
+.transport-toggle.on {
+  border-color: var(--color-accent);
+  background: var(--color-accent-fill);
+  color: var(--color-accent-soft);
+}
+
+.transport-gain {
+  width: 54px;
+  font-size: 11px;
+  color: var(--color-neutral-400);
+  white-space: nowrap;
+}
+
+.transport-hints {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+.transport-hints em {
+  font-style: normal;
+  color: var(--color-text-muted);
+}

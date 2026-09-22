@@ -9,9 +9,9 @@ import { applyTheme } from "./index";
  * These catch UI helper regressions only.
  */
 describe("theme applyTheme", () => {
-  bench("set dark-default 1k times", () => {
+  bench("set nocturne 1k times", () => {
     for (let i = 0; i < 1000; i += 1) {
-      applyTheme("dark-default");
+      applyTheme("nocturne");
     }
   });
 });

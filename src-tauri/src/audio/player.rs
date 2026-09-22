@@ -48,6 +48,10 @@ struct SharedPlayback {
     sample_rate: u32,
     /// Frame index into pcm.
     position: AtomicUsize,
+    /// Loop window in frames. Playback wraps from `region_end` straight back to
+    /// `region_start`, so a selected region loops with no gap and no crossfade.
+    region_start: AtomicUsize,
+    region_end: AtomicUsize,
     playing: AtomicBool,
     paused: AtomicBool,
     looping: AtomicBool,
@@ -183,16 +187,20 @@ impl PlayerEngine {
         path: &Path,
         start_secs: f64,
         sample_type: SamplePlayType,
+        region_secs: Option<(f64, f64)>,
     ) -> AppResult<()> {
         let decoded = decode_file(path)?;
-        self.play_decoded(&decoded, start_secs, sample_type)
+        self.play_decoded(&decoded, start_secs, sample_type, region_secs)
     }
 
+    /// Play `decoded` from `start_secs`. `region_secs` limits playback to a
+    /// window, which is what a waveform selection loops over.
     pub fn play_decoded(
         &mut self,
         decoded: &DecodedAudio,
         start_secs: f64,
         sample_type: SamplePlayType,
+        region_secs: Option<(f64, f64)>,
     ) -> AppResult<()> {
         let device = self.resolve_device()?;
         let supported = device
@@ -206,7 +214,12 @@ impl PlayerEngine {
         let pcm = convert_for_device(decoded, out_channels, out_rate);
         let channels = out_channels.max(1);
         let frames = pcm.len().checked_div(channels).unwrap_or(0);
-        let start_frame = f64_to_usize(start_secs.max(0.0) * f64::from(out_rate)).min(frames);
+        let to_frame = |secs: f64| f64_to_usize(secs.max(0.0) * f64::from(out_rate)).min(frames);
+        let region = region_secs.map_or((0, frames), |(start, end)| {
+            let start_frame = to_frame(start);
+            (start_frame, to_frame(end).max(start_frame))
+        });
+        let start_frame = to_frame(start_secs).max(region.0);
         let should_loop = self.loop_preview && sample_type == SamplePlayType::Loop;
 
         self.stop_stream_only();
@@ -215,12 +228,35 @@ impl PlayerEngine {
             channels,
             out_rate,
             start_frame,
+            region,
             should_loop,
             &device,
             &config,
             sample_format,
         )?;
         Ok(())
+    }
+
+    /// Retune the loop window of whatever is playing, without restarting it.
+    pub fn set_region(&self, region_secs: Option<(f64, f64)>) {
+        let Some(shared) = &self.shared else {
+            return;
+        };
+        let frames = shared
+            .pcm
+            .len()
+            .checked_div(shared.channels.max(1))
+            .unwrap_or(0);
+        let rate = f64::from(shared.sample_rate.max(1));
+        let (start, end) = region_secs.map_or((0, frames), |(start, end)| {
+            let start_frame = f64_to_usize(start.max(0.0) * rate).min(frames);
+            let end_frame = f64_to_usize(end.max(0.0) * rate)
+                .min(frames)
+                .max(start_frame);
+            (start_frame, end_frame)
+        });
+        shared.region_start.store(start, Ordering::Relaxed);
+        shared.region_end.store(end, Ordering::Relaxed);
     }
 
     pub fn pause(&self) {
@@ -238,9 +274,11 @@ impl PlayerEngine {
             .len()
             .checked_div(shared.channels.max(1))
             .unwrap_or(0);
+        let region_start = shared.region_start.load(Ordering::Relaxed);
+        let region_end = shared.region_end.load(Ordering::Relaxed).min(frames);
         let pos = shared.position.load(Ordering::Relaxed);
-        if pos >= frames {
-            shared.position.store(0, Ordering::Relaxed);
+        if pos >= region_end {
+            shared.position.store(region_start, Ordering::Relaxed);
         }
         shared.paused.store(false, Ordering::Relaxed);
         shared.playing.store(true, Ordering::Relaxed);
@@ -254,11 +292,16 @@ impl PlayerEngine {
             let config: StreamConfig = supported.into();
             let pos = shared.position.load(Ordering::Relaxed);
             let looping = shared.looping.load(Ordering::Relaxed);
+            let region = (
+                shared.region_start.load(Ordering::Relaxed),
+                shared.region_end.load(Ordering::Relaxed),
+            );
             self.start_stream(
                 Arc::clone(&shared.pcm),
                 shared.channels,
                 shared.sample_rate,
                 pos,
+                region,
                 looping,
                 &device,
                 &config,
@@ -271,6 +314,30 @@ impl PlayerEngine {
     pub fn stop(&mut self) {
         self.stop_stream_only();
         self.shared = None;
+    }
+
+    /// Current playhead in seconds, and whether audio is actively outputting.
+    pub fn playback_state(&self) -> (f64, bool) {
+        let Some(shared) = &self.shared else {
+            return (0.0, false);
+        };
+        let channels = shared.channels.max(1);
+        let frames = shared.pcm.len().checked_div(channels).unwrap_or(0);
+        let pos = shared.position.load(Ordering::Relaxed);
+        #[allow(
+            clippy::as_conversions,
+            clippy::cast_precision_loss,
+            reason = "playhead position: frame index to seconds"
+        )]
+        let secs = if shared.sample_rate == 0 {
+            0.0
+        } else {
+            pos as f64 / f64::from(shared.sample_rate)
+        };
+        let playing = shared.playing.load(Ordering::Relaxed)
+            && !shared.paused.load(Ordering::Relaxed)
+            && pos < frames;
+        (secs, playing)
     }
 
     #[allow(dead_code)]
@@ -328,6 +395,7 @@ impl PlayerEngine {
         channels: usize,
         sample_rate: u32,
         start_frame: usize,
+        region: (usize, usize),
         looping: bool,
         device: &Device,
         config: &StreamConfig,
@@ -338,6 +406,8 @@ impl PlayerEngine {
             channels,
             sample_rate,
             position: AtomicUsize::new(start_frame),
+            region_start: AtomicUsize::new(region.0),
+            region_end: AtomicUsize::new(region.1),
             playing: AtomicBool::new(true),
             paused: AtomicBool::new(false),
             looping: AtomicBool::new(looping),
@@ -410,12 +480,21 @@ where
 
     let mut pos = shared.position.load(Ordering::Relaxed);
     let looping = shared.looping.load(Ordering::Relaxed);
+    let region_start = shared
+        .region_start
+        .load(Ordering::Relaxed)
+        .min(frames_total);
+    let region_end = shared
+        .region_end
+        .load(Ordering::Relaxed)
+        .min(frames_total)
+        .max(region_start);
     let mut finished = false;
 
     for frame in data.chunks_mut(out_ch) {
-        if !finished && pos >= frames_total {
-            if looping && frames_total > 0 {
-                pos = 0;
+        if !finished && pos >= region_end {
+            if looping && region_end > region_start {
+                pos = region_start;
             } else {
                 finished = true;
                 shared.playing.store(false, Ordering::Relaxed);

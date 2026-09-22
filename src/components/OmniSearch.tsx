@@ -6,161 +6,186 @@ import {
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { tagPalette } from "../lib/tagColors";
+import { keys, matchesBinding } from "../lib/bindings";
+import {
+  EMPTY_OMNI,
+  OPTIONAL_COLUMNS,
+  folderChipLabel,
+  omniHasQuery,
+  type OmniState,
+  type OptionalColumn,
+} from "../lib/omni";
+import type { FolderNode } from "../lib/ipc";
+import { Popover } from "../ui/Popover";
 
-export interface OmniState {
-  text: string;
-  folder: string | null;
-  tags: string[];
-  bpmMin: number | null;
-  bpmMax: number | null;
-  key: string | null;
-  halfDouble: boolean;
-  relativeKey: boolean;
+interface ChipProps {
+  prefix: string;
+  value: string;
+  dot?: string;
+  toggle?: { label: string; on: boolean; onToggle: () => void };
+  onRemove: () => void;
+  removeLabel: string;
+}
+
+function Chip({ prefix, value, dot, toggle, onRemove, removeLabel }: ChipProps) {
+  return (
+    <span className="omni-chip">
+      {dot ? <span className="omni-chip-dot" style={{ background: dot }} /> : null}
+      <span className="omni-chip-pre">{prefix}</span>
+      <span className="omni-chip-val mono">{value}</span>
+      {toggle ? (
+        <button
+          type="button"
+          className={`omni-chip-toggle${toggle.on ? " on" : ""}`}
+          aria-pressed={toggle.on}
+          onClick={toggle.onToggle}
+        >
+          <span className="omni-chip-track">
+            <span className="omni-chip-knob" />
+          </span>
+          {toggle.label}
+        </button>
+      ) : null}
+      <button type="button" className="omni-chip-x" aria-label={removeLabel} onClick={onRemove}>
+        <XIcon size={10} />
+      </button>
+    </span>
+  );
 }
 
 interface Props {
   value: OmniState;
   onChange: (next: OmniState) => void;
+  folders: FolderNode[];
+  halfDouble: boolean;
+  relativeKey: boolean;
   onToggleHalfDouble: () => void;
   onToggleRelativeKey: () => void;
   showWaveforms: boolean;
   onToggleWaveforms: () => void;
   favoritesOnly: boolean;
   onToggleFavoritesOnly: () => void;
+  hiddenColumns: Set<OptionalColumn>;
+  onToggleColumn: (column: OptionalColumn) => void;
+  columnLabels: Record<OptionalColumn, string>;
 }
 
 export function OmniSearch({
   value,
   onChange,
+  folders,
+  halfDouble,
+  relativeKey,
   onToggleHalfDouble,
   onToggleRelativeKey,
   showWaveforms,
   onToggleWaveforms,
   favoritesOnly,
   onToggleFavoritesOnly,
+  hiddenColumns,
+  onToggleColumn,
+  columnLabels,
 }: Props) {
   const { t } = useTranslation("common");
-  const hasQuery =
-    value.text.length > 0 ||
-    value.folder != null ||
-    value.tags.length > 0 ||
-    value.bpmMin != null ||
-    value.bpmMax != null ||
-    value.key != null;
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const hasQuery = omniHasQuery(value);
+  const roots = folders.filter((node) => node.is_root);
 
-  const clearAll = () =>
-    void onChange({
-      ...value,
-      text: "",
-      folder: null,
-      tags: [],
-      bpmMin: null,
-      bpmMax: null,
-      key: null,
-    });
+  const chips: ReactNode[] = [];
+  if (value.folder != null) {
+    chips.push(
+      <Chip
+        key="folder"
+        prefix={t("chipFolder")}
+        value={folderChipLabel(value.folder, roots)}
+        removeLabel={t("clear")}
+        onRemove={() => {
+          onChange({ ...value, folder: null });
+        }}
+      />,
+    );
+  }
+  for (const tag of value.tags) {
+    chips.push(
+      <Chip
+        key={`tag:${tag}`}
+        prefix={t("chipTag")}
+        value={tag}
+        dot={tagPalette(tag, null).dot}
+        removeLabel={t("clear")}
+        onRemove={() => {
+          onChange({ ...value, tags: value.tags.filter((x) => x !== tag) });
+        }}
+      />,
+    );
+  }
+  if (value.bpmMin != null || value.bpmMax != null) {
+    chips.push(
+      <Chip
+        key="bpm"
+        prefix={t("chipBpm")}
+        value={`${value.bpmMin ?? "…"}-${value.bpmMax ?? "…"}`}
+        toggle={{ label: t("halfDouble"), on: halfDouble, onToggle: onToggleHalfDouble }}
+        removeLabel={t("clear")}
+        onRemove={() => {
+          onChange({ ...value, bpmMin: null, bpmMax: null });
+        }}
+      />,
+    );
+  }
+  if (value.key != null) {
+    chips.push(
+      <Chip
+        key="key"
+        prefix={t("chipKey")}
+        value={value.key}
+        toggle={{ label: t("relative"), on: relativeKey, onToggle: onToggleRelativeKey }}
+        removeLabel={t("clear")}
+        onRemove={() => {
+          onChange({ ...value, key: null });
+        }}
+      />,
+    );
+  }
+
+  const dropLastChip = () => {
+    if (value.key != null) onChange({ ...value, key: null });
+    else if (value.bpmMin != null || value.bpmMax != null)
+      onChange({ ...value, bpmMin: null, bpmMax: null });
+    else if (value.tags.length > 0) onChange({ ...value, tags: value.tags.slice(0, -1) });
+    else if (value.folder != null) onChange({ ...value, folder: null });
+  };
 
   return (
     <div className="omni-bar">
       <div className="omni-field">
         <MagnifyingGlassIcon size={14} className="omni-icon" />
         <div className="omni-chips">
-          {value.folder ? (
-            <span className="omni-chip">
-              <span className="omni-chip-pre">{t("chipFolder")}</span>
-              <span className="omni-chip-val mono">{value.folder}</span>
-              <button
-                type="button"
-                className="omni-chip-x"
-                aria-label={t("clear")}
-                onClick={() => void onChange({ ...value, folder: null })}
-              >
-                <XIcon size={10} />
-              </button>
-            </span>
-          ) : null}
-          {value.tags.map((tag) => (
-            <span key={tag} className="omni-chip">
-              <span className="omni-chip-dot" />
-              <span className="omni-chip-pre">{t("chipTag")}</span>
-              <span className="omni-chip-val mono">{tag}</span>
-              <button
-                type="button"
-                className="omni-chip-x"
-                aria-label={t("clear")}
-                onClick={() =>
-                  void onChange({ ...value, tags: value.tags.filter((x) => x !== tag) })
-                }
-              >
-                <XIcon size={10} />
-              </button>
-            </span>
-          ))}
-          {value.bpmMin != null || value.bpmMax != null ? (
-            <span className="omni-chip">
-              <span className="omni-chip-pre">{t("chipBpm")}</span>
-              <span className="omni-chip-val mono">
-                {value.bpmMin ?? "…"}–{value.bpmMax ?? "…"}
-              </span>
-              <button
-                type="button"
-                className={`omni-toggle${value.halfDouble ? " on" : ""}`}
-                onClick={onToggleHalfDouble}
-                title={t("halfDouble")}
-              >
-                {t("halfDoubleShort")}
-              </button>
-              <button
-                type="button"
-                className="omni-chip-x"
-                aria-label={t("clear")}
-                onClick={() => void onChange({ ...value, bpmMin: null, bpmMax: null })}
-              >
-                <XIcon size={10} />
-              </button>
-            </span>
-          ) : null}
-          {value.key ? (
-            <span className="omni-chip">
-              <span className="omni-chip-pre">{t("chipKey")}</span>
-              <span className="omni-chip-val mono">{value.key}</span>
-              <button
-                type="button"
-                className={`omni-toggle${value.relativeKey ? " on" : ""}`}
-                onClick={onToggleRelativeKey}
-                title={t("relativeKey")}
-              >
-                {t("relativeShort")}
-              </button>
-              <button
-                type="button"
-                className="omni-chip-x"
-                aria-label={t("clear")}
-                onClick={() => void onChange({ ...value, key: null })}
-              >
-                <XIcon size={10} />
-              </button>
-            </span>
-          ) : null}
+          {chips}
           <input
             className="omni-input"
             value={value.text}
-            placeholder={hasQuery ? "" : t("searchPlaceholder")}
-            onChange={(e) => void onChange({ ...value, text: e.target.value })}
+            placeholder={chips.length > 0 ? "" : t("searchPlaceholder")}
+            onChange={(e) => {
+              onChange({ ...value, text: e.target.value });
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Backspace" && value.text === "") {
-                if (value.key) onChange({ ...value, key: null });
-                else if (value.bpmMin != null || value.bpmMax != null)
-                  onChange({ ...value, bpmMin: null, bpmMax: null });
-                else if (value.tags.length)
-                  onChange({ ...value, tags: value.tags.slice(0, -1) });
-                else if (value.folder) onChange({ ...value, folder: null });
-              }
+              if (matchesBinding(e, keys.dropChip) && value.text === "") dropLastChip();
             }}
           />
         </div>
         {hasQuery ? (
-          <button type="button" className="omni-clear" onClick={clearAll} aria-label={t("clear")}>
+          <button
+            type="button"
+            className="omni-clear"
+            aria-label={t("clear")}
+            onClick={() => {
+              onChange(EMPTY_OMNI);
+            }}
+          >
             <XCircleIcon size={14} />
           </button>
         ) : null}
@@ -169,30 +194,65 @@ export function OmniSearch({
         <button
           type="button"
           className={`omni-tool-btn${showWaveforms ? " on" : ""}`}
+          title={t("rowWaveforms")}
+          aria-pressed={showWaveforms}
           onClick={onToggleWaveforms}
-          title={t("waveforms")}
         >
           <WaveformIcon size={14} />
-          <span>{t("waveforms")}</span>
+          {t("waveforms")}
         </button>
         <button
           type="button"
           className={`omni-icon-btn${favoritesOnly ? " on" : ""}`}
-          onClick={onToggleFavoritesOnly}
           title={t("favoritesOnly")}
           aria-label={t("favoritesOnly")}
+          aria-pressed={favoritesOnly}
+          onClick={onToggleFavoritesOnly}
         >
           <StarIcon size={15} weight={favoritesOnly ? "fill" : "regular"} />
         </button>
-        <button
-          type="button"
-          className="omni-icon-btn"
-          title={t("columns")}
-          aria-label={t("columns")}
-          disabled
-        >
-          <ColumnsIcon size={15} />
-        </button>
+        <div className="omni-columns">
+          <button
+            type="button"
+            className={`omni-icon-btn${columnsOpen ? " on" : ""}`}
+            title={t("columns")}
+            aria-label={t("columns")}
+            aria-expanded={columnsOpen}
+            onPointerDown={(e) => {
+              /* Keep the popover's outside-close from racing the toggle. */
+              if (columnsOpen) e.stopPropagation();
+            }}
+            onClick={() => {
+              setColumnsOpen((open) => !open);
+            }}
+          >
+            <ColumnsIcon size={15} />
+          </button>
+          {columnsOpen ? (
+            <Popover
+              label={t("columns")}
+              onClose={() => {
+                setColumnsOpen(false);
+              }}
+            >
+              <div className="popover-label">{t("columns")}</div>
+              {OPTIONAL_COLUMNS.map((column) => (
+                <button
+                  key={column}
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={!hiddenColumns.has(column)}
+                  onClick={() => {
+                    onToggleColumn(column);
+                  }}
+                >
+                  <span className="omni-column-mark">{hiddenColumns.has(column) ? "" : "✓"}</span>
+                  {columnLabels[column]}
+                </button>
+              ))}
+            </Popover>
+          ) : null}
+        </div>
       </div>
     </div>
   );
