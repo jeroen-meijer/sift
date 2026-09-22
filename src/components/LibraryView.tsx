@@ -687,6 +687,7 @@ export function LibraryView({
             }
             analyzingIds={analyzingIds}
             showWaveforms={settings.row_waveforms}
+            coloredWaveforms={settings.colored_waveforms}
             hiddenColumns={hiddenColumns}
             columnWidths={mergeColumnWidths(settings.column_widths)}
             sortColumn={settings.sort_column}
@@ -744,6 +745,7 @@ export function LibraryView({
             allTags={tags}
             snap={settings.snap}
             waveformMode={settings.waveform_view}
+            coloredWaveforms={settings.colored_waveforms}
             playheadSecs={playingId === focusedId ? playhead : null}
             selection={selection}
             loopPreview={settings.loop_preview}

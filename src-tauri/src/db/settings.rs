@@ -22,6 +22,7 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
         "play_on_select": true,
         "loop_preview": true,
         "row_waveforms": true,
+        "colored_waveforms": true,
         "snap": "1/4",
         "waveform_view": "stereo",
         "output_device": "default",

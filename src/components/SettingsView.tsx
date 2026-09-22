@@ -287,6 +287,15 @@ export function SettingsView({
                     }}
                   />
                 </Row>
+                <Row title={t("coloredWaveforms")} hint={t("coloredWaveformsHint")}>
+                  <Switch
+                    label={t("coloredWaveforms")}
+                    checked={settings.colored_waveforms}
+                    onChange={(v) => {
+                      onChange("colored_waveforms", v);
+                    }}
+                  />
+                </Row>
                 <Row title={t("outputDevice")} hint={t("outputDeviceHint")}>
                   <PillSelect
                     label={t("outputDevice")}

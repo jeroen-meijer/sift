@@ -18,6 +18,8 @@ interface Props {
   clipReady: boolean;
   /** Apply snap (and Shift free-time) to a pointer position. */
   snapPointer: (secs: number) => number;
+  /** Bass→red / mid→green / treble→blue coloring from peak colors. */
+  colored: boolean;
   onSeek: (secs: number) => void;
   onSelect: (selection: Selection | null) => void;
   onDragClip: () => void;
@@ -54,6 +56,7 @@ export function WaveformView({
   selection,
   clipReady,
   snapPointer,
+  colored,
   onSeek,
   onSelect,
   onDragClip,
@@ -127,21 +130,40 @@ export function WaveformView({
     const ink = styles.getPropertyValue("--color-wave-ink").trim();
     const laneHeight = height / lanes;
     const channels = Math.max(1, peaks.channels);
+    const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
 
-    ctx.strokeStyle = ink;
     ctx.lineWidth = 1;
     for (let lane = 0; lane < lanes; lane++) {
       const mid = laneHeight * lane + laneHeight / 2;
-      ctx.beginPath();
-      for (let i = 0; i < peaks.bucket_count; i++) {
-        const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
-        const min = peaks.peaks[base] ?? 0;
-        const max = peaks.peaks[base + 1] ?? 0;
-        const x = (i / peaks.bucket_count) * width;
-        ctx.moveTo(x, mid - max * laneHeight * 0.46);
-        ctx.lineTo(x, mid - min * laneHeight * 0.46);
+      if (hasColors) {
+        for (let i = 0; i < peaks.bucket_count; i++) {
+          const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
+          const min = peaks.peaks[base] ?? 0;
+          const max = peaks.peaks[base + 1] ?? 0;
+          const ci = i * 3;
+          const r = peaks.colors[ci] ?? 0;
+          const g = peaks.colors[ci + 1] ?? 0;
+          const b = peaks.colors[ci + 2] ?? 0;
+          ctx.strokeStyle = `rgb(${String(r)},${String(g)},${String(b)})`;
+          ctx.beginPath();
+          const x = (i / peaks.bucket_count) * width;
+          ctx.moveTo(x, mid - max * laneHeight * 0.46);
+          ctx.lineTo(x, mid - min * laneHeight * 0.46);
+          ctx.stroke();
+        }
+      } else {
+        ctx.strokeStyle = ink;
+        ctx.beginPath();
+        for (let i = 0; i < peaks.bucket_count; i++) {
+          const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
+          const min = peaks.peaks[base] ?? 0;
+          const max = peaks.peaks[base + 1] ?? 0;
+          const x = (i / peaks.bucket_count) * width;
+          ctx.moveTo(x, mid - max * laneHeight * 0.46);
+          ctx.lineTo(x, mid - min * laneHeight * 0.46);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
 
     if (lanes === 2) {
@@ -151,7 +173,7 @@ export function WaveformView({
       ctx.lineTo(width, laneHeight);
       ctx.stroke();
     }
-  }, [peaks, size, lanes]);
+  }, [peaks, size, lanes, colored]);
 
   const gridStyle = useMemo(() => {
     const divisor = snapDivisor(snap);

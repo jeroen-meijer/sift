@@ -81,6 +81,7 @@ interface Props {
   playingProgress: number | null;
   analyzingIds: Set<number>;
   showWaveforms: boolean;
+  coloredWaveforms: boolean;
   hiddenColumns: Set<OptionalColumn>;
   columnWidths: ColumnWidths;
   sortColumn: SortColumn;
@@ -105,6 +106,7 @@ export function SampleTable({
   playingProgress,
   analyzingIds,
   showWaveforms,
+  coloredWaveforms,
   hiddenColumns,
   columnWidths,
   sortColumn,
@@ -343,6 +345,7 @@ export function SampleTable({
                       missing={sample.missing}
                       analyzing={analyzing}
                       selected={selected}
+                      colored={coloredWaveforms}
                       progress={playing ? playingProgress : null}
                       onScrub={(fraction) => {
                         onScrubRow(sample, fraction);

@@ -68,6 +68,8 @@ export interface PeakData {
   duration_ms: number;
   bucket_count: number;
   peaks: number[];
+  /** Flat RGB triples (`bucket_count * 3`): bass→R, mid→G, treble→B. */
+  colors: number[];
 }
 
 export interface PlaybackState {
@@ -136,6 +138,8 @@ export interface AppSettings {
   play_on_select: boolean;
   loop_preview: boolean;
   row_waveforms: boolean;
+  /** Per-bucket bass/mid/treble coloring on waveforms (default on). */
+  colored_waveforms: boolean;
   snap: SnapMode;
   waveform_view: WaveformView;
   output_device: string;
@@ -161,6 +165,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   play_on_select: true,
   loop_preview: true,
   row_waveforms: true,
+  colored_waveforms: true,
   snap: "1/4",
   waveform_view: "stereo",
   output_device: "default",
