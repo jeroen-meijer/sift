@@ -138,6 +138,7 @@ export interface AppSettings {
   preview_gain_db: number;
   bpm_range_min: number;
   bpm_range_max: number;
+  bpm_round_whole: boolean;
   new_file_mode: NewFileMode;
   notify_auto_index: boolean;
   ignore_list: string[];
@@ -159,6 +160,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   preview_gain_db: -6,
   bpm_range_min: 70,
   bpm_range_max: 180,
+  bpm_round_whole: true,
   new_file_mode: "auto",
   notify_auto_index: false,
   ignore_list: [],

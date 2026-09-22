@@ -85,5 +85,15 @@
   "tagsDialogBody_other": "Ticked tags are on every one of the {{count}} selected samples.",
   "tagFilterPlaceholder": "Filter taxonomy…",
   "clipPending": "{{span}} · {{secs}} s",
-  "clipPendingNoBpm": "{{secs}} s"
+  "clipPendingNoBpm": "{{secs}} s",
+  "bpmValue": "BPM",
+  "bpmFromLength": "From length",
+  "bpmBeats_one": "{{count}} beat",
+  "bpmBeats_other": "{{count}} beats",
+  "bpmCustomBeats": "beats",
+  "bpmSeconds": "{{secs}} s",
+  "bpmVaries": "varies",
+  "bpmRound": "Round to whole numbers",
+  "bpmClear": "Clear BPM",
+  "bpmNoDuration": "Sift needs the sample's length to work this out."
 }

@@ -28,6 +28,7 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
         "preview_gain_db": -6.0,
         "bpm_range_min": 70,
         "bpm_range_max": 180,
+        "bpm_round_whole": true,
         "new_file_mode": "auto",
         "notify_auto_index": false,
         "ignore_list": DEFAULT_IGNORE,
