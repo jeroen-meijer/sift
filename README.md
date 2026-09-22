@@ -42,9 +42,13 @@ bun run build
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo nextest run --all-features
+cargo bench --bench audio_hotpath
 
 # App package
 bun run tauri:build
 ```
+
+Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`.
+Frontend micro-bench: `bun run bench`.
 
 Watch Clippy: `cd src-tauri && bacon clippy`.

@@ -26,5 +26,8 @@ export default defineConfig(() => ({
     environment: "jsdom",
     globals: false,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    benchmark: {
+      include: ["src/**/*.bench.{ts,tsx}"],
+    },
   },
 }));

@@ -7,11 +7,21 @@ mod ids;
 mod indexer;
 mod library;
 mod paths;
+mod perf_budgets;
 mod samples;
 mod state;
 mod tags;
 mod undo;
 mod watch;
+
+/// Hot-path surface for Criterion benches and perf budget tests.
+/// Not part of the Tauri IPC contract.
+pub mod perf {
+    pub use crate::analyze::{Analyzer, HeuristicAnalyzer, PathTokenAnalyzer};
+    pub use crate::audio::decode::{DecodedAudio, decode_file};
+    pub use crate::audio::jit::render_clip;
+    pub use crate::audio::peaks::{DEFAULT_BUCKETS, generate_peaks};
+}
 
 use state::AppState;
 use tauri::Manager;
