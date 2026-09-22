@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::audio::PlayerEngine;
+use crate::audio::{DecodeCache, PlayerEngine};
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::paths::AppPaths;
@@ -12,6 +12,8 @@ pub struct AppState {
     pub paths: AppPaths,
     pub db: Arc<Db>,
     pub player: Mutex<PlayerEngine>,
+    /// Decoded PCM LRU for select→play / prefetch (see SPEC audition latency).
+    pub decode_cache: Mutex<DecodeCache>,
     pub undo: Mutex<UndoStack>,
     pub watch_shared: Arc<WatchShared>,
     pub watch_guard: Mutex<Option<WatchGuard>>,
@@ -58,6 +60,7 @@ impl AppState {
             paths,
             db,
             player: Mutex::new(player),
+            decode_cache: Mutex::new(DecodeCache::default()),
             undo: Mutex::new(UndoStack::default()),
             watch_shared,
             watch_guard: Mutex::new(None),

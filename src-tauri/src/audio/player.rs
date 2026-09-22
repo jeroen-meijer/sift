@@ -1,13 +1,15 @@
 //! cpal preview playback engine.
 //!
-//! Decode happens on the control thread; the audio callback only reads a shared
-//! interleaved f32 buffer and applies gain. Previous plays are interrupted by
-//! dropping the old stream before starting a new one.
+//! Decode happens on the control thread (via [`crate::audio::decode_cache`]);
+//! the audio callback only reads a shared interleaved f32 buffer and applies
+//! gain. Same-file seeks reuse the last converted PCM and only retarget the
+//! playhead when the stream is already live.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::time::Instant;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{
@@ -15,7 +17,7 @@ use cpal::{
 };
 use serde::Serialize;
 
-use crate::audio::decode::{DecodedAudio, decode_file};
+use crate::audio::decode::DecodedAudio;
 use crate::error::{AppError, AppResult};
 use crate::ids::f64_to_usize;
 
@@ -65,6 +67,15 @@ impl SharedPlayback {
     }
 }
 
+/// Device-rate PCM kept so mid-file seeks skip convert + stream rebuild.
+#[derive(Clone)]
+struct ConvertedBuffer {
+    path: PathBuf,
+    channels: usize,
+    sample_rate: u32,
+    pcm: Arc<[f32]>,
+}
+
 /// Thread-safe preview player owned by `AppState` behind a `Mutex`.
 pub struct PlayerEngine {
     host: Host,
@@ -74,6 +85,8 @@ pub struct PlayerEngine {
     loop_preview: bool,
     stream: Option<Stream>,
     shared: Option<Arc<SharedPlayback>>,
+    /// Last file converted for the current output device layout.
+    last_converted: Option<ConvertedBuffer>,
 }
 
 impl Default for PlayerEngine {
@@ -91,6 +104,7 @@ impl PlayerEngine {
             loop_preview: true,
             stream: None,
             shared: None,
+            last_converted: None,
         }
     }
 
@@ -153,6 +167,7 @@ impl PlayerEngine {
             self.device_id = Some(id.to_string());
         }
 
+        self.last_converted = None;
         self.stop();
         Ok(())
     }
@@ -182,26 +197,27 @@ impl PlayerEngine {
         self.gain_db
     }
 
-    pub fn play_file(
-        &mut self,
-        path: &Path,
-        start_secs: f64,
-        sample_type: SamplePlayType,
-        region_secs: Option<(f64, f64)>,
-    ) -> AppResult<()> {
-        let decoded = decode_file(path)?;
-        self.play_decoded(&decoded, start_secs, sample_type, region_secs)
-    }
-
     /// Play `decoded` from `start_secs`. `region_secs` limits playback to a
     /// window, which is what a waveform selection loops over.
+    ///
+    /// When `path` matches the last converted buffer, skips convert and (when
+    /// the stream is still live) only retargets the playhead.
     pub fn play_decoded(
         &mut self,
+        path: &Path,
         decoded: &DecodedAudio,
         start_secs: f64,
         sample_type: SamplePlayType,
         region_secs: Option<(f64, f64)>,
     ) -> AppResult<()> {
+        if self
+            .last_converted
+            .as_ref()
+            .is_some_and(|c| c.path == path)
+        {
+            return self.restart_converted(start_secs, sample_type, region_secs);
+        }
+
         let device = self.resolve_device()?;
         let supported = device
             .default_output_config()
@@ -211,20 +227,23 @@ impl PlayerEngine {
         let sample_format = supported.sample_format();
         let config: StreamConfig = supported.into();
 
-        let pcm = convert_for_device(decoded, out_channels, out_rate);
+        let convert_start = Instant::now();
+        let pcm: Arc<[f32]> = convert_for_device(decoded, out_channels, out_rate).into();
+        crate::profile_log::event(
+            "play.convert",
+            convert_start.elapsed(),
+            &format!("frames={}", pcm.len().checked_div(out_channels.max(1)).unwrap_or(0)),
+        );
+
         let channels = out_channels.max(1);
         let frames = pcm.len().checked_div(channels).unwrap_or(0);
-        let to_frame = |secs: f64| f64_to_usize(secs.max(0.0) * f64::from(out_rate)).min(frames);
-        let region = region_secs.map_or((0, frames), |(start, end)| {
-            let start_frame = to_frame(start);
-            (start_frame, to_frame(end).max(start_frame))
-        });
-        let start_frame = to_frame(start_secs).max(region.0);
-        let should_loop = self.loop_preview && sample_type == SamplePlayType::Loop;
+        let (region, start_frame, should_loop) =
+            play_window(frames, out_rate, start_secs, sample_type, region_secs, self.loop_preview);
 
+        let stream_start = Instant::now();
         self.stop_stream_only();
         self.start_stream(
-            pcm.into(),
+            Arc::clone(&pcm),
             channels,
             out_rate,
             start_frame,
@@ -234,6 +253,76 @@ impl PlayerEngine {
             &config,
             sample_format,
         )?;
+        crate::profile_log::event("play.stream_start", stream_start.elapsed(), "cold");
+
+        self.last_converted = Some(ConvertedBuffer {
+            path: path.to_path_buf(),
+            channels,
+            sample_rate: out_rate,
+            pcm,
+        });
+        Ok(())
+    }
+
+    /// Retarget an already-converted buffer (same file seek / replay).
+    fn restart_converted(
+        &mut self,
+        start_secs: f64,
+        sample_type: SamplePlayType,
+        region_secs: Option<(f64, f64)>,
+    ) -> AppResult<()> {
+        let Some(conv) = self.last_converted.clone() else {
+            return Err(AppError::msg("no converted buffer"));
+        };
+        let frames = conv
+            .pcm
+            .len()
+            .checked_div(conv.channels.max(1))
+            .unwrap_or(0);
+        let (region, start_frame, should_loop) = play_window(
+            frames,
+            conv.sample_rate,
+            start_secs,
+            sample_type,
+            region_secs,
+            self.loop_preview,
+        );
+
+        let reuse_start = Instant::now();
+        if let Some(shared) = &self.shared
+            && Arc::ptr_eq(&shared.pcm, &conv.pcm)
+        {
+            shared.region_start.store(region.0, Ordering::Relaxed);
+            shared.region_end.store(region.1, Ordering::Relaxed);
+            shared.position.store(start_frame, Ordering::Relaxed);
+            shared.looping.store(should_loop, Ordering::Relaxed);
+            shared.paused.store(false, Ordering::Relaxed);
+            shared.playing.store(true, Ordering::Relaxed);
+            if self.stream.is_some() {
+                crate::profile_log::event("play.reuse", reuse_start.elapsed(), "seek");
+                return Ok(());
+            }
+        }
+
+        let device = self.resolve_device()?;
+        let supported = device
+            .default_output_config()
+            .map_err(|e| AppError::msg(format!("default output config: {e}")))?;
+        let sample_format = supported.sample_format();
+        let config: StreamConfig = supported.into();
+        self.stop_stream_only();
+        self.start_stream(
+            Arc::clone(&conv.pcm),
+            conv.channels,
+            conv.sample_rate,
+            start_frame,
+            region,
+            should_loop,
+            &device,
+            &config,
+            sample_format,
+        )?;
+        crate::profile_log::event("play.stream_start", reuse_start.elapsed(), "reuse_pcm");
         Ok(())
     }
 
@@ -528,6 +617,24 @@ where
 
 fn db_to_linear(db: f32) -> f32 {
     10f32.powf(db / 20.0)
+}
+
+fn play_window(
+    frames: usize,
+    sample_rate: u32,
+    start_secs: f64,
+    sample_type: SamplePlayType,
+    region_secs: Option<(f64, f64)>,
+    loop_preview: bool,
+) -> ((usize, usize), usize, bool) {
+    let to_frame = |secs: f64| f64_to_usize(secs.max(0.0) * f64::from(sample_rate)).min(frames);
+    let region = region_secs.map_or((0, frames), |(start, end)| {
+        let start_frame = to_frame(start);
+        (start_frame, to_frame(end).max(start_frame))
+    });
+    let start_frame = to_frame(start_secs).max(region.0);
+    let should_loop = loop_preview && sample_type == SamplePlayType::Loop;
+    (region, start_frame, should_loop)
 }
 
 /// Resample + channel-map decoded PCM to the device layout (linear interpolation).

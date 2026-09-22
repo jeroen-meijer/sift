@@ -419,6 +419,7 @@ pub fn play_sample(
     region_start_secs: Option<f64>,
     region_end_secs: Option<f64>,
 ) -> AppResult<()> {
+    let total = std::time::Instant::now();
     let sample = state
         .db
         .with_conn(|conn| samples::get_sample(conn, sample_id))?
@@ -426,20 +427,69 @@ pub fn play_sample(
     if sample.missing {
         return Err(AppError::msg("sample file is missing"));
     }
+    let path = Path::new(&sample.path);
     let play_type = SamplePlayType::from_str_opt(sample.sample_type.as_deref());
-    let mut player = state
-        .player
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let region = region_start_secs
         .zip(region_end_secs)
         .filter(|(a, b)| b > a);
-    player.play_file(
-        Path::new(&sample.path),
-        start_secs.or(region_start_secs).unwrap_or(0.0),
-        play_type,
-        region,
-    )
+    let start = start_secs.or(region_start_secs).unwrap_or(0.0);
+
+    let decode_start = std::time::Instant::now();
+    let (decoded, cache_hit) = state
+        .decode_cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_decode(path)?;
+    crate::profile_log::event(
+        if cache_hit {
+            "play.decode_cache_hit"
+        } else {
+            "play.decode"
+        },
+        decode_start.elapsed(),
+        &format!("id={sample_id}"),
+    );
+
+    state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .play_decoded(path, &decoded, start, play_type, region)?;
+
+    crate::profile_log::event(
+        "ipc.play_sample",
+        total.elapsed(),
+        &format!("id={sample_id}"),
+    );
+    Ok(())
+}
+
+/// Warm the decode LRU for upcoming select→play (neighbors / hover).
+#[tauri::command]
+pub fn prefetch_decode(state: State<'_, AppState>, sample_ids: Vec<i64>) -> AppResult<()> {
+    if sample_ids.is_empty() {
+        return Ok(());
+    }
+    let mut paths = Vec::with_capacity(sample_ids.len());
+    state.db.with_conn(|conn| {
+        for id in sample_ids {
+            if let Some(sample) = samples::get_sample(conn, id)?
+                && !sample.missing
+            {
+                paths.push(sample.path);
+            }
+        }
+        Ok(())
+    })?;
+    let mut cache = state
+        .decode_cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    for path in &paths {
+        cache.prefetch(Path::new(path));
+    }
+    drop(cache);
+    Ok(())
 }
 
 /// Retune the loop window while a preview runs, so dragging a selection handle
