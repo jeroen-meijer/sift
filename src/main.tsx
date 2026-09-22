@@ -5,7 +5,7 @@ import { App } from "./components/App";
 import { applyTheme } from "./theme";
 import "./styles/tokens.css";
 
-applyTheme("dark-default");
+applyTheme("nocturne");
 
 const root = document.getElementById("root");
 if (!root) {

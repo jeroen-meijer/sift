@@ -16,6 +16,8 @@ interface Props {
   playheadSecs: number | null;
   selection: Selection | null;
   clipReady: boolean;
+  /** Apply snap (and Shift free-time) to a pointer position. */
+  snapPointer: (secs: number) => number;
   onSeek: (secs: number) => void;
   onSelect: (selection: Selection | null) => void;
   onDragClip: () => void;
@@ -51,6 +53,7 @@ export function WaveformView({
   playheadSecs,
   selection,
   clipReady,
+  snapPointer,
   onSeek,
   onSelect,
   onDragClip,
@@ -58,13 +61,42 @@ export function WaveformView({
   const { t } = useTranslation("library");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wellRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ startX: number; startSecs: number; edge: "start" | "end" | null } | null>(
-    null,
-  );
+  const dragRef = useRef<{
+    startX: number;
+    startSecs: number;
+    edge: "start" | "end" | null;
+    /** Clicked outside an existing selection: clear on release unless a drag starts. */
+    pendingClear: boolean;
+    /** Click (not drag) should seek+play on release. */
+    pendingSeek: boolean;
+  } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [hoverSecs, setHoverSecs] = useState<number | null>(null);
+  const hoverRawRef = useRef<number | null>(null);
 
   const duration = peaks ? peaks.duration_ms / 1000 : 0;
   const lanes = mode === "stereo" && (peaks?.channels ?? 0) >= 2 ? 2 : 1;
+
+  const publishHover = useCallback(
+    (raw: number | null) => {
+      hoverRawRef.current = raw;
+      setHoverSecs(raw == null || dragRef.current != null ? null : snapPointer(raw));
+    },
+    [snapPointer],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Shift") return;
+      publishHover(hoverRawRef.current);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
+    };
+  }, [publishHover]);
 
   /* Keep the canvas matched to its box. */
   useEffect(() => {
@@ -163,14 +195,37 @@ export function WaveformView({
   const onPointerDown = (e: React.PointerEvent, edge: "start" | "end" | null) => {
     if (e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    const secs = secsAt(e.clientX);
-    dragRef.current = { startX: e.clientX, startSecs: secs, edge };
-    if (edge == null) onSeek(secs);
+    publishHover(null);
+    const raw = secsAt(e.clientX);
+    /* Match the hover line: selection/seek anchors on the snapped grid (unless Shift). */
+    const secs = edge == null ? snapPointer(raw) : raw;
+    if (edge == null && selection && (secs < selection.start || secs > selection.end)) {
+      /* Outside the region: wait to see if this is a click (clear) or a drag (new selection). */
+      dragRef.current = {
+        startX: e.clientX,
+        startSecs: secs,
+        edge: null,
+        pendingClear: true,
+        pendingSeek: false,
+      };
+      return;
+    }
+    dragRef.current = {
+      startX: e.clientX,
+      startSecs: secs,
+      edge,
+      pendingClear: false,
+      /* Seek only once we know this was a click, not the start of a drag. */
+      pendingSeek: edge == null,
+    };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag) {
+      publishHover(secsAt(e.clientX));
+      return;
+    }
     const secs = secsAt(e.clientX);
     if (drag.edge === "start" && selection) {
       onSelect({ start: Math.min(secs, selection.end), end: selection.end });
@@ -181,6 +236,8 @@ export function WaveformView({
       return;
     }
     if (Math.abs(e.clientX - drag.startX) < MIN_DRAG_PX) return;
+    drag.pendingClear = false;
+    drag.pendingSeek = false;
     onSelect({ start: Math.min(drag.startSecs, secs), end: Math.max(drag.startSecs, secs) });
   };
 
@@ -188,7 +245,15 @@ export function WaveformView({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+    const drag = dragRef.current;
     dragRef.current = null;
+    publishHover(secsAt(e.clientX));
+    if (!drag) return;
+    if (drag.pendingClear) {
+      onSelect(null);
+      return;
+    }
+    if (drag.pendingSeek) onSeek(drag.startSecs);
   };
 
   /* The pill only offers the drag once the clip behind it exists. */
@@ -202,106 +267,114 @@ export function WaveformView({
     : null;
 
   return (
-    <div
-      ref={wellRef}
-      className="wave-well"
-      onPointerDown={(e) => {
-        onPointerDown(e, null);
-      }}
-      onPointerMove={onPointerMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
-    >
-      {gridStyle ? <div className="wave-grid" style={gridStyle} aria-hidden /> : null}
-
-      <canvas ref={canvasRef} className="wave-canvas" aria-label={t("waveform")} />
-
-      <div className="wave-ruler" aria-hidden>
+    <div className="wave-stack">
+      <div className="wave-time-ruler" aria-hidden>
         {rulerMarks.map((mark) => (
           <span key={mark} className="wave-ruler-mark" style={{ left: `${pct(mark)}%` }}>
             {formatTime(mark)}
           </span>
         ))}
       </div>
+      <div
+        ref={wellRef}
+        className="wave-well"
+        onPointerDown={(e) => {
+          onPointerDown(e, null);
+        }}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onPointerLeave={() => {
+          if (!dragRef.current) publishHover(null);
+        }}
+      >
+        {gridStyle ? <div className="wave-grid" style={gridStyle} aria-hidden /> : null}
 
-      <span className="wave-lane-label" style={{ top: 5 }} aria-hidden>
-        {lanes === 2 ? "L" : "M"}
-      </span>
-      {lanes === 2 ? (
-        <span className="wave-lane-label" style={{ top: "calc(50% + 5px)" }} aria-hidden>
-          R
+        <canvas ref={canvasRef} className="wave-canvas" aria-label={t("waveform")} />
+
+        <span className="wave-lane-label" style={{ top: 5 }} aria-hidden>
+          {lanes === 2 ? "L" : "M"}
         </span>
-      ) : null}
+        {lanes === 2 ? (
+          <span className="wave-lane-label" style={{ top: "calc(50% + 5px)" }} aria-hidden>
+            R
+          </span>
+        ) : null}
 
-      {selection ? (
-        <>
-          <div className="wave-dim" style={{ left: 0, width: `${pct(selection.start)}%` }} />
-          <div
-            className="wave-dim"
-            style={{ right: 0, width: `${100 - pct(selection.end)}%` }}
-          />
-          <div
-            className={`wave-selection${clipReady ? " draggable" : ""}`}
-            draggable={clipReady}
-            style={{
-              left: `${pct(selection.start)}%`,
-              width: `${pct(selection.end) - pct(selection.start)}%`,
-            }}
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "copy";
-              onDragClip();
-            }}
-          />
-          <div
-            className="wave-handle"
-            role="slider"
-            tabIndex={0}
-            aria-label={t("selectionStart")}
-            aria-valuenow={selection.start}
-            aria-valuemin={0}
-            aria-valuemax={duration}
-            style={{ left: `${pct(selection.start)}%` }}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onPointerDown(e, "start");
-            }}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-          >
-            <span />
-          </div>
-          <div
-            className="wave-handle"
-            role="slider"
-            tabIndex={0}
-            aria-label={t("selectionEnd")}
-            aria-valuenow={selection.end}
-            aria-valuemin={0}
-            aria-valuemax={duration}
-            style={{ left: `${pct(selection.end)}%` }}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onPointerDown(e, "end");
-            }}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-          >
-            <span />
-          </div>
-          {spanLabel ? (
-            <div className="wave-clip-pill" style={{ left: `${pct(selection.start)}%` }}>
-              {spanLabel}
+        {selection ? (
+          <>
+            <div className="wave-dim" style={{ left: 0, width: `${pct(selection.start)}%` }} />
+            <div
+              className="wave-dim"
+              style={{ right: 0, width: `${100 - pct(selection.end)}%` }}
+            />
+            <div
+              className={`wave-selection${clipReady ? " draggable" : ""}`}
+              draggable={clipReady}
+              style={{
+                left: `${pct(selection.start)}%`,
+                width: `${pct(selection.end) - pct(selection.start)}%`,
+              }}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "copy";
+                onDragClip();
+              }}
+            />
+            <div
+              className="wave-handle"
+              role="slider"
+              tabIndex={0}
+              aria-label={t("selectionStart")}
+              aria-valuenow={selection.start}
+              aria-valuemin={0}
+              aria-valuemax={duration}
+              style={{ left: `${pct(selection.start)}%` }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onPointerDown(e, "start");
+              }}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+            >
+              <span />
             </div>
-          ) : null}
-        </>
-      ) : null}
+            <div
+              className="wave-handle"
+              role="slider"
+              tabIndex={0}
+              aria-label={t("selectionEnd")}
+              aria-valuenow={selection.end}
+              aria-valuemin={0}
+              aria-valuemax={duration}
+              style={{ left: `${pct(selection.end)}%` }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onPointerDown(e, "end");
+              }}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+            >
+              <span />
+            </div>
+            {spanLabel ? (
+              <div className="wave-clip-pill" style={{ left: `${pct(selection.start)}%` }}>
+                {spanLabel}
+              </div>
+            ) : null}
+          </>
+        ) : null}
 
-      {playheadSecs != null && duration > 0 ? (
-        <>
-          <div className="wave-playhead" style={{ left: `${pct(playheadSecs)}%` }} />
-          <div className="wave-playhead-cap" style={{ left: `${pct(playheadSecs)}%` }} />
-        </>
-      ) : null}
+        {hoverSecs != null ? (
+          <div className="wave-hover-cursor" style={{ left: `${pct(hoverSecs)}%` }} aria-hidden />
+        ) : null}
+
+        {playheadSecs != null && duration > 0 ? (
+          <>
+            <div className="wave-playhead" style={{ left: `${pct(playheadSecs)}%` }} />
+            <div className="wave-playhead-cap" style={{ left: `${pct(playheadSecs)}%` }} />
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

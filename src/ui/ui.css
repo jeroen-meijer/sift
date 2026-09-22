@@ -1,6 +1,6 @@
 /* Primitives shared across views. Geometry follows Sift.dc.html exactly. */
 
-/* — switch ————————————————————————————————————————— */
+/* --- switch --- */
 
 .switch {
   width: 34px;
@@ -35,54 +35,75 @@
   background: var(--color-neutral-100);
 }
 
-/* — segmented ——————————————————————————————————————— */
+/* --- segmented --- */
 
 .seg {
+  position: relative;
   display: inline-flex;
   flex: none;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--color-sunken);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+.seg-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 7px;
+  background: var(--color-accent-fill);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.seg-thumb.ready {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    width var(--motion-base) var(--motion-ease);
 }
 
 .seg-opt {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 5px 11px;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
   font-size: 12px;
   color: var(--color-text-muted);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.seg-opt + .seg-opt {
-  border-left: 1px solid var(--color-border);
-}
-
-.seg-opt input {
-  position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.seg-opt:has(input:checked) {
+.seg-opt.on {
   color: var(--color-accent-soft);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 
-.seg-opt:not(:has(input:checked)):hover {
-  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+.seg-opt:not(.on):hover {
+  color: var(--color-text);
 }
 
-.seg-opt:has(input:focus-visible) {
+.seg-opt:focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+  outline-offset: 1px;
 }
 
-/* — sliders ————————————————————————————————————————— */
+@media (prefers-reduced-motion: reduce) {
+  .seg-thumb.ready {
+    transition: none;
+  }
+}
+
+/* --- sliders --- */
 
 .slider,
 .range-slider-input {
@@ -155,7 +176,7 @@
   pointer-events: auto;
 }
 
-/* — checkbox ————————————————————————————————————————— */
+/* --- checkbox --- */
 
 .checkbox-row {
   display: flex;
@@ -206,7 +227,7 @@
   color: var(--color-text-dim-2);
 }
 
-/* — pill select ————————————————————————————————————— */
+/* --- pill select --- */
 
 .pill-select {
   position: relative;
@@ -263,16 +284,17 @@
   outline-offset: 1px;
 }
 
-/* — dialog —————————————————————————————————————————— */
+/* --- dialog --- */
 
 .dialog-scrim {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 50;
   display: grid;
   place-items: center;
   padding: 20px;
   background: color-mix(in srgb, var(--color-bg-deep) 62%, transparent);
+  animation: dialog-scrim-in var(--motion-base) var(--motion-ease) both;
 }
 
 .dialog-card {
@@ -281,14 +303,51 @@
   overflow-y: auto;
   padding: 18px;
   border-radius: var(--radius-lg);
-  background: var(--color-elevated);
+  background: var(--color-bg-input);
   box-shadow:
-    0 0 0 1px var(--color-neutral-600),
+    0 0 0 1px var(--color-text-ghost),
     0 26px 60px rgb(0 0 0 / 72%);
+  animation: dialog-card-in var(--motion-base) var(--motion-ease) both;
+  transform-origin: 50% 40%;
+}
+
+.dialog-card.bare {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(820px, calc(100% - 24px));
 }
 
 .dialog-card:focus {
   outline: none;
+}
+
+@keyframes dialog-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-slide)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-scrim,
+  .dialog-card {
+    animation-duration: 1ms;
+  }
 }
 
 .dialog-title {
@@ -346,7 +405,7 @@
   color: var(--color-text-faint);
 }
 
-/* — menu ———————————————————————————————————————————— */
+/* --- menu --- */
 
 .menu {
   position: fixed;
@@ -355,11 +414,23 @@
   padding: 5px;
   overflow-y: auto;
   border-radius: 9px;
-  background: var(--color-elevated);
+  background: var(--color-bg-input);
   box-shadow:
     0 0 0 1px var(--color-text-ghost),
     0 18px 44px rgb(0 0 0 / 72%);
   font-size: 12.5px;
+  /* Opacity only. Transform would pin position:fixed flyouts to the menu
+     and open them off-screen or clipped. */
+  animation: menu-in var(--motion-base) var(--motion-ease) both;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .menu-rule {
@@ -413,16 +484,36 @@
 }
 
 .menu-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  opacity: 0.5;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  opacity: 0.55;
+}
+
+.menu-hint-mod {
+  font-size: 1.08em;
+  line-height: 1;
+}
+
+.menu-hint-key {
+  font-size: 1em;
+  line-height: 1;
 }
 
 .menu-caret {
   margin-left: auto;
   flex: none;
   opacity: 0.55;
+}
+
+.menu-hint + .menu-caret {
+  margin-left: 4px;
 }
 
 .menu-item:hover:not(:disabled) .menu-caret {
@@ -436,13 +527,20 @@
 /* Placed from its trigger's box by Menu, so it can be clamped to the window. */
 .menu-flyout {
   position: fixed;
+  z-index: 70;
   width: 176px;
-  --flyout-from: calc(var(--motion-slide) * -1);
+  overflow: visible;
+  --flyout-from: -8px;
   animation: menu-flyout-in var(--motion-base) var(--motion-ease) both;
 }
 
 .menu-flyout.left {
-  --flyout-from: var(--motion-slide);
+  --flyout-from: 8px;
+}
+
+.menu-flyout.leaving {
+  animation-name: menu-flyout-out;
+  pointer-events: none;
 }
 
 @keyframes menu-flyout-in {
@@ -453,17 +551,30 @@
 
   to {
     opacity: 1;
-    transform: none;
+    transform: translateX(0);
+  }
+}
+
+@keyframes menu-flyout-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(var(--flyout-from));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .menu,
   .menu-flyout {
     animation-duration: 1ms;
   }
 }
 
-/* — popover ————————————————————————————————————————— */
+/* --- popover --- */
 
 .popover {
   position: absolute;
@@ -474,19 +585,40 @@
   overflow-y: auto;
   padding: 5px;
   border-radius: 9px;
-  background: var(--color-elevated);
+  background: var(--color-bg-input);
   box-shadow:
     0 0 0 1px var(--color-text-ghost),
     0 18px 44px rgb(0 0 0 / 72%);
   font-size: 12.5px;
+  transform-origin: top right;
+  animation: popover-in var(--motion-base) var(--motion-ease) both;
+}
+
+.popover-left {
+  left: 0;
+  transform-origin: top left;
 }
 
 .popover-right {
   right: 0;
 }
 
-.popover-left {
-  left: 0;
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--motion-slide) * -0.4)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .popover {
+    animation-duration: 1ms;
+  }
 }
 
 .popover button {
@@ -517,6 +649,14 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-text-faint);
+}
+
+.popover-search {
+  width: calc(100% - 8px);
+  margin: 2px 4px 6px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 

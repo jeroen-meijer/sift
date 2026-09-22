@@ -1,33 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ipc, type PeakData } from "../lib/ipc";
-
-/** Peaks are immutable per sample, so one cache serves every row that scrolls by. */
-const peakCache = new Map<number, PeakData>();
-const inFlight = new Map<number, Promise<PeakData | null>>();
-
-function loadPeaks(sampleId: number): Promise<PeakData | null> {
-  const cached = peakCache.get(sampleId);
-  if (cached) return Promise.resolve(cached);
-  const existing = inFlight.get(sampleId);
-  if (existing) return existing;
-  const request = ipc
-    .getPeaks(sampleId)
-    .then((data) => {
-      peakCache.set(sampleId, data);
-      return data;
-    })
-    .catch(() => null)
-    .finally(() => inFlight.delete(sampleId));
-  inFlight.set(sampleId, request);
-  return request;
-}
+import { cachedRowPeaks, loadRowPeaks } from "../lib/rowPeaks";
 
 interface Props {
   sampleId: number;
   missing: boolean;
   analyzing: boolean;
   selected: boolean;
-  /** Fraction 0–1 of the playhead, or null when this row is not playing. */
+  /** Fraction 0-1 of the playhead, or null when this row is not playing. */
   progress: number | null;
   onScrub?: ((fraction: number) => void) | undefined;
 }
@@ -42,15 +21,22 @@ export function RowWaveform({
   onScrub,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [peaks, setPeaks] = useState<PeakData | null>(() => peakCache.get(sampleId) ?? null);
+  const [peaks, setPeaks] = useState(() => cachedRowPeaks(sampleId));
   const [hoverFraction, setHoverFraction] = useState<number | null>(null);
 
   const idle = missing || analyzing;
 
   useEffect(() => {
-    if (idle) return;
+    if (idle) {
+      setPeaks(null);
+      return;
+    }
+    /* Virtual rows reuse this component; sync from cache before any fetch. */
+    const cached = cachedRowPeaks(sampleId);
+    setPeaks(cached);
+    if (cached) return;
     let alive = true;
-    void loadPeaks(sampleId).then((data) => {
+    void loadRowPeaks(sampleId).then((data) => {
       if (alive) setPeaks(data);
     });
     return () => {

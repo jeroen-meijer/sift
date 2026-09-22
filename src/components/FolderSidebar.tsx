@@ -167,32 +167,35 @@ export function FolderSidebar({
             <SlidersHorizontalIcon size={12} />
           </button>
         </div>
-        {tagsOpen ? (
-          <div className="sidebar-scroll sidebar-tags-scroll">
-            {flatTags.map(({ node, depth }) => {
-              const selected = selectedTagPath === node.path;
-              return (
-                <button
-                  key={node.id}
-                  type="button"
-                  className={`tree-row tag${selected ? " selected" : ""}`}
-                  aria-pressed={selected}
-                  onClick={() => {
-                    onSelectTag(selected ? null : node.path);
-                  }}
-                >
-                  <span className="tree-pad" style={{ width: 8 + depth * 12 }} />
-                  <span
-                    className="tree-dot"
-                    style={{ background: tagPalette(node.path, node.color).dot }}
-                  />
-                  <span className="tree-name">{node.path}</span>
-                  <span className="tree-count">{formatCount(node.sample_count)}</span>
-                </button>
-              );
-            })}
+        <div className={`sidebar-tags-body${tagsOpen ? " open" : ""}`}>
+          <div className="sidebar-tags-body-inner">
+            <div className="sidebar-scroll sidebar-tags-scroll">
+              {flatTags.map(({ node, depth }) => {
+                const selected = selectedTagPath === node.path;
+                return (
+                  <button
+                    key={node.id}
+                    type="button"
+                    className={`tree-row tag${selected ? " selected" : ""}`}
+                    aria-pressed={selected}
+                    tabIndex={tagsOpen ? 0 : -1}
+                    onClick={() => {
+                      onSelectTag(selected ? null : node.path);
+                    }}
+                  >
+                    <span className="tree-pad" style={{ width: 8 + depth * 12 }} />
+                    <span
+                      className="tree-dot"
+                      style={{ background: tagPalette(node.path, node.color).dot }}
+                    />
+                    <span className="tree-name">{node.path}</span>
+                    <span className="tree-count">{formatCount(node.sample_count)}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        ) : null}
+        </div>
       </div>
     </aside>
   );

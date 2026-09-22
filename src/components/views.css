@@ -32,19 +32,51 @@
   color: var(--color-text-faint);
 }
 
-/* — settings ————————————————————————————————————————— */
+/* --- settings --- */
+
+.settings-dialog {
+  height: min(720px, calc(100% - 48px));
+}
+
+.settings-modal {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  background: var(--color-bg-input);
+}
+
+.settings-modal .full-view-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tags-modal .tag-list {
+  width: 260px;
+}
 
 .settings-nav {
   width: 212px;
   flex: none;
   padding: 14px 9px;
-  background: var(--color-bg-sidebar);
+  background: var(--color-bg-input);
   border-right: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 7px;
+  margin-bottom: 13px;
 }
 
 .settings-nav-title {
-  padding: 0 7px;
-  margin-bottom: 13px;
+  margin: 0;
   font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 500;
@@ -99,6 +131,79 @@
 
 .settings-section-label {
   margin-bottom: 11px;
+}
+
+.settings-themes-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.settings-themes-head .settings-section-label {
+  margin-bottom: 0;
+}
+
+.settings-themes-count {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.theme-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.theme-card:hover {
+  background: var(--color-surface-hover);
+}
+
+.theme-card.on {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  background: var(--color-accent-fill);
+}
+
+.theme-card-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.theme-card-blurb {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.theme-card-swatches {
+  display: flex;
+  gap: 4px;
+  flex: none;
+  padding-top: 1px;
+}
+
+.theme-swatch {
+  width: 8px;
+  height: 22px;
+  border-radius: 99px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 18%, transparent);
 }
 
 .settings-row {
@@ -240,30 +345,36 @@
   color: var(--color-accent-soft);
 }
 
-/* — tag management ——————————————————————————————————— */
+/* --- tag management --- */
 
 .tag-list {
   width: 300px;
   flex: none;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-sidebar);
+  background: var(--color-bg-input);
   border-right: 1px solid var(--color-divider);
 }
 
-.tag-list-header {
-  height: 42px;
-  flex: none;
+.tag-list-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px 0 14px;
+  gap: 8px;
+  padding: 14px 9px 8px;
 }
 
 .tag-list-title {
+  margin: 0;
+  padding: 0 7px;
   font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 500;
+}
+
+.tag-list-toolbar {
+  display: flex;
+  padding: 0 10px 8px;
 }
 
 .tag-list-filter {
@@ -480,7 +591,7 @@
   color: var(--color-danger);
 }
 
-/* — dialog contents —————————————————————————————————— */
+/* --- dialog contents --- */
 
 .dialog-title-lg {
   font-size: 18px;

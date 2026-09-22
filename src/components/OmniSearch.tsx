@@ -9,13 +9,16 @@ import {
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { tagPalette } from "../lib/tagColors";
+import { keys, matchesBinding } from "../lib/bindings";
 import {
   EMPTY_OMNI,
   OPTIONAL_COLUMNS,
+  folderChipLabel,
   omniHasQuery,
   type OmniState,
   type OptionalColumn,
 } from "../lib/omni";
+import type { FolderNode } from "../lib/ipc";
 import { Popover } from "../ui/Popover";
 
 interface ChipProps {
@@ -56,6 +59,7 @@ function Chip({ prefix, value, dot, toggle, onRemove, removeLabel }: ChipProps) 
 interface Props {
   value: OmniState;
   onChange: (next: OmniState) => void;
+  folders: FolderNode[];
   halfDouble: boolean;
   relativeKey: boolean;
   onToggleHalfDouble: () => void;
@@ -72,6 +76,7 @@ interface Props {
 export function OmniSearch({
   value,
   onChange,
+  folders,
   halfDouble,
   relativeKey,
   onToggleHalfDouble,
@@ -87,6 +92,7 @@ export function OmniSearch({
   const { t } = useTranslation("common");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const hasQuery = omniHasQuery(value);
+  const roots = folders.filter((node) => node.is_root);
 
   const chips: ReactNode[] = [];
   if (value.folder != null) {
@@ -94,7 +100,7 @@ export function OmniSearch({
       <Chip
         key="folder"
         prefix={t("chipFolder")}
-        value={value.folder}
+        value={folderChipLabel(value.folder, roots)}
         removeLabel={t("clear")}
         onRemove={() => {
           onChange({ ...value, folder: null });
@@ -121,7 +127,7 @@ export function OmniSearch({
       <Chip
         key="bpm"
         prefix={t("chipBpm")}
-        value={`${value.bpmMin ?? "…"}–${value.bpmMax ?? "…"}`}
+        value={`${value.bpmMin ?? "…"}-${value.bpmMax ?? "…"}`}
         toggle={{ label: t("halfDouble"), on: halfDouble, onToggle: onToggleHalfDouble }}
         removeLabel={t("clear")}
         onRemove={() => {
@@ -167,7 +173,7 @@ export function OmniSearch({
               onChange({ ...value, text: e.target.value });
             }}
             onKeyDown={(e) => {
-              if (e.key === "Backspace" && value.text === "") dropLastChip();
+              if (matchesBinding(e, keys.dropChip) && value.text === "") dropLastChip();
             }}
           />
         </div>
@@ -212,6 +218,10 @@ export function OmniSearch({
             title={t("columns")}
             aria-label={t("columns")}
             aria-expanded={columnsOpen}
+            onPointerDown={(e) => {
+              /* Keep the popover's outside-close from racing the toggle. */
+              if (columnsOpen) e.stopPropagation();
+            }}
             onClick={() => {
               setColumnsOpen((open) => !open);
             }}

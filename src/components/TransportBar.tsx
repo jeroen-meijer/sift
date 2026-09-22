@@ -1,5 +1,6 @@
 import { RepeatIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
+import { keys } from "../lib/bindings";
 import { formatDb } from "../lib/format";
 import type { SnapMode } from "../lib/ipc";
 import { PillSelect } from "../ui/PillSelect";
@@ -65,16 +66,16 @@ export function TransportBar({
 
       <div className="transport-hints">
         <span>
-          <em>Enter</em> {t("hintPlayStart")}
+          <em>{keys.play.hint}</em> {t("hintPlayStart")}
         </span>
         <span>
-          <em>Space</em> {t("hintPause")}
+          <em>{keys.pause.hint}</em> {t("hintPause")}
         </span>
         <span>
-          <em>⇧drag</em> {t("hintFreeTime")}
+          <em>{keys.freeTime.hint}drag</em> {t("hintFreeTime")}
         </span>
         <span>
-          <em>Z</em> {t("hintZeroCross")}
+          <em>{keys.zeroCrossing.hint}</em> {t("hintZeroCross")}
         </span>
       </div>
     </div>

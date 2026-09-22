@@ -1,5 +1,9 @@
 /** Every Tauri command Sift calls, with the shapes the Rust side sends back. */
 import { invoke } from "@tauri-apps/api/core";
+import type { ColumnWidths } from "./columnWidths";
+import { DEFAULT_COLUMN_WIDTHS } from "./columnWidths";
+
+export type { ColumnWidths } from "./columnWidths";
 
 export interface TagChip {
   id: number;
@@ -148,6 +152,9 @@ export interface AppSettings {
   relative_key: boolean;
   hold_hover_hotkey: string | null;
   clips_dir: string;
+  column_widths: ColumnWidths;
+  /** Color palette id (`nocturne` | `ink` | `graphite` | `snow`). */
+  theme: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -170,6 +177,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   relative_key: false,
   hold_hover_hotkey: null,
   clips_dir: "",
+  column_widths: { ...DEFAULT_COLUMN_WIDTHS },
+  theme: "nocturne",
 };
 
 /** Commands that return unit on the Rust side. */
@@ -202,8 +211,20 @@ export const ipc = {
   redo: () => invoke<boolean>("redo_meta"),
 
   getPeaks: (sampleId: number) => invoke<PeakData>("get_peaks", { sampleId }),
-  play: (sampleId: number, startSecs: number | null) =>
-    run("play_sample", { sampleId, startSecs }),
+  play: (
+    sampleId: number,
+    startSecs: number | null,
+    region?: { start: number; end: number } | null,
+  ) =>
+    run("play_sample", {
+      sampleId,
+      startSecs,
+      regionStartSecs: region?.start ?? null,
+      regionEndSecs: region?.end ?? null,
+    }),
+  /** Retune the loop window of a running preview without restarting it. */
+  setPlayRegion: (region: { start: number; end: number } | null) =>
+    run("set_play_region", { startSecs: region?.start ?? null, endSecs: region?.end ?? null }),
   pause: () => run("pause_playback"),
   resume: () => run("resume_playback"),
   stop: () => run("stop_playback"),

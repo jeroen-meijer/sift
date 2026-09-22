@@ -41,7 +41,7 @@ describe("placeMenu", () => {
     expect(placeMenu(0, 0, 400, VIEWPORT)).toMatchObject({ left: EDGE_GAP, top: EDGE_GAP });
   });
 
-  it("scrolls rather than overflowing when taller than the window", () => {
+  it("scrolls when taller than the window", () => {
     const short: Viewport = { width: 1440, height: 240 };
     const placed = placeMenu(100, 100, 600, short);
     expect(placed.top).toBe(EDGE_GAP);

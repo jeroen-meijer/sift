@@ -32,6 +32,7 @@ interface Props {
   onRemoveTag: (tagId: number) => void;
   onSeek: (secs: number) => void;
   onSelect: (selection: Selection | null) => void;
+  snapPointer: (secs: number) => number;
   onDragClip: () => void;
   onSnapChange: (snap: SnapMode) => void;
   onLoopChange: (on: boolean) => void;
@@ -57,6 +58,7 @@ export function DetailPane({
   onRemoveTag,
   onSeek,
   onSelect,
+  snapPointer,
   onDragClip,
   onSnapChange,
   onLoopChange,
@@ -67,14 +69,17 @@ export function DetailPane({
 }: Props) {
   const { t } = useTranslation("library");
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [tagFilter, setTagFilter] = useState("");
 
   const available = useMemo(() => {
     if (!sample) return [];
     const onSample = new Set(sample.tags.map((tag) => tag.id));
+    const needle = tagFilter.trim().toLowerCase();
     return flattenTags(allTags)
       .map(({ node }) => node)
-      .filter((node) => !onSample.has(node.id));
-  }, [allTags, sample]);
+      .filter((node) => !onSample.has(node.id))
+      .filter((node) => !needle || node.path.toLowerCase().includes(needle));
+  }, [allTags, sample, tagFilter]);
 
   if (!sample) {
     return (
@@ -138,6 +143,9 @@ export function DetailPane({
               title={t("addTag")}
               aria-label={t("addTag")}
               aria-expanded={tagPickerOpen}
+              onPointerDown={(e) => {
+                if (tagPickerOpen) e.stopPropagation();
+              }}
               onClick={() => {
                 setTagPickerOpen((open) => !open);
               }}
@@ -149,10 +157,26 @@ export function DetailPane({
                 label={t("addTag")}
                 onClose={() => {
                   setTagPickerOpen(false);
+                  setTagFilter("");
                 }}
               >
+                <input
+                  className="input popover-search"
+                  value={tagFilter}
+                  placeholder={t("tagFilterPlaceholder")}
+                  aria-label={t("tagFilterPlaceholder")}
+                  autoFocus
+                  onChange={(e) => {
+                    setTagFilter(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                />
                 {available.length === 0 ? (
-                  <div className="popover-label">{t("noMoreTags")}</div>
+                  <div className="popover-label">
+                    {tagFilter.trim() ? t("tagFilterEmpty") : t("noMoreTags")}
+                  </div>
                 ) : (
                   available.map((node) => (
                     <button
@@ -161,6 +185,7 @@ export function DetailPane({
                       onClick={() => {
                         onAddTag(node.id);
                         setTagPickerOpen(false);
+                        setTagFilter("");
                       }}
                     >
                       <span
@@ -225,6 +250,7 @@ export function DetailPane({
               playheadSecs={playheadSecs}
               selection={selection}
               clipReady={clipReady}
+              snapPointer={snapPointer}
               onSeek={onSeek}
               onSelect={onSelect}
               onDragClip={onDragClip}

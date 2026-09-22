@@ -4,6 +4,7 @@
   flex: 1;
   display: flex;
   min-height: 0;
+  user-select: none;
 }
 
 .library-main {
@@ -14,7 +15,7 @@
   background: var(--color-bg);
 }
 
-/* — omni bar ———————————————————————————————————————— */
+/* --- omni bar --- */
 
 .omni-bar {
   height: var(--omnibar-height);
@@ -242,7 +243,7 @@
   color: inherit;
 }
 
-/* — sidebar ————————————————————————————————————————— */
+/* --- sidebar --- */
 
 .sidebar {
   width: var(--sidebar-width);
@@ -304,6 +305,21 @@
   border-top: 1px solid var(--color-divider);
 }
 
+.sidebar-tags-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-base) var(--motion-ease);
+}
+
+.sidebar-tags-body.open {
+  grid-template-rows: 1fr;
+}
+
+.sidebar-tags-body-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
 .sidebar-tags-scroll {
   flex: none;
   max-height: 190px;
@@ -323,7 +339,13 @@
   color: var(--color-text-muted);
 }
 
-/* — tree rows (folders and tags share the shape) ————————— */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-tags-body {
+    transition: none;
+  }
+}
+
+/* --- tree rows (folders and tags share the shape) --- */
 
 .tree-row {
   position: relative;
@@ -443,7 +465,7 @@
   border-radius: 2px;
 }
 
-/* — sample table ————————————————————————————————————— */
+/* --- sample table --- */
 
 .sample-table {
   flex: 1;
@@ -471,6 +493,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -483,6 +506,51 @@
 
 .sample-table-header button.col:hover {
   color: var(--color-text-muted);
+}
+
+.col-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+}
+
+.col-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 2;
+  width: 7px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.col-resize::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 3px;
+  width: 1px;
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.col-header:hover .col-resize::after,
+.col-resize:hover::after,
+body.col-resizing .col-resize::after {
+  opacity: 1;
+}
+
+body.col-resizing,
+body.col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .sort-mark {
@@ -507,6 +575,8 @@
   border-bottom: 1px solid var(--color-hairline);
   font-size: 12px;
   color: var(--color-neutral-400);
+  user-select: none;
+  cursor: default;
 }
 
 .sample-row:hover {
@@ -525,6 +595,7 @@
 }
 
 .sample-row .col.fav {
+  position: relative;
   display: grid;
   place-items: center;
   padding: 0;
@@ -539,6 +610,27 @@
 
 .sample-row .col.fav:hover {
   color: var(--color-accent-soft);
+}
+
+.sample-row .col.fav .fav-play {
+  display: none;
+  color: var(--color-accent-soft);
+}
+
+.sample-row .col.fav.playing .fav-play {
+  display: block;
+}
+
+.sample-row .col.fav.playing .fav-star {
+  display: none;
+}
+
+.sample-row .col.fav.playing:hover .fav-play {
+  display: none;
+}
+
+.sample-row .col.fav.playing:hover .fav-star {
+  display: block;
 }
 
 .sample-row .col.name {
@@ -558,6 +650,10 @@
   color: var(--color-text);
 }
 
+.name-ext {
+  color: var(--color-text-faint);
+}
+
 .sample-row.missing .name-text {
   color: var(--color-text-dim-2);
   text-decoration: line-through;
@@ -569,11 +665,6 @@
   border-radius: 2px;
   background: color-mix(in srgb, var(--color-accent) 34%, transparent);
   color: var(--color-accent-100);
-}
-
-.row-playing {
-  flex: none;
-  color: var(--color-accent-soft);
 }
 
 .row-missing-icon {
@@ -634,7 +725,7 @@
   color: var(--color-text-faint);
 }
 
-/* — row waveform ————————————————————————————————————— */
+/* --- row waveform --- */
 
 .row-wave {
   position: relative;
@@ -702,6 +793,7 @@
   background: var(--color-accent-soft);
   box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent-soft) 80%, transparent);
   pointer-events: none;
+  will-change: left;
 }
 
 .row-wave-cursor {
@@ -713,7 +805,7 @@
   pointer-events: none;
 }
 
-/* — selection bar ———————————————————————————————————— */
+/* --- selection bar --- */
 
 .selection-bar {
   height: 30px;
@@ -749,7 +841,7 @@
   gap: 7px;
 }
 
-/* — ask-before-index toast ———————————————————————————— */
+/* --- ask-before-index toast --- */
 
 .ask-toast {
   position: absolute;
@@ -761,7 +853,7 @@
   gap: 10px;
   padding: 13px 14px;
   border-radius: 10px;
-  background: var(--color-elevated);
+  background: var(--color-bg-input);
   box-shadow:
     0 0 0 1px var(--color-text-ghost),
     0 20px 46px rgb(0 0 0 / 66%);
@@ -824,11 +916,62 @@
   color: var(--color-text);
 }
 
-/* — set BPM panel ————————————————————————————————————— */
+/* --- set BPM panel --- */
 
 .bpm-panel {
   display: flex;
   flex-direction: column;
+}
+
+/* --- set key panel --- */
+
+.key-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.key-panel-search {
+  padding: 2px 9px 6px;
+}
+
+.key-panel-input {
+  width: 100%;
+  min-height: 22px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-size: 11.5px;
+}
+
+.key-panel-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.key-panel-row.active:not(:hover) {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-accent-soft);
+}
+
+.key-panel-row .menu-label {
+  flex: 1;
+  padding-left: 0;
+}
+
+.key-panel-tick {
+  flex: none;
+  margin-left: auto;
+  opacity: 0.85;
+}
+
+.key-panel-row.current .menu-label {
+  color: var(--color-accent-soft);
+}
+
+.key-panel-empty {
+  padding: 8px 9px;
+  font-size: 11px;
+  color: var(--color-text-faint);
 }
 
 .bpm-panel-field {

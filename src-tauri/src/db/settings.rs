@@ -38,7 +38,15 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
         "relative_key": false,
         "hold_hover_hotkey": null,
         "clips_dir": paths.clips_dir.to_string_lossy(),
-        "theme": "dark-default",
+        "column_widths": {
+            "name": 220,
+            "type": 58,
+            "bpm": 46,
+            "key": 54,
+            "wave": 180,
+            "tags": 210
+        },
+        "theme": "nocturne",
         "locale": "en"
     });
 

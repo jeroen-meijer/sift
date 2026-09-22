@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { keys, matchesBinding } from "../../lib/bindings";
 import { Dialog } from "../../ui/Dialog";
 
 interface Props {
@@ -37,7 +38,7 @@ export function SetValueDialog({
           setValue(e.target.value);
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") onApply(value);
+          if (matchesBinding(e, keys.confirm)) onApply(value);
         }}
       />
       <div className="dialog-actions">

@@ -1,7 +1,9 @@
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { keys, matchesBinding, primaryModHeld, shiftHeld as isShiftHeld } from "../lib/bindings";
 import { bpmFromBeats } from "../lib/bpm";
+import { mergeColumnWidths, type ColumnWidths } from "../lib/columnWidths";
 import { matchesHotkey } from "../lib/hotkey";
 import {
   ipc,
@@ -14,6 +16,7 @@ import {
   type SortColumn,
   type TagNode,
 } from "../lib/ipc";
+import { cachedRowPeaks } from "../lib/rowPeaks";
 import { DetailPane } from "./DetailPane";
 import { FolderSidebar } from "./FolderSidebar";
 import { EMPTY_OMNI, omniHasQuery, type OmniState, type OptionalColumn } from "../lib/omni";
@@ -25,11 +28,10 @@ import { StatusBar, type AnalysisBar } from "./StatusBar";
 import { CustomAnalysisDialog } from "./dialogs/CustomAnalysisDialog";
 import { RemoveMissingDialog } from "./dialogs/RemoveMissingDialog";
 import { RemoveRootDialog } from "./dialogs/RemoveRootDialog";
-import { SetValueDialog } from "./dialogs/SetValueDialog";
 import { TagPickerDialog } from "./dialogs/TagPickerDialog";
 import type { Selection } from "./WaveformView";
 
-const PLAYHEAD_POLL_MS = 40;
+const PLAYHEAD_POLL_MS = 50;
 /** Wait for the selection to settle before writing a clip for it. */
 const CLIP_RENDER_DEBOUNCE_MS = 250;
 const MIN_CLIP_SECS = 0.01;
@@ -38,7 +40,6 @@ type Dialog =
   | { kind: "removeRoot"; node: FolderNode }
   | { kind: "removeMissing"; sample: SampleRow }
   | { kind: "customAnalysis" }
-  | { kind: "setKey" }
   | { kind: "tags" };
 
 interface Props {
@@ -85,7 +86,14 @@ export function LibraryView({
   const [playhead, setPlayhead] = useState<number | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [clipPath, setClipPath] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; sample: SampleRow } | null>(null);
+  /** Scrubbing a row wave must not be overwritten by play-on-select from 0. */
+  const skipPlayOnSelect = useRef(false);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    sample: SampleRow;
+    openPanel?: "key" | "bpm";
+  } | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [customOpts, setCustomOpts] = useState<CustomAnalysisOpts>({
     overwrite_tags: false,
@@ -147,10 +155,27 @@ export function LibraryView({
 
   /* ── preview ───────────────────────────────────────────────────────── */
 
-  const play = useCallback((sampleId: number, startSecs: number | null) => {
-    setPlayingId(sampleId);
-    void ipc.play(sampleId, startSecs).catch(console.error);
-  }, []);
+  const play = useCallback(
+    (
+      sampleId: number,
+      startSecs: number | null,
+      region?: { start: number; end: number } | null,
+    ) => {
+      setPlayingId(sampleId);
+      void ipc.play(sampleId, startSecs, region).catch(console.error);
+    },
+    [],
+  );
+
+  /** Region to loop, only when the focused sample is a loop with a selection. */
+  const loopRegion = useCallback(
+    (sample: SampleRow | null | undefined, sel: Selection | null) => {
+      if (sample?.sample_type !== "loop" || !sel) return null;
+      if (sel.end - sel.start < MIN_CLIP_SECS) return null;
+      return sel;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (focusedId == null) {
@@ -169,32 +194,54 @@ export function LibraryView({
       .catch(() => {
         setPeaks(null);
       });
-    if (settings.play_on_select) play(focusedId, null);
+    if (skipPlayOnSelect.current) {
+      skipPlayOnSelect.current = false;
+      return;
+    }
+    if (settings.play_on_select) play(focusedId, null, null);
   }, [focusedId, settings.play_on_select, play]);
 
-  /* Poll the engine only while something is playing. */
+  /* Poll the engine for a truth sample, then interpolate between ticks with
+   * rAF so the playhead stays smooth on high-refresh displays. */
   useEffect(() => {
     if (playingId == null) {
       setPlayhead(null);
       return;
     }
-    let timer = 0;
+    let pollTimer = 0;
+    let raf = 0;
     let alive = true;
+    let anchorSecs = 0;
+    let anchorAt = performance.now();
+    let moving = false;
+
+    const paint = (now: number) => {
+      if (!alive) return;
+      const secs = moving ? anchorSecs + (now - anchorAt) / 1000 : anchorSecs;
+      setPlayhead(secs);
+      raf = window.requestAnimationFrame(paint);
+    };
+
     const tick = () => {
       void ipc
         .playbackState()
         .then((state) => {
           if (!alive) return;
-          setPlayhead(state.position_secs);
+          anchorSecs = state.position_secs;
+          anchorAt = performance.now();
+          moving = state.playing;
           if (!state.playing && state.position_secs <= 0) setPlayingId(null);
         })
         .catch(() => undefined);
-      timer = window.setTimeout(tick, PLAYHEAD_POLL_MS);
+      pollTimer = window.setTimeout(tick, PLAYHEAD_POLL_MS);
     };
+
     tick();
+    raf = window.requestAnimationFrame(paint);
     return () => {
       alive = false;
-      window.clearTimeout(timer);
+      window.clearTimeout(pollTimer);
+      window.cancelAnimationFrame(raf);
     };
   }, [playingId]);
 
@@ -213,14 +260,25 @@ export function LibraryView({
 
   const selectRow = useCallback(
     (id: number, e: React.MouseEvent | React.KeyboardEvent) => {
+      const mod = "metaKey" in e && primaryModHeld(e);
+      const shift = "shiftKey" in e && isShiftHeld(e);
+      /* Context menu selects the row but must not kick play-on-select. */
+      const fromContextMenu = "type" in e && e.type === "contextmenu";
+      /* Re-clicking the focused row restarts preview (Enter-equivalent). */
+      if (id === focusedId && !mod && !shift && !fromContextMenu) {
+        const row = samples.find((s) => s.id === id) ?? null;
+        const region = loopRegion(row, selection);
+        play(id, region?.start ?? null, region);
+      }
+      if (fromContextMenu) skipPlayOnSelect.current = true;
       setFocusedId(id);
       setSelectedIds((prev) => {
-        if (e.metaKey || e.ctrlKey) {
+        if (mod) {
           const next = new Set(prev);
           if (!next.delete(id)) next.add(id);
           return next;
         }
-        if (e.shiftKey && focusedId != null) {
+        if (shift && focusedId != null) {
           const from = samples.findIndex((s) => s.id === focusedId);
           const to = samples.findIndex((s) => s.id === id);
           if (from >= 0 && to >= 0) {
@@ -235,7 +293,7 @@ export function LibraryView({
         return new Set([id]);
       });
     },
-    [focusedId, samples],
+    [focusedId, samples, selection, play, loopRegion],
   );
 
   const selectedSamples = useMemo(
@@ -256,9 +314,8 @@ export function LibraryView({
   }, [selectedSamples]);
 
   /*
-   * Render the clip as soon as the selection settles. Doing it inside dragstart
-   * instead would put a decode between the gesture and the drag, and macOS has
-   * dropped the drag session by the time that finishes.
+   * Render the clip once the selection settles. Decoding inside dragstart is
+   * too late: macOS drops the drag session before the decode finishes.
    */
   useEffect(() => {
     setClipPath(null);
@@ -326,9 +383,6 @@ export function LibraryView({
             .catch(console.error);
           break;
         }
-        case "key":
-          setDialog({ kind: "setKey" });
-          break;
         case "showParent":
           setOmni((prev) => ({ ...prev, folder: sample.parent_path }));
           break;
@@ -407,7 +461,7 @@ export function LibraryView({
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      shiftHeld.current = e.shiftKey;
+      shiftHeld.current = isShiftHeld(e);
       if (matchesHotkey(e, settings.hold_hover_hotkey)) {
         e.preventDefault();
         setHoverPreviewHeld(true);
@@ -415,67 +469,104 @@ export function LibraryView({
       }
       if (isTyping(e.target)) return;
 
-      const mod = e.metaKey || e.ctrlKey;
-      const key = e.key.toLowerCase();
-
-      if (mod && key === "z") {
+      if (matchesBinding(e, keys.redo)) {
         e.preventDefault();
-        void (e.shiftKey ? ipc.redo() : ipc.undo()).then((ok) => {
+        void ipc.redo().then((ok) => {
           if (ok) reload();
         });
         return;
       }
-      if (mod && key === "o" && focused) {
+      if (matchesBinding(e, keys.undo)) {
+        e.preventDefault();
+        void ipc.undo().then((ok) => {
+          if (ok) reload();
+        });
+        return;
+      }
+      if (matchesBinding(e, keys.open) && focused) {
         e.preventDefault();
         void openPath(focused.path).catch(console.error);
         return;
       }
-      if (mod && key === "r" && focused) {
+      if (matchesBinding(e, keys.reveal) && focused) {
         e.preventDefault();
         void revealItemInDir(focused.path).catch(console.error);
         return;
       }
-      if (mod && key === "c" && selectedSamples.length > 0) {
+      if (matchesBinding(e, keys.copyPath) && selectedSamples.length > 0) {
         e.preventDefault();
-        const values = selectedSamples.map((s) => (e.altKey ? s.path : s.filename));
-        void navigator.clipboard.writeText(values.join("\n"));
+        void navigator.clipboard.writeText(selectedSamples.map((s) => s.path).join("\n"));
         return;
       }
-      if (mod) return;
-
-      if (key === "f" && focused) {
+      if (matchesBinding(e, keys.copyFilename) && selectedSamples.length > 0) {
         e.preventDefault();
+        void navigator.clipboard.writeText(selectedSamples.map((s) => s.filename).join("\n"));
+        return;
+      }
+      if (primaryModHeld(e)) return;
+
+      if (matchesBinding(e, keys.favorite) && focused) {
+        e.preventDefault();
+        e.stopPropagation();
         runAction("favorite", focused);
         return;
       }
-      if (key === "t" && focused) {
+      if (matchesBinding(e, keys.tags) && focused) {
         e.preventDefault();
+        e.stopPropagation();
         setDialog({ kind: "tags" });
         return;
       }
-      if (key === "z") {
+      if (matchesBinding(e, keys.cycleType) && focused) {
         e.preventDefault();
-        applyZeroCrossing(e.shiftKey);
+        e.stopPropagation();
+        const order = [null, "loop", "one-shot"] as const;
+        const idx = order.findIndex((value) => value === focused.sample_type);
+        const next = order[(idx < 0 ? 0 : idx + 1) % order.length] ?? null;
+        const action =
+          next == null ? "type:none" : next === "loop" ? "type:loop" : "type:one-shot";
+        runAction(action, focused);
         return;
       }
-      if (e.key === "Enter" && focusedId != null) {
+      if ((matchesBinding(e, keys.setKey) || matchesBinding(e, keys.setBpm)) && focused) {
         e.preventDefault();
-        play(focusedId, 0);
+        e.stopPropagation();
+        const el = document.querySelector(`[data-sample-id="${String(focused.id)}"]`);
+        const rect = el instanceof HTMLElement ? el.getBoundingClientRect() : null;
+        setMenu({
+          x: rect ? rect.left + 48 : Math.round(window.innerWidth / 2 - 100),
+          y: rect ? rect.bottom - 2 : Math.round(window.innerHeight / 3),
+          sample: focused,
+          openPanel: matchesBinding(e, keys.setKey) ? "key" : "bpm",
+        });
         return;
       }
-      if (e.key === " ") {
+      if (matchesBinding(e, keys.zeroCrossing)) {
         e.preventDefault();
-        void ipc.pause().catch(() => ipc.resume());
+        applyZeroCrossing(isShiftHeld(e));
         return;
       }
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (matchesBinding(e, keys.play) && focusedId != null) {
+        e.preventDefault();
+        const region = loopRegion(focused, selection);
+        play(focusedId, region?.start ?? 0, region);
+        return;
+      }
+      if (matchesBinding(e, keys.pause)) {
+        e.preventDefault();
+        void ipc
+          .playbackState()
+          .then((state) => (state.playing ? ipc.pause() : ipc.resume()))
+          .catch(console.error);
+        return;
+      }
+      if (matchesBinding(e, keys.selectDown) || matchesBinding(e, keys.selectUp)) {
         e.preventDefault();
         if (samples.length === 0) return;
         const current = focusedId == null ? -1 : samples.findIndex((s) => s.id === focusedId);
-        const next =
-          e.key === "ArrowDown"
-            ? Math.min(samples.length - 1, current + 1)
-            : Math.max(0, (current < 0 ? 0 : current) - 1);
+        const next = matchesBinding(e, keys.selectDown)
+          ? Math.min(samples.length - 1, current + 1)
+          : Math.max(0, (current < 0 ? 0 : current) - 1);
         const row = samples[next];
         if (!row) return;
         setFocusedId(row.id);
@@ -484,19 +575,20 @@ export function LibraryView({
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      shiftHeld.current = e.shiftKey;
+      shiftHeld.current = isShiftHeld(e);
       if (matchesHotkey(e, settings.hold_hover_hotkey)) setHoverPreviewHeld(false);
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
     };
   }, [
     focused,
     focusedId,
+    loopRegion,
     play,
     reload,
     runAction,
@@ -550,6 +642,7 @@ export function LibraryView({
           <OmniSearch
             value={omni}
             onChange={setOmni}
+            folders={folders}
             halfDouble={settings.half_double_bpm}
             relativeKey={settings.relative_key}
             onToggleHalfDouble={() => {
@@ -595,33 +688,49 @@ export function LibraryView({
             analyzingIds={analyzingIds}
             showWaveforms={settings.row_waveforms}
             hiddenColumns={hiddenColumns}
+            columnWidths={mergeColumnWidths(settings.column_widths)}
             sortColumn={settings.sort_column}
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
             hoverPreviewHeld={hoverPreviewHeld}
             onSelect={selectRow}
             onHoverPreview={(id) => {
+              skipPlayOnSelect.current = true;
               setFocusedId(id);
-              play(id, 0);
+              play(id, 0, null);
             }}
             onToggleFavorite={toggleFavorite}
             onSort={(column: SortColumn) => {
               if (settings.sort_column === column) {
-                onSettingChange("sort_direction", settings.sort_direction === "asc" ? "desc" : "asc");
+                if (settings.sort_direction === "asc") {
+                  onSettingChange("sort_direction", "desc");
+                } else {
+                  /* Third click: drop column sort and return to name ascending. */
+                  onSettingChange("sort_column", "name");
+                  onSettingChange("sort_direction", "asc");
+                }
               } else {
                 onSettingChange("sort_column", column);
                 onSettingChange("sort_direction", "asc");
               }
+            }}
+            onColumnWidthsChange={(widths: ColumnWidths) => {
+              onSettingChange("column_widths", widths);
             }}
             onOpenMenu={(x, y, sample) => {
               setMenu({ x, y, sample });
             }}
             onDragSelected={dragSelected}
             onScrubRow={(sample, fraction) => {
-              const duration = (sample.duration_ms ?? 0) / 1000;
+              const fromSample = (sample.duration_ms ?? 0) / 1000;
+              const fromPeaks = (cachedRowPeaks(sample.id)?.duration_ms ?? 0) / 1000;
+              const duration = fromSample > 0 ? fromSample : fromPeaks;
+              const start = duration > 0 ? fraction * duration : 0;
+              skipPlayOnSelect.current = true;
               setFocusedId(sample.id);
               setSelectedIds(new Set([sample.id]));
-              play(sample.id, duration > 0 ? fraction * duration : 0);
+              setPlayhead(start);
+              play(sample.id, start, null);
             }}
           />
 
@@ -652,13 +761,27 @@ export function LibraryView({
             onSeek={(secs) => {
               if (focusedId == null) return;
               const snapped = snapSecs(secs);
-              play(focusedId, snapped);
+              const region = loopRegion(focused, selection);
+              play(focusedId, snapped, region);
               setPlayhead(snapped);
             }}
+            snapPointer={snapSecs}
             onSelect={(next) => {
-              setSelection(
-                next ? { start: snapSecs(next.start), end: snapSecs(next.end) } : null,
-              );
+              const snapped = next
+                ? { start: snapSecs(next.start), end: snapSecs(next.end) }
+                : null;
+              setSelection(snapped);
+              if (focusedId == null || !focused || focused.missing) return;
+              const region = loopRegion(focused, snapped);
+              if (region) {
+                if (playingId === focusedId) {
+                  void ipc.setPlayRegion(region).catch(console.error);
+                } else {
+                  play(focusedId, region.start, region);
+                }
+              } else if (!snapped && playingId === focusedId) {
+                void ipc.setPlayRegion(null).catch(console.error);
+              }
             }}
             clipReady={clipPath != null}
             onDragClip={dragClip}
@@ -700,6 +823,7 @@ export function LibraryView({
           bpmMin={settings.bpm_range_min}
           bpmMax={settings.bpm_range_max}
           roundBpm={settings.bpm_round_whole}
+          {...(menu.openPanel != null ? { openPanel: menu.openPanel } : {})}
           onRoundBpmChange={(round) => {
             onSettingChange("bpm_round_whole", round);
           }}
@@ -708,6 +832,12 @@ export function LibraryView({
           }}
           onSetBpmFromBeats={(beats) => {
             setBpmFromBeats(menuTargets, beats);
+          }}
+          onSetKey={(key) => {
+            if (menuTargets.length === 0) return;
+            void Promise.all(menuTargets.map((row) => ipc.setKey(row.id, key)))
+              .then(reload)
+              .catch(console.error);
           }}
           onSelect={runAction}
           onClose={() => {
@@ -774,25 +904,6 @@ export function LibraryView({
               selectedSamples.filter((s) => !s.missing).map((s) => s.id),
               customOpts,
             );
-          }}
-        />
-      ) : null}
-
-      {dialog?.kind === "setKey" ? (
-        <SetValueDialog
-          title={t("setKeyTitle")}
-          body={t("setKeyBody", { count: selectedSamples.length })}
-          initial={focused?.key_name ?? ""}
-          placeholder="A min"
-          onCancel={() => {
-            setDialog(null);
-          }}
-          onApply={(value) => {
-            setDialog(null);
-            const key = value.trim() === "" ? null : value.trim();
-            void Promise.all(selectedSamples.map((s) => ipc.setKey(s.id, key)))
-              .then(reload)
-              .catch(console.error);
           }}
         />
       ) : null}

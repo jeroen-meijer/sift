@@ -68,6 +68,7 @@ pub fn run() {
             commands::redo_meta,
             commands::get_peaks,
             commands::play_sample,
+            commands::set_play_region,
             commands::stop_playback,
             commands::pause_playback,
             commands::resume_playback,
