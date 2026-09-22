@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
 import { formatSpan, formatTime } from "../lib/format";
 import type { PeakData, SnapMode, WaveformView as WaveformMode } from "../lib/ipc";
-import { bucketWeights, readSpectralBands, spectralCss } from "../lib/spectralColor";
+import { readSpectralBands } from "../lib/spectralColor";
 import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
 export interface Selection {
@@ -123,48 +124,33 @@ export function WaveformView({
 
     const paint = () => {
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      const ctx = canvas.getContext("2d");
+      const ctx = syncCanvasSize(canvas, width, height, dpr);
       if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
       const styles = getComputedStyle(canvas);
-      const ink = styles.getPropertyValue("--color-wave-ink").trim();
+      const ink = styles.getPropertyValue("--color-wave-ink").trim() || "#7b71b8";
       const bands = readSpectralBands(canvas);
       const laneHeight = height / lanes;
       const channels = Math.max(1, peaks.channels);
-      const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
+      const lane = {
+        peaks: peaks.peaks,
+        colors: peaks.colors,
+        bucketCount: peaks.bucket_count,
+        channels,
+      };
 
-      ctx.lineWidth = 1;
-      for (let lane = 0; lane < lanes; lane++) {
-        const mid = laneHeight * lane + laneHeight / 2;
-        if (hasColors) {
-          for (let i = 0; i < peaks.bucket_count; i++) {
-            const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
-            const min = peaks.peaks[base] ?? 0;
-            const max = peaks.peaks[base + 1] ?? 0;
-            ctx.strokeStyle = spectralCss(bucketWeights(peaks.colors, i), bands);
-            ctx.beginPath();
-            const x = (i / peaks.bucket_count) * width;
-            ctx.moveTo(x, mid - max * laneHeight * 0.46);
-            ctx.lineTo(x, mid - min * laneHeight * 0.46);
-            ctx.stroke();
-          }
-        } else {
-          ctx.strokeStyle = ink;
-          ctx.beginPath();
-          for (let i = 0; i < peaks.bucket_count; i++) {
-            const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
-            const min = peaks.peaks[base] ?? 0;
-            const max = peaks.peaks[base + 1] ?? 0;
-            const x = (i / peaks.bucket_count) * width;
-            ctx.moveTo(x, mid - max * laneHeight * 0.46);
-            ctx.lineTo(x, mid - min * laneHeight * 0.46);
-          }
-          ctx.stroke();
-        }
+      for (let i = 0; i < lanes; i++) {
+        paintWaveLane(ctx, lane, {
+          width,
+          midY: laneHeight * i + laneHeight / 2,
+          ampScale: laneHeight * 0.46,
+          channelIndex: lanes === 2 ? i : 0,
+          colored,
+          bands,
+          ink,
+          maxColorStops: 64,
+        });
       }
 
       if (lanes === 2) {

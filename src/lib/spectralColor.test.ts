@@ -31,7 +31,19 @@ describe("spectralColor", () => {
     const mixed = blendSpectralRgb([200, 0, 200], bands);
     expect(mixed[0]).toBeGreaterThan(100);
     expect(mixed[2]).toBeGreaterThan(100);
-    expect(mixed[1]).toBeLessThan(40);
+    expect(mixed[1]).toBeLessThan(80);
+  });
+
+  it("saturates mixed frames away from grey", () => {
+    const mutedBands: SpectralBandColors = {
+      bass: [180, 100, 120],
+      mid: [100, 180, 120],
+      treble: [100, 120, 180],
+    };
+    const mixed = blendSpectralRgb([120, 120, 120], mutedBands);
+    const max = Math.max(...mixed);
+    const min = Math.min(...mixed);
+    expect(max - min).toBeGreaterThan(20);
   });
 
   it("formats a css rgb()", () => {

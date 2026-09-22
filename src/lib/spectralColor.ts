@@ -125,7 +125,7 @@ export function readSpectralBands(el: Element): SpectralBandColors {
 
 /**
  * Blend Classic weights with theme band colors. Soft floor keeps quiet
- * spectral energy visible on dark chrome.
+ * spectral energy visible; saturation push keeps bands vivid on dark chrome.
  */
 export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   const wb = weights[0] / 255;
@@ -135,18 +135,25 @@ export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   let g = wb * bands.bass[1] + wm * bands.mid[1] + wt * bands.treble[1];
   let b = wb * bands.bass[2] + wm * bands.mid[2] + wt * bands.treble[2];
 
-  const peak = Math.max(r, g, b);
-  if (peak > 0.5 && peak < 90) {
-    const lift = 90 / peak;
+  /* Push away from grey so mixed frames stay punchy. */
+  const avg = (r + g + b) / 3;
+  const sat = 1.45;
+  r = avg + (r - avg) * sat;
+  g = avg + (g - avg) * sat;
+  b = avg + (b - avg) * sat;
+
+  const peak = Math.max(r, g, b, 0);
+  if (peak > 0.5 && peak < 110) {
+    const lift = 110 / peak;
     r *= lift;
     g *= lift;
     b *= lift;
   }
 
   return [
-    Math.min(255, Math.round(r)),
-    Math.min(255, Math.round(g)),
-    Math.min(255, Math.round(b)),
+    Math.min(255, Math.max(0, Math.round(r))),
+    Math.min(255, Math.max(0, Math.round(g))),
+    Math.min(255, Math.max(0, Math.round(b))),
   ];
 }
 
