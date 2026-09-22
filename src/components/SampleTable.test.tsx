@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "../i18n";
+import { DEFAULT_COLUMN_ORDER } from "../lib/columnOrder";
 import type { SampleRow } from "../lib/ipc";
 import { SampleTable } from "./SampleTable";
 
@@ -34,6 +35,15 @@ function sample(overrides: Partial<SampleRow> = {}): SampleRow {
 
 const noop = () => undefined;
 
+const defaultWidths = {
+  name: 220,
+  type: 58,
+  bpm: 46,
+  key: 54,
+  wave: 180,
+  tags: 210,
+};
+
 function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = {}) {
   return render(
     <SampleTable
@@ -46,6 +56,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       showWaveforms
       coloredWaveforms
       hiddenColumns={new Set()}
+      columnOrder={[...DEFAULT_COLUMN_ORDER]}
       sortColumn="name"
       sortDirection="asc"
       highlightText=""
@@ -57,15 +68,9 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       onOpenMenu={noop}
       onDragSelected={noop}
       onScrubRow={noop}
-      columnWidths={{
-        name: 220,
-        type: 58,
-        bpm: 46,
-        key: 54,
-        wave: 180,
-        tags: 210,
-      }}
+      columnWidths={defaultWidths}
       onColumnWidthsChange={noop}
+      onColumnOrderChange={noop}
       {...props}
     />,
   );
@@ -96,6 +101,71 @@ describe("SampleTable", () => {
   it("omits the waveform column entirely when row waveforms are off", () => {
     renderTable({ showWaveforms: false });
     expect(screen.queryByText("Waveform")).toBeNull();
+  });
+
+  it("renders headers in the persisted column order", () => {
+    const { container } = renderTable({
+      columnOrder: ["type", "name", "bpm", "key", "wave", "tags"],
+    });
+    const headers = [...container.querySelectorAll(".sample-table-header [data-col]")].map(
+      (el) => el.getAttribute("data-col"),
+    );
+    expect(headers[0]).toBe("type");
+    expect(headers[1]).toBe("name");
+  });
+
+  it("sorts on pointerup without a drag", () => {
+    const onSort = vi.fn();
+    renderTable({ onSort });
+    const typeBtn = screen.getByRole("button", { name: "Type" });
+    fireEvent.pointerDown(typeBtn, { button: 0, clientX: 100, clientY: 10 });
+    fireEvent.pointerUp(window, { button: 0, clientX: 102, clientY: 10 });
+    expect(onSort).toHaveBeenCalledWith("type");
+  });
+
+  it("reorders on drag past the threshold and does not sort", () => {
+    const onSort = vi.fn();
+    const onColumnOrderChange = vi.fn();
+    const { container } = renderTable({ onSort, onColumnOrderChange });
+
+    const typeHeader = container.querySelector('[data-col="type"]');
+    const nameHeader = container.querySelector('[data-col="name"]');
+    expect(typeHeader).not.toBeNull();
+    expect(nameHeader).not.toBeNull();
+    if (!typeHeader || !nameHeader) return;
+    const typeBtn = screen.getByRole("button", { name: "Type" });
+
+    vi.spyOn(typeHeader, "getBoundingClientRect").mockReturnValue({
+      left: 220,
+      right: 280,
+      top: 0,
+      bottom: 28,
+      width: 60,
+      height: 28,
+      x: 220,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(nameHeader, "getBoundingClientRect").mockReturnValue({
+      left: 26,
+      right: 220,
+      top: 0,
+      bottom: 28,
+      width: 194,
+      height: 28,
+      x: 26,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(typeBtn, { button: 0, clientX: 250, clientY: 10 });
+    fireEvent.pointerMove(window, { clientX: 80, clientY: 10 });
+    fireEvent.pointerUp(window, { button: 0, clientX: 80, clientY: 10 });
+
+    expect(onSort).not.toHaveBeenCalled();
+    expect(onColumnOrderChange).toHaveBeenCalled();
+    const next = onColumnOrderChange.mock.calls[0]?.[0] as string[];
+    expect(next[0]).toBe("type");
   });
 
   it("shows the tag path, not the leaf name", () => {
@@ -149,6 +219,7 @@ describe("SampleTable", () => {
         showWaveforms
         coloredWaveforms
         hiddenColumns={new Set()}
+        columnOrder={[...DEFAULT_COLUMN_ORDER]}
         sortColumn="name"
         sortDirection="asc"
         highlightText=""
@@ -160,15 +231,9 @@ describe("SampleTable", () => {
         onOpenMenu={noop}
         onDragSelected={noop}
         onScrubRow={noop}
-        columnWidths={{
-          name: 220,
-          type: 58,
-          bpm: 46,
-          key: 54,
-          wave: 180,
-          tags: 210,
-        }}
+        columnWidths={defaultWidths}
         onColumnWidthsChange={noop}
+        onColumnOrderChange={noop}
       />,
     );
     expect(screen.getByRole("button", { name: "Unfavorite" })).toHaveAttribute(

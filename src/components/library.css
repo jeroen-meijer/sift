@@ -553,6 +553,12 @@ body.col-resizing * {
   user-select: none !important;
 }
 
+body.col-reordering,
+body.col-reordering * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
 .sort-mark {
   color: var(--color-accent);
 }

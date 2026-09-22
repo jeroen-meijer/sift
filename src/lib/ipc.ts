@@ -1,10 +1,12 @@
 /** Every Tauri command Sift calls, with the shapes the Rust side sends back. */
 import { invoke } from "@tauri-apps/api/core";
-import type { ColumnWidths } from "./columnWidths";
+import type { ColumnWidths, ResizableColumn } from "./columnWidths";
 import { DEFAULT_COLUMN_WIDTHS } from "./columnWidths";
+import { DEFAULT_COLUMN_ORDER } from "./columnOrder";
 import { profiled } from "./profile";
 
 export type { ColumnWidths } from "./columnWidths";
+export type { ResizableColumn } from "./columnWidths";
 
 export interface TagChip {
   id: number;
@@ -158,6 +160,8 @@ export interface AppSettings {
   hold_hover_hotkey: string | null;
   clips_dir: string;
   column_widths: ColumnWidths;
+  /** Left→right order of content columns (fav stays pinned). */
+  column_order: ResizableColumn[];
   /** Color palette id (`nocturne` | `ink` | `graphite` | `snow`). */
   theme: string;
 }
@@ -184,6 +188,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hold_hover_hotkey: null,
   clips_dir: "",
   column_widths: { ...DEFAULT_COLUMN_WIDTHS },
+  column_order: [...DEFAULT_COLUMN_ORDER],
   theme: "nocturne",
 };
 

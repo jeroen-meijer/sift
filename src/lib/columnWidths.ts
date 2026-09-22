@@ -40,3 +40,23 @@ export function mergeColumnWidths(stored: Partial<ColumnWidths> | null | undefin
 export function clampColumnWidth(column: ResizableColumn, width: number): number {
   return Math.max(MIN_COLUMN_WIDTHS[column], Math.round(width));
 }
+
+/**
+ * CSS grid track list for the sample table. Stored widths are relative weights
+ * (`fr`), floored by each column's min px so a wide pane scales columns
+ * together instead of parking leftover space in a trailing absorber.
+ */
+export function columnGridTemplate(
+  columns: readonly ResizableColumn[],
+  widths: ColumnWidths,
+): string {
+  const parts = [`${String(FAV_COLUMN_WIDTH)}px`];
+  for (const column of columns) {
+    const min = MIN_COLUMN_WIDTHS[column];
+    const weight = Math.max(1, widths[column]);
+    parts.push(`minmax(${String(min)}px, ${String(weight)}fr)`);
+  }
+  /* Trailing gutter cell stays zero-width; free space goes to the fr columns. */
+  parts.push("0px");
+  return parts.join(" ");
+}
