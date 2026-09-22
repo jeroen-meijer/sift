@@ -353,6 +353,7 @@
   z-index: 60;
   width: 256px;
   padding: 5px;
+  overflow-y: auto;
   border-radius: 9px;
   background: var(--color-elevated);
   box-shadow:
@@ -432,18 +433,15 @@
   position: relative;
 }
 
+/* Placed from its trigger's box by Menu, so it can be clamped to the window. */
 .menu-flyout {
-  position: absolute;
-  top: -5px;
-  left: 100%;
+  position: fixed;
   width: 176px;
   --flyout-from: calc(var(--motion-slide) * -1);
   animation: menu-flyout-in var(--motion-base) var(--motion-ease) both;
 }
 
 .menu-flyout.left {
-  left: auto;
-  right: 100%;
   --flyout-from: var(--motion-slide);
 }
 
