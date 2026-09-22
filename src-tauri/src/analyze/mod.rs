@@ -658,6 +658,7 @@ pub fn spawn_analysis_batch(app: AppHandle, db: Arc<Db>, sample_ids: Vec<i64>, m
     }
     std::thread::spawn(move || {
         let total = u64::try_from(sample_ids.len()).unwrap_or(u64::MAX);
+        let _ = app.emit("analysis-queue", &sample_ids);
         let mut done = 0u64;
         for sample_id in sample_ids {
             let bpm_range = db

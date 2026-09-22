@@ -61,6 +61,7 @@
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 12px;
   gap: 14px;
   background: var(--color-bg-sidebar);
@@ -68,6 +69,59 @@
   font-size: 11px;
   color: var(--color-text-faint);
   font-family: var(--font-mono);
+}
+
+.statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.statusbar-analysis {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--color-neutral-400);
+  margin-left: auto;
+}
+
+.statusbar-spin {
+  color: var(--color-accent);
+  animation: siftSpin 0.9s linear infinite;
+}
+
+.statusbar-bar {
+  width: 118px;
+  height: 3px;
+  border-radius: 2px;
+  background: #292b31;
+  overflow: hidden;
+}
+
+.statusbar-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.2s ease-out;
+}
+
+.statusbar-hint {
+  color: var(--color-text-faint);
+}
+
+@keyframes siftSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes siftShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
 }
 
 .first-launch {
@@ -419,7 +473,88 @@
 
 .sample-row.missing .col.name {
   text-decoration: line-through;
-  opacity: 0.55;
+  text-decoration-color: #4a4e5d;
+  color: #6d6f7c;
+}
+
+.sample-row .col.name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sample-row .col.name .name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.sample-row .missing-icon {
+  flex: none;
+  color: #c9736d;
+}
+
+.analyzing-label {
+  font-size: 10.5px;
+  color: var(--color-accent);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.row-wave {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.row-wave-canvas {
+  width: 100%;
+  height: 18px;
+  display: block;
+}
+
+.row-wave-analyzing {
+  height: 4px;
+  border-radius: 3px;
+  background: #22242f;
+  overflow: hidden;
+}
+
+.row-wave-shimmer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-accent) 60%, transparent),
+    transparent
+  );
+  animation: siftShimmer 1.4s linear infinite;
+}
+
+.row-wave-missing {
+  height: 1px;
+  width: 100%;
+  background: repeating-linear-gradient(90deg, #3a3d49 0 4px, transparent 4px 8px);
+}
+
+.row-wave-off {
+  height: 1px;
+  width: 100%;
+  background: rgba(233, 233, 237, 0.07);
+}
+
+.wave-placeholder {
+  height: 14px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 
 .missing-banner {
@@ -511,12 +646,6 @@
   background: transparent;
   color: var(--color-text-dim);
   padding: 0;
-}
-
-.wave-placeholder {
-  height: 14px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 
 .tag-chip {
@@ -727,7 +856,63 @@
 .omni-actions {
   flex: none;
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
+  padding-left: 4px;
+}
+
+.omni-tool-btn {
+  height: 28px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 7px;
+  border: 1px solid rgba(233, 233, 237, 0.13);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.omni-tool-btn:hover {
+  background: rgba(233, 233, 237, 0.05);
+  color: var(--color-text);
+}
+
+.omni-tool-btn.on {
+  border-color: var(--color-accent);
+  background: var(--color-accent-fill);
+  color: var(--color-accent-soft);
+}
+
+.omni-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.omni-icon-btn:hover:not(:disabled) {
+  background: rgba(233, 233, 237, 0.06);
+  color: var(--color-text);
+}
+
+.omni-icon-btn.on {
+  color: var(--color-accent-soft);
+  background: var(--color-accent-fill);
+}
+
+.omni-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .omni-toggle,
