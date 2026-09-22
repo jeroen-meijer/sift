@@ -44,6 +44,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       playingProgress={null}
       analyzingIds={new Set()}
       showWaveforms
+      coloredWaveforms
       hiddenColumns={new Set()}
       sortColumn="name"
       sortDirection="asc"
@@ -140,6 +141,7 @@ describe("SampleTable", () => {
         playingProgress={null}
         analyzingIds={new Set()}
         showWaveforms
+        coloredWaveforms
         hiddenColumns={new Set()}
         sortColumn="name"
         sortDirection="asc"

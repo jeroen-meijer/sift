@@ -6,6 +6,8 @@ interface Props {
   missing: boolean;
   analyzing: boolean;
   selected: boolean;
+  /** Bass→red / mid→green / treble→blue from peak colors. */
+  colored: boolean;
   /** Fraction 0-1 of the playhead, or null when this row is not playing. */
   progress: number | null;
   onScrub?: ((fraction: number) => void) | undefined;
@@ -17,6 +19,7 @@ export function RowWaveform({
   missing,
   analyzing,
   selected,
+  colored,
   progress,
   onScrub,
 }: Props) {
@@ -58,14 +61,15 @@ export function RowWaveform({
     ctx.clearRect(0, 0, width, height);
 
     const styles = getComputedStyle(canvas);
-    ctx.strokeStyle = styles
+    const ink = styles
       .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
       .trim();
     ctx.lineWidth = 1.05;
     const mid = height / 2;
     const channels = Math.max(1, peaks.channels);
     const last = Math.max(1, peaks.bucket_count - 1);
-    ctx.beginPath();
+    const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
+
     for (let i = 0; i < peaks.bucket_count; i++) {
       const base = i * channels * 2;
       const amp = Math.max(
@@ -74,11 +78,21 @@ export function RowWaveform({
       );
       const x = (i / last) * width;
       const y = amp * (height * 0.42);
+      if (hasColors) {
+        const ci = i * 3;
+        const r = peaks.colors[ci] ?? 0;
+        const g = peaks.colors[ci + 1] ?? 0;
+        const b = peaks.colors[ci + 2] ?? 0;
+        ctx.strokeStyle = `rgb(${String(r)},${String(g)},${String(b)})`;
+      } else {
+        ctx.strokeStyle = ink;
+      }
+      ctx.beginPath();
       ctx.moveTo(x, mid - y);
       ctx.lineTo(x, mid + y);
+      ctx.stroke();
     }
-    ctx.stroke();
-  }, [peaks, idle, selected]);
+  }, [peaks, idle, selected, colored]);
 
   if (analyzing) {
     return (
