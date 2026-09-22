@@ -114,12 +114,7 @@ mod tests {
         let result = measure("path_token_analyze", Duration::from_millis(50), || {
             PathTokenAnalyzer.analyze(path, &pcm, 70.0, 180.0)
         });
-        assert!(
-            result
-                .suggested_tag_paths
-                .iter()
-                .any(|t| t == "Drums/Kick")
-        );
+        assert!(result.suggested_tag_paths.iter().any(|t| t == "Drums/Kick"));
     }
 
     #[test]

@@ -273,6 +273,30 @@ impl PlayerEngine {
         self.shared = None;
     }
 
+    /// Current playhead in seconds, and whether audio is actively outputting.
+    pub fn playback_state(&self) -> (f64, bool) {
+        let Some(shared) = &self.shared else {
+            return (0.0, false);
+        };
+        let channels = shared.channels.max(1);
+        let frames = shared.pcm.len().checked_div(channels).unwrap_or(0);
+        let pos = shared.position.load(Ordering::Relaxed);
+        #[allow(
+            clippy::as_conversions,
+            clippy::cast_precision_loss,
+            reason = "playhead position: frame index to seconds"
+        )]
+        let secs = if shared.sample_rate == 0 {
+            0.0
+        } else {
+            pos as f64 / f64::from(shared.sample_rate)
+        };
+        let playing = shared.playing.load(Ordering::Relaxed)
+            && !shared.paused.load(Ordering::Relaxed)
+            && pos < frames;
+        (secs, playing)
+    }
+
     #[allow(dead_code)]
     pub fn seek(&self, secs: f64) {
         let Some(shared) = &self.shared else {

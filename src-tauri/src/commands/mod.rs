@@ -21,9 +21,11 @@ use crate::watch;
 pub struct DbStats {
     pub roots: i64,
     pub samples: i64,
+    pub missing: i64,
     pub tags: i64,
     pub data_dir: String,
     pub clips_dir: String,
+    pub clips_bytes: u64,
 }
 
 fn restart_watches(app: &AppHandle, state: &AppState) {
@@ -51,13 +53,20 @@ pub fn db_stats(state: State<'_, AppState>) -> AppResult<DbStats> {
 
         let roots: i64 = roots_dsl::roots.select(count_star()).first(conn)?;
         let samples: i64 = samples_dsl::samples.select(count_star()).first(conn)?;
+        let missing: i64 = samples_dsl::samples
+            .filter(samples_dsl::missing.ne(0))
+            .select(count_star())
+            .first(conn)?;
         let tags: i64 = tags_dsl::tags.select(count_star()).first(conn)?;
+        let clips_dir = state.clips_dir();
         Ok(DbStats {
             roots,
             samples,
+            missing,
             tags,
             data_dir: state.paths.data_dir.to_string_lossy().into_owned(),
-            clips_dir: state.paths.clips_dir.to_string_lossy().into_owned(),
+            clips_bytes: jit::cache_size(&clips_dir),
+            clips_dir: clips_dir.to_string_lossy().into_owned(),
         })
     })
 }
@@ -448,6 +457,29 @@ pub fn resume_playback(state: State<'_, AppState>) -> AppResult<()> {
         .resume()
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PlaybackState {
+    pub position_secs: f64,
+    pub playing: bool,
+}
+
+#[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
+pub fn playback_state(state: State<'_, AppState>) -> AppResult<PlaybackState> {
+    let (position_secs, playing) = state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .playback_state();
+    Ok(PlaybackState {
+        position_secs,
+        playing,
+    })
+}
+
 #[tauri::command]
 pub fn list_output_devices(state: State<'_, AppState>) -> AppResult<Vec<OutputDeviceInfo>> {
     state
@@ -586,19 +618,78 @@ pub fn render_jit_clip(
     if sample.missing {
         return Err(AppError::msg("sample file is missing"));
     }
-    let out = jit::allocate_clip_path(
-        &state.paths.clips_dir,
-        &sample.filename,
-        start_secs,
-        end_secs,
-    );
+    let out = jit::allocate_clip_path(&state.clips_dir(), &sample.filename, start_secs, end_secs);
     jit::render_clip(Path::new(&sample.path), start_secs, end_secs, &out)?;
     Ok(out.to_string_lossy().into_owned())
 }
 
+/// Nudge each point to the nearest zero crossing (the `Z` key on the waveform).
+#[tauri::command]
+pub fn snap_zero_crossings(
+    state: State<'_, AppState>,
+    sample_id: i64,
+    points: Vec<f64>,
+) -> AppResult<Vec<f64>> {
+    let sample = state
+        .db
+        .with_conn(|conn| samples::get_sample(conn, sample_id))?
+        .ok_or_else(|| AppError::msg("sample not found"))?;
+    if sample.missing {
+        return Ok(points);
+    }
+    let audio = crate::audio::decode_file(Path::new(&sample.path))?;
+    Ok(points
+        .into_iter()
+        .map(|secs| crate::audio::zero_cross::nearest(&audio, secs))
+        .collect())
+}
+
 #[tauri::command]
 pub fn clear_jit_cache(state: State<'_, AppState>) -> AppResult<()> {
-    jit::clear_cache(&state.paths.clips_dir)
+    jit::clear_cache(&state.clips_dir())
+}
+
+/// Point the JIT clip cache at another directory. The old cache is left alone.
+#[tauri::command]
+pub fn set_clips_dir(state: State<'_, AppState>, path: String) -> AppResult<()> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_absolute() {
+        return Err(AppError::msg("clip cache path must be absolute"));
+    }
+    std::fs::create_dir_all(&dir)?;
+    state.set_clips_dir(dir);
+    state
+        .db
+        .with_conn(|conn| settings::set(conn, "clips_dir", &json!(path)))
+}
+
+/// True while `AppKit` still has the mouse event a drag session can attach to.
+///
+/// The drag plugin asks `AppKit` for a session and unwraps the result. When the
+/// webview's `dragstart` has already finished — which is what happens if
+/// anything slow runs between the gesture and this command — `AppKit` hands back
+/// NULL and the plugin takes the whole process down with it. Checking first
+/// turns that crash into an ordinary error.
+#[cfg(target_os = "macos")]
+fn drag_gesture_is_live() -> bool {
+    use objc2_app_kit::{NSApplication, NSEventType};
+
+    let Some(mtm) = objc2::MainThreadMarker::new() else {
+        return false;
+    };
+    NSApplication::sharedApplication(mtm)
+        .currentEvent()
+        .is_some_and(|event| {
+            matches!(
+                event.r#type(),
+                NSEventType::LeftMouseDown | NSEventType::LeftMouseDragged
+            )
+        })
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn drag_gesture_is_live() -> bool {
+    true
 }
 
 #[tauri::command]
@@ -629,6 +720,11 @@ pub async fn start_drag_files(app: AppHandle, window: Window, paths: Vec<String>
         let raw_window = window.gtk_window();
         #[cfg(not(target_os = "linux"))]
         let raw_window = tauri::Result::Ok(window);
+
+        if !drag_gesture_is_live() {
+            let _ = tx.send(Err(AppError::msg("drag gesture already finished")));
+            return;
+        }
 
         let result = match raw_window {
             Ok(w) => drag::start_drag(
