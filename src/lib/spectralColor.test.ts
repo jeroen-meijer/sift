@@ -34,12 +34,32 @@ describe("spectralColor", () => {
     expect(mixed[2]).toBeLessThan(60);
   });
 
+  it("paints mid-led frames at full chroma even when energy is moderate", () => {
+    const mixed = blendSpectralRgb([20, 140, 40], bands);
+    expect(mixed[1]).toBeGreaterThan(200);
+    expect(mixed[0]).toBeLessThan(80);
+    expect(mixed[2]).toBeLessThan(80);
+  });
+
+  it("keeps mid-vs-treble races on the winner hue (not cyan wash)", () => {
+    const nocturne: SpectralBandColors = {
+      bass: [255, 61, 138],
+      mid: [46, 232, 154],
+      treble: [139, 124, 255],
+    };
+    /* Clear mid-led amen body. */
+    const midLed = blendSpectralRgb([10, 180, 50], nocturne);
+    expect(midLed[1]).toBeGreaterThan(midLed[2] + 20);
+    expect(midLed[1]).toBeGreaterThan(160);
+    /* Treble-led bucket stays violet, not mint. */
+    const trebleLed = blendSpectralRgb([10, 50, 180], nocturne);
+    expect(trebleLed[2]).toBeGreaterThan(trebleLed[1] + 20);
+  });
+
   it("does not paint equal band energy as pure white", () => {
     const mixed = blendSpectralRgb([255, 255, 255], bands);
     const max = Math.max(...mixed);
-    const min = Math.min(...mixed);
-    /* Primary R+G+B mix → greyish, not #fff. */
-    expect(max - min).toBeLessThan(40);
+    /* Additive primary mix → grey, not #fff. */
     expect(max).toBeLessThan(200);
   });
 

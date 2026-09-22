@@ -8,6 +8,7 @@ mod indexer;
 mod library;
 mod paths;
 mod perf_budgets;
+mod profile_log;
 mod samples;
 mod state;
 mod tags;
@@ -41,6 +42,7 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             let state = app.state::<AppState>();
+            crate::profile_log::init(&state.paths.cache_dir);
             watch::restart(&handle, &state.watch_shared, &state.watch_guard);
             Ok(())
         })
@@ -92,6 +94,9 @@ pub fn run() {
             commands::add_sample_tag,
             commands::remove_sample_tag,
             commands::analyze_samples,
+            commands::profile_enabled,
+            commands::profile_mark,
+            commands::profile_log_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

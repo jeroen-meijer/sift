@@ -149,7 +149,8 @@ export function WaveformView({
           colored,
           bands,
           ink,
-          style: "columns",
+          style: "gradient",
+          maxColorStops: 96,
         });
       }
 
@@ -316,17 +317,23 @@ export function WaveformView({
 
         {selection ? (
           <>
-            <div className="wave-dim" style={{ left: 0, width: `${pct(selection.start)}%` }} />
+            {/* Anchor both dims and the selection to the same pct edges.
+                `right + width` for the right dim can disagree with `left + width`
+                for the selection by a full snap cell under WKWebView rounding. */}
             <div
               className="wave-dim"
-              style={{ right: 0, width: `${100 - pct(selection.end)}%` }}
+              style={{ left: 0, right: `${100 - pct(selection.start)}%` }}
+            />
+            <div
+              className="wave-dim"
+              style={{ left: `${pct(selection.end)}%`, right: 0 }}
             />
             <div
               className={`wave-selection${clipReady ? " draggable" : ""}`}
               draggable={clipReady}
               style={{
                 left: `${pct(selection.start)}%`,
-                width: `${pct(selection.end) - pct(selection.start)}%`,
+                right: `${100 - pct(selection.end)}%`,
               }}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "copy";

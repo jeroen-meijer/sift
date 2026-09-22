@@ -38,6 +38,8 @@ bun run test
 bun run bench
 bun run build
 bun run tauri:dev
+bun run tauri:profile
+bun run tauri:build
 ```
 
 ## Perf / profiling
@@ -45,6 +47,7 @@ bun run tauri:dev
 - Soft budgets (CI): `cargo nextest run -E 'test(/^perf_/)' --no-capture`
 - Detailed timings: `cargo bench --bench audio_hotpath` (decode, peaks, JIT clip, path tokens, heuristic BPM/key)
 - UI micro: `bun run bench`
+- Interactive release profile: `bun run tauri:profile` then use the app; read `logs/sift-profile.log` (IPC + peaks cache hit/miss + FE round-trips)
 
 ## Conventions
 

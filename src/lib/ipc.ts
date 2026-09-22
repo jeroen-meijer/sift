@@ -2,6 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ColumnWidths } from "./columnWidths";
 import { DEFAULT_COLUMN_WIDTHS } from "./columnWidths";
+import { profiled } from "./profile";
 
 export type { ColumnWidths } from "./columnWidths";
 
@@ -201,7 +202,10 @@ export const ipc = {
   addRoot: (path: string) => invoke<unknown>("add_root", { path }),
   removeRoot: (rootId: number) => run("remove_root", { rootId }),
 
-  listSamples: (query: SampleQuery) => invoke<SampleRow[]>("list_samples", { query }),
+  listSamples: (query: SampleQuery) =>
+    profiled("fe.list_samples", `limit=${String(query.limit)}`, () =>
+      invoke<SampleRow[]>("list_samples", { query }),
+    ),
   setFavorite: (id: number, favorite: boolean) =>
     run("set_sample_favorite", { id, favorite }),
   setBpm: (id: number, bpm: number | null) => run("set_sample_bpm", { id, bpm }),
@@ -215,18 +219,23 @@ export const ipc = {
   undo: () => invoke<boolean>("undo_meta"),
   redo: () => invoke<boolean>("redo_meta"),
 
-  getPeaks: (sampleId: number) => invoke<PeakData>("get_peaks", { sampleId }),
+  getPeaks: (sampleId: number) =>
+    profiled("fe.get_peaks", `id=${String(sampleId)}`, () =>
+      invoke<PeakData>("get_peaks", { sampleId }),
+    ),
   play: (
     sampleId: number,
     startSecs: number | null,
     region?: { start: number; end: number } | null,
   ) =>
-    run("play_sample", {
-      sampleId,
-      startSecs,
-      regionStartSecs: region?.start ?? null,
-      regionEndSecs: region?.end ?? null,
-    }),
+    profiled("fe.play_sample", `id=${String(sampleId)}`, () =>
+      run("play_sample", {
+        sampleId,
+        startSecs,
+        regionStartSecs: region?.start ?? null,
+        regionEndSecs: region?.end ?? null,
+      }),
+    ),
   /** Retune the loop window of a running preview without restarting it. */
   setPlayRegion: (region: { start: number; end: number } | null) =>
     run("set_play_region", { startSecs: region?.start ?? null, endSecs: region?.end ?? null }),

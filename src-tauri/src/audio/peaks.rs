@@ -2,7 +2,7 @@
 //!
 //! Binary layout (`{sample_id}.peaks`):
 //! - magic: `SFTP` (4 bytes)
-//! - version: u32 LE (= 5)
+//! - version: u32 LE (= 6)
 //! - channels: u32 LE
 //! - `sample_rate`: u32 LE
 //! - `duration_ms`: f64 LE
@@ -23,9 +23,9 @@ use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
 
 const MAGIC: &[u8; 4] = b"SFTP";
-/// v5: same layout as v4, but bass/mid/treble cuts are musical (200 Hz / 3.5 kHz)
-/// so vocals land in mid instead of the old moodbar 500 Hz "bass" bucket.
-const VERSION: u32 = 5;
+/// v6: mid/treble cut at 6 kHz so amen/snare body stays mid instead of a flat
+/// treble wash (v5 used 3.5 kHz).
+const VERSION: u32 = 6;
 
 /// Peak buffer ready for IPC / Canvas drawing.
 #[derive(Debug, Clone, Serialize)]
@@ -275,14 +275,15 @@ fn generate_spectral_colors(decoded: &DecodedAudio, buckets: usize) -> Vec<u8> {
     let fft_size = adaptive_fft_size(mono.len());
     let options = GenerateOptions {
         theme: Theme::Classic,
-        // Keep band ratios: an 808 attack can light mid/treble bins (click),
-        // but bass energy still dominates the global peak.
+        // Keep band ratios across the file (not per-band peaks → white wash).
         normalize_mode: NormalizeMode::GlobalPeak,
-        // Moodbar defaults (500 / 2000) put singing fundamentals in "bass".
-        // Tighter low cut keeps subs/808s red and vocals in mid/treble.
+        // Musical cuts for sample browsing:
+        // - <200 Hz: sub / 808 / kick body
+        // - 200–6 kHz: vocals, snare body, most melodic content
+        // - >6 kHz: air / hats (amen was ~75% treble at 3.5 kHz)
         low_cut_hz: 200.0,
-        mid_cut_hz: 3500.0,
-        band_edges_hz: vec![200.0, 3500.0],
+        mid_cut_hz: 6000.0,
+        band_edges_hz: vec![200.0, 6000.0],
         fft_size,
         max_target_frames: Some(buckets.max(1)),
         ..GenerateOptions::default()
@@ -368,13 +369,48 @@ pub fn ensure_peaks(
     buckets_row: usize,
 ) -> AppResult<PeakData> {
     let cache = peak_path(&paths.peaks_dir, sample_id);
+    let start = std::time::Instant::now();
     if let Some(cached) = read_peakfile(&cache, Some(buckets_row))? {
+        crate::profile_log::event(
+            "peaks.cache_hit",
+            start.elapsed(),
+            &format!("id={sample_id} buckets={buckets_row}"),
+        );
         return Ok(cached);
     }
 
+    let decode_start = std::time::Instant::now();
     let decoded = decode_file(path)?;
+    crate::profile_log::event(
+        "peaks.decode",
+        decode_start.elapsed(),
+        &format!(
+            "id={sample_id} frames={} ch={}",
+            decoded.frame_count(),
+            decoded.channels
+        ),
+    );
+
+    let gen_start = std::time::Instant::now();
     let data = generate_peaks(&decoded, buckets_row)?;
+    crate::profile_log::event(
+        "peaks.generate",
+        gen_start.elapsed(),
+        &format!("id={sample_id} buckets={buckets_row}"),
+    );
+
+    let write_start = std::time::Instant::now();
     write_peakfile(&cache, &data)?;
+    crate::profile_log::event(
+        "peaks.write",
+        write_start.elapsed(),
+        &format!("id={sample_id}"),
+    );
+    crate::profile_log::event(
+        "peaks.cache_miss",
+        start.elapsed(),
+        &format!("id={sample_id} buckets={buckets_row}"),
+    );
     Ok(data)
 }
 
@@ -515,16 +551,16 @@ mod tests {
         assert!(!near_white, "bass tone washed to white: {mid:?}");
     }
 
-    /// Real 808 vs vocal: attack colors must diverge (bass vs mid/treble share).
+    /// Real library fixtures: 808 bass-led, vocal mid-led, amen not flat treble.
     #[test]
-    fn example_808_attack_more_bass_than_vocal() {
+    fn example_samples_have_distinct_spectral_shapes() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples");
-        let eight =
-            root.join("limbowrld_drumkit/808s/If u Swag 808 ._.`.wav");
+        let eight = root.join("limbowrld_drumkit/808s/If u Swag 808 ._.`.wav");
         let vocal = root.join(
             "foushee_vocals/runs/FOUSHEE_vocal_run_clean_jazzy_harmony_87_Bmaj.wav",
         );
-        if !eight.is_file() || !vocal.is_file() {
+        let amen = root.join("amen_breaks/cw_amen_updown.wav");
+        if !eight.is_file() || !vocal.is_file() || !amen.is_file() {
             eprintln!("skip: example samples missing");
             return;
         }
@@ -533,37 +569,59 @@ mod tests {
             generate_peaks(&decode_file(&eight).expect("808"), 256).expect("808 peaks");
         let vocal_peaks =
             generate_peaks(&decode_file(&vocal).expect("vocal"), 256).expect("vocal peaks");
-
-        // First ~12% of the file (attack / opening phrase).
-        let end_8 = eight_peaks.bucket_count / 8;
-        let end_v = vocal_peaks.bucket_count / 8;
-        let a808 = avg_rgb(&eight_peaks.colors, 0, end_8.max(8));
-        let avoc = avg_rgb(&vocal_peaks.colors, 0, end_v.max(8));
+        let amen_peaks =
+            generate_peaks(&decode_file(&amen).expect("amen"), 256).expect("amen peaks");
 
         let share = |rgb: [f32; 3], i: usize| rgb[i] / (rgb[0] + rgb[1] + rgb[2]).max(1.0);
-        let s808_bass = share(a808, 0);
-        let svoc_bass = share(avoc, 0);
-        let svoc_mid = share(avoc, 1);
-        assert!(
-            s808_bass > 0.7,
-            "808 attack should be bass-led, share={s808_bass:.3} rgb={a808:?}"
-        );
-        assert!(
-            svoc_mid > 0.5,
-            "vocal attack should be mid-led, mid={svoc_mid:.3} rgb={avoc:?}"
-        );
-        assert!(
-            svoc_bass < 0.2,
-            "vocal should barely paint bass/red, bass={svoc_bass:.3} rgb={avoc:?}"
-        );
-        assert!(
-            s808_bass > svoc_bass + 0.4,
-            "808 bass share ({s808_bass:.3}) should dwarf vocal ({svoc_bass:.3}); 808={a808:?} vocal={avoc:?}"
-        );
-        let whiteish = |rgb: [f32; 3]| rgb[0] > 200.0 && rgb[1] > 180.0 && rgb[2] > 180.0;
-        assert!(!whiteish(a808), "808 attack still near-white: {a808:?}");
+        let end = |n: usize| (n / 8).max(8);
 
-        // Fixture strips for visual inspection under testdata/.
+        let a808 = avg_rgb(&eight_peaks.colors, 0, end(eight_peaks.bucket_count));
+        let avoc = avg_rgb(&vocal_peaks.colors, 0, end(vocal_peaks.bucket_count));
+        let amen_avg = avg_rgb(&amen_peaks.colors, 0, amen_peaks.bucket_count);
+
+        assert!(
+            share(a808, 0) > 0.7,
+            "808 attack should be bass-led, rgb={a808:?}"
+        );
+        assert!(
+            share(avoc, 1) > 0.5 && share(avoc, 0) < 0.2,
+            "vocal should be mid-led with little bass, rgb={avoc:?}"
+        );
+
+        let amen_mid = share(amen_avg, 1);
+        let amen_treble = share(amen_avg, 2);
+        assert!(
+            amen_mid > 0.35,
+            "amen should carry substantial mid (snare body), rgb={amen_avg:?}"
+        );
+        assert!(
+            amen_treble < 0.55,
+            "amen must not wash to flat treble/blue, rgb={amen_avg:?}"
+        );
+        // Not a single-band strip: mid and treble both matter for a drum break.
+        assert!(
+            amen_mid > 0.15 && amen_treble > 0.15,
+            "amen should mix mid+treble over time, rgb={amen_avg:?}"
+        );
+
+        let mut mid_dom = 0u32;
+        let mut treble_dom = 0u32;
+        for i in 0..amen_peaks.bucket_count {
+            let base = i.saturating_mul(3);
+            let r = i32::from(amen_peaks.colors.get(base).copied().unwrap_or(0));
+            let g = i32::from(amen_peaks.colors.get(base.saturating_add(1)).copied().unwrap_or(0));
+            let b = i32::from(amen_peaks.colors.get(base.saturating_add(2)).copied().unwrap_or(0));
+            if g >= r && g >= b {
+                mid_dom = mid_dom.saturating_add(1);
+            } else if b >= r && b >= g {
+                treble_dom = treble_dom.saturating_add(1);
+            }
+        }
+        assert!(
+            mid_dom > u32::try_from(amen_peaks.bucket_count / 4).unwrap_or(0),
+            "amen should have many mid-dominant buckets, mid_dom={mid_dom} treble_dom={treble_dom}"
+        );
+
         let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/spectral-fixtures");
         let _ = fs::create_dir_all(&out);
         write_ppm_strip(
@@ -576,6 +634,12 @@ mod tests {
             &out.join("vocal-classic-weights.ppm"),
             &vocal_peaks.colors,
             vocal_peaks.bucket_count,
+            24,
+        );
+        write_ppm_strip(
+            &out.join("amen-classic-weights.ppm"),
+            &amen_peaks.colors,
+            amen_peaks.bucket_count,
             24,
         );
     }

@@ -97,7 +97,7 @@
 @property --color-row-wave-sel { syntax: "<color>"; inherits: true; initial-value: #b9b0f0; }
 @property --color-wave-bass { syntax: "<color>"; inherits: true; initial-value: #ff3d8a; }
 @property --color-wave-mid { syntax: "<color>"; inherits: true; initial-value: #2ee89a; }
-@property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #4eb8ff; }
+@property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #8b7cff; }
 
 /* Smooth lerp when data-theme flips (skipped on first paint and reduced-motion). */
 html.theme-lerp {
@@ -248,7 +248,7 @@ html.theme-lerp {
   /* Spectral bands: saturated enough to read on slate chrome. */
   --color-wave-bass: #ff3d8a;
   --color-wave-mid: #2ee89a;
-  --color-wave-treble: #4eb8ff;
+  --color-wave-treble: #8b7cff;
 }
 
 /* --- Ink (Monospace Ink) --- */
@@ -323,7 +323,7 @@ html.theme-lerp {
   --color-row-wave-sel: #c9aefd;
   --color-wave-bass: #ff2d7b;
   --color-wave-mid: #1dff9a;
-  --color-wave-treble: #3db8ff;
+  --color-wave-treble: #9a7dff;
 }
 
 /* --- Graphite (Monospace Graphite) --- */
@@ -398,7 +398,7 @@ html.theme-lerp {
   --color-row-wave-sel: #c4c4c4;
   --color-wave-bass: #ff4a4a;
   --color-wave-mid: #4ade80;
-  --color-wave-treble: #60a5fa;
+  --color-wave-treble: #8b9cf7;
 }
 
 /* --- Snow (Monospace Snow, light) --- */
@@ -474,5 +474,5 @@ html.theme-lerp {
   /* Darker saturated bands so they hold on white chrome. */
   --color-wave-bass: #cf222e;
   --color-wave-mid: #1a7f37;
-  --color-wave-treble: #0550ae;
+  --color-wave-treble: #5b4db8;
 }

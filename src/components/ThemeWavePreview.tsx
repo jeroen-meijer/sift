@@ -47,7 +47,8 @@ export function ThemeWavePreview({ themeId }: Props) {
         colored: true,
         bands: bandsForTheme(themeId),
         ink: "#888",
-        style: "columns",
+        style: "gradient",
+        maxColorStops: 48,
       });
     };
 
