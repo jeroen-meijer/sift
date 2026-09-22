@@ -8,14 +8,25 @@ import {
   StarIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   clampColumnWidth,
-  FAV_COLUMN_WIDTH,
+  columnGridTemplate,
   type ColumnWidths,
   type ResizableColumn,
 } from "../lib/columnWidths";
+import {
+  dropIndexFromClientX,
+  mergeColumnOrder,
+  reorderByVisibleDrop,
+  visibleOrderedColumns,
+} from "../lib/columnOrder";
+import {
+  measureAllColLefts,
+  measureColRects,
+  playColumnFlip,
+} from "../lib/flipColumns";
 import { formatCount } from "../lib/format";
 import type { SampleRow, SortColumn, SortDirection } from "../lib/ipc";
 import { tagPalette } from "../lib/tagColors";
@@ -29,30 +40,10 @@ const ROW_OVERSCAN = 40;
 /** Prefetch peaks this far past the overscan window (first-pass scroll). */
 const PEAK_PREFETCH_PAD = 80;
 const EM_DASH = "—";
+/** Movement past this (css px) turns a header press into a column reorder. */
+const REORDER_THRESHOLD_PX = 5;
 
-function visibleColumns(hidden: Set<OptionalColumn>, showWaveforms: boolean): ResizableColumn[] {
-  const columns: ResizableColumn[] = ["name"];
-  for (const column of ["type", "bpm", "key"] as const) {
-    if (!hidden.has(column)) columns.push(column);
-  }
-  if (showWaveforms) columns.push("wave");
-  if (!hidden.has("tags")) columns.push("tags");
-  return columns;
-}
-
-function gridTemplate(
-  hidden: Set<OptionalColumn>,
-  showWaveforms: boolean,
-  widths: ColumnWidths,
-): string {
-  const parts = [`${String(FAV_COLUMN_WIDTH)}px`];
-  for (const column of visibleColumns(hidden, showWaveforms)) {
-    parts.push(`${String(widths[column])}px`);
-  }
-  /* Absorb leftover width so the table still fills the pane. */
-  parts.push("minmax(0, 1fr)");
-  return parts.join(" ");
-}
+const SORTABLE = new Set<ResizableColumn>(["name", "type", "bpm", "key"]);
 
 function highlight(name: string, query: string): ReactNode {
   const needle = query.trim().toLowerCase();
@@ -75,6 +66,14 @@ function splitFilename(filename: string): { base: string; ext: string } {
   return { base: filename.slice(0, at), ext: filename.slice(at) };
 }
 
+function ordersEqual(a: readonly ResizableColumn[], b: readonly ResizableColumn[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 interface Props {
   samples: SampleRow[];
   indexedCount: number;
@@ -89,6 +88,7 @@ interface Props {
   coloredWaveforms: boolean;
   hiddenColumns: Set<OptionalColumn>;
   columnWidths: ColumnWidths;
+  columnOrder: ResizableColumn[];
   sortColumn: SortColumn;
   sortDirection: SortDirection;
   highlightText: string;
@@ -98,6 +98,7 @@ interface Props {
   onToggleFavorite: (id: number, favorite: boolean) => void;
   onSort: (column: SortColumn) => void;
   onColumnWidthsChange: (widths: ColumnWidths) => void;
+  onColumnOrderChange: (order: ResizableColumn[]) => void;
   onOpenMenu: (x: number, y: number, sample: SampleRow) => void;
   onDragSelected: () => void;
   onScrubRow: (sample: SampleRow, fraction: number) => void;
@@ -115,6 +116,7 @@ export function SampleTable({
   coloredWaveforms,
   hiddenColumns,
   columnWidths,
+  columnOrder,
   sortColumn,
   sortDirection,
   highlightText,
@@ -124,20 +126,41 @@ export function SampleTable({
   onToggleFavorite,
   onSort,
   onColumnWidthsChange,
+  onColumnOrderChange,
   onOpenMenu,
   onDragSelected,
   onScrubRow,
 }: Props) {
   const { t } = useTranslation("library");
   const { t: tc } = useTranslation("common");
+  const tableRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     column: ResizableColumn;
     startX: number;
     startWidth: number;
   } | null>(null);
+  const reorderRef = useRef<{
+    column: ResizableColumn;
+    startX: number;
+    active: boolean;
+    sortable: boolean;
+  } | null>(null);
   const widthsRef = useRef(columnWidths);
   widthsRef.current = columnWidths;
+  const orderRef = useRef(columnOrder);
+  orderRef.current = columnOrder;
+  const flipBeforeRef = useRef<Map<HTMLElement, number> | null>(null);
+
+  const [draftOrder, setDraftOrder] = useState<ResizableColumn[] | null>(null);
+  const draftOrderRef = useRef<ResizableColumn[] | null>(null);
+  draftOrderRef.current = draftOrder;
+  const effectiveOrder = draftOrder ?? mergeColumnOrder(columnOrder);
+  const columns = visibleOrderedColumns(effectiveOrder, hiddenColumns, showWaveforms);
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+  const orderKey = effectiveOrder.join(",");
 
   const virtualizer = useVirtualizer({
     count: samples.length,
@@ -174,6 +197,21 @@ export function SampleTable({
     prefetchRowPeaks(warmIds);
   }, [showWaveforms, samples, rangeStart, rangeEnd]);
 
+  useLayoutEffect(() => {
+    const root = tableRef.current;
+    const before = flipBeforeRef.current;
+    if (!root || !before) return;
+    flipBeforeRef.current = null;
+    playColumnFlip(root, before);
+  }, [orderKey]);
+
+  /* Clear draft once the parent has caught up with the committed order. */
+  useEffect(() => {
+    if (draftOrder && ordersEqual(draftOrder, mergeColumnOrder(columnOrder))) {
+      setDraftOrder(null);
+    }
+  }, [columnOrder, draftOrder]);
+
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const drag = dragRef.current;
@@ -195,40 +233,144 @@ export function SampleTable({
     };
   }, [onColumnWidthsChange]);
 
-  const template = gridTemplate(hiddenColumns, showWaveforms, columnWidths);
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const session = reorderRef.current;
+      if (!session) return;
+      const dx = e.clientX - session.startX;
+      if (!session.active) {
+        if (Math.abs(dx) < REORDER_THRESHOLD_PX) return;
+        session.active = true;
+        document.body.classList.add("col-reordering");
+      }
+
+      const header = headerRef.current;
+      const table = tableRef.current;
+      if (!header || !table) return;
+
+      const visible = columnsRef.current;
+      const rects = measureColRects(header);
+      const drop = dropIndexFromClientX(visible, session.column, e.clientX, rects);
+      const current = draftOrderRef.current ?? mergeColumnOrder(orderRef.current);
+      const next = reorderByVisibleDrop(current, visible, session.column, drop);
+      if (ordersEqual(next, current)) return;
+
+      flipBeforeRef.current = measureAllColLefts(table);
+      draftOrderRef.current = next;
+      setDraftOrder(next);
+    };
+
+    const onUp = () => {
+      const session = reorderRef.current;
+      reorderRef.current = null;
+      document.body.classList.remove("col-reordering");
+      if (!session) return;
+
+      if (!session.active) {
+        if (session.sortable && SORTABLE.has(session.column)) {
+          onSort(session.column as SortColumn);
+        }
+        return;
+      }
+
+      const committed = draftOrderRef.current ?? mergeColumnOrder(orderRef.current);
+      if (!ordersEqual(committed, mergeColumnOrder(orderRef.current))) {
+        onColumnOrderChange(committed);
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [onColumnOrderChange, onSort]);
+
+  const template = columnGridTemplate(columns, columnWidths);
 
   const startResize = (column: ResizableColumn, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    /* Measure the rendered track width — stored values are fr weights, not px. */
+    const header = headerRef.current?.querySelector<HTMLElement>(`[data-col="${column}"]`);
+    const rendered = header?.getBoundingClientRect().width;
     dragRef.current = {
       column,
       startX: e.clientX,
-      startWidth: widthsRef.current[column],
+      startWidth: rendered != null && rendered > 0 ? rendered : widthsRef.current[column],
     };
     document.body.classList.add("col-resizing");
   };
 
-  const header = (column: "name" | "type" | "bpm" | "key", label: string) => {
-    const active = sortColumn === column;
+  const startReorder = (column: ResizableColumn, e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    reorderRef.current = {
+      column,
+      startX: e.clientX,
+      active: false,
+      sortable: SORTABLE.has(column),
+    };
+  };
+
+  const columnLabel = (column: ResizableColumn): string => {
+    switch (column) {
+      case "name":
+        return t("colName");
+      case "type":
+        return t("colType");
+      case "bpm":
+        return t("colBpm");
+      case "key":
+        return t("colKey");
+      case "wave":
+        return t("colWaveform");
+      case "tags":
+        return t("colTags");
+    }
+  };
+
+  const renderHeader = (column: ResizableColumn) => {
+    const label = columnLabel(column);
+    const sortable = SORTABLE.has(column);
+    const active = sortable && sortColumn === column;
     return (
-      <div className="col-header">
-        <button
-          type="button"
-          className="col"
-          aria-sort={active ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
-          onClick={() => {
-            onSort(column);
-          }}
-        >
-          {label}
-          {active ? (
-            sortDirection === "asc" ? (
-              <CaretUpIcon size={8} weight="bold" className="sort-mark" />
-            ) : (
-              <CaretDownIcon size={8} weight="bold" className="sort-mark" />
-            )
-          ) : null}
-        </button>
+      <div key={column} className="col-header" data-col={column}>
+        {sortable ? (
+          <button
+            type="button"
+            className="col"
+            aria-sort={active ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+            onPointerDown={(e) => {
+              startReorder(column, e);
+            }}
+            onClick={(e) => {
+              /* Sort is handled on pointerup so drag can suppress it. */
+              e.preventDefault();
+            }}
+          >
+            {label}
+            {active ? (
+              sortDirection === "asc" ? (
+                <CaretUpIcon size={8} weight="bold" className="sort-mark" />
+              ) : (
+                <CaretDownIcon size={8} weight="bold" className="sort-mark" />
+              )
+            ) : null}
+          </button>
+        ) : (
+          <span
+            className="col"
+            onPointerDown={(e) => {
+              startReorder(column, e);
+            }}
+          >
+            {label}
+          </span>
+        )}
         <button
           type="button"
           className="col-resize"
@@ -242,31 +384,89 @@ export function SampleTable({
     );
   };
 
-  const plainHeader = (column: ResizableColumn, label: string) => (
-    <div className="col-header">
-      <span className="col">{label}</span>
-      <button
-        type="button"
-        className="col-resize"
-        tabIndex={-1}
-        aria-label={t("resizeColumn", { column: label })}
-        onPointerDown={(e) => {
-          startResize(column, e);
-        }}
-      />
-    </div>
-  );
+  const renderCell = (column: ResizableColumn, sample: SampleRow, analyzing: boolean, playing: boolean) => {
+    switch (column) {
+      case "name": {
+        const { base, ext } = splitFilename(sample.filename);
+        return (
+          <div key={column} className="col name" data-col={column} title={sample.path}>
+            {sample.missing ? (
+              <WarningCircleIcon size={11} weight="fill" className="row-missing-icon" />
+            ) : null}
+            <span className="name-text">
+              {highlight(base, highlightText)}
+              {ext ? <span className="name-ext">{ext}</span> : null}
+            </span>
+          </div>
+        );
+      }
+      case "type":
+        return (
+          <div key={column} className="col type" data-col={column}>
+            {sample.missing ? "" : (sample.sample_type ?? "")}
+          </div>
+        );
+      case "bpm":
+        return (
+          <div key={column} className="col mono-cell" data-col={column}>
+            {sample.bpm == null ? EM_DASH : Math.round(sample.bpm)}
+          </div>
+        );
+      case "key":
+        return (
+          <div key={column} className="col mono-cell" data-col={column}>
+            {sample.key_name ?? EM_DASH}
+          </div>
+        );
+      case "wave":
+        return (
+          <div key={column} className="col wave" data-col={column}>
+            <RowWaveform
+              sampleId={sample.id}
+              missing={sample.missing}
+              analyzing={analyzing}
+              selected={selectedIds.has(sample.id)}
+              colored={coloredWaveforms}
+              progress={playing ? playingProgress : null}
+              onScrub={(fraction) => {
+                onScrubRow(sample, fraction);
+              }}
+            />
+          </div>
+        );
+      case "tags":
+        return (
+          <div key={column} className="col tags" data-col={column}>
+            {analyzing ? (
+              <span className="analyzing-label">{tc("statusAnalyzing")}</span>
+            ) : (
+              sample.tags.map((tag) => {
+                const palette = tagPalette(tag.path, tag.color);
+                return (
+                  <span
+                    key={tag.id}
+                    className="tag-chip"
+                    style={{ background: palette.bg, color: palette.fg }}
+                  >
+                    {tag.path}
+                  </span>
+                );
+              })
+            )}
+          </div>
+        );
+    }
+  };
 
   return (
-    <div className="sample-table">
-      <div className="sample-table-header" style={{ gridTemplateColumns: template }}>
+    <div className="sample-table" ref={tableRef}>
+      <div
+        className="sample-table-header"
+        ref={headerRef}
+        style={{ gridTemplateColumns: template }}
+      >
         <span />
-        {header("name", t("colName"))}
-        {hiddenColumns.has("type") ? null : header("type", t("colType"))}
-        {hiddenColumns.has("bpm") ? null : header("bpm", t("colBpm"))}
-        {hiddenColumns.has("key") ? null : header("key", t("colKey"))}
-        {showWaveforms ? plainHeader("wave", t("colWaveform")) : null}
-        {hiddenColumns.has("tags") ? null : plainHeader("tags", t("colTags"))}
+        {columns.map((column) => renderHeader(column))}
         <span aria-hidden />
       </div>
 
@@ -330,69 +530,7 @@ export function SampleTable({
                   />
                 </button>
 
-                <div className="col name" title={sample.path}>
-                  {sample.missing ? (
-                    <WarningCircleIcon size={11} weight="fill" className="row-missing-icon" />
-                  ) : null}
-                  {(() => {
-                    const { base, ext } = splitFilename(sample.filename);
-                    return (
-                      <span className="name-text">
-                        {highlight(base, highlightText)}
-                        {ext ? <span className="name-ext">{ext}</span> : null}
-                      </span>
-                    );
-                  })()}
-                </div>
-
-                {hiddenColumns.has("type") ? null : (
-                  <div className="col type">{sample.missing ? "" : (sample.sample_type ?? "")}</div>
-                )}
-                {hiddenColumns.has("bpm") ? null : (
-                  <div className="col mono-cell">
-                    {sample.bpm == null ? EM_DASH : Math.round(sample.bpm)}
-                  </div>
-                )}
-                {hiddenColumns.has("key") ? null : (
-                  <div className="col mono-cell">{sample.key_name ?? EM_DASH}</div>
-                )}
-
-                {showWaveforms ? (
-                  <div className="col wave">
-                    <RowWaveform
-                      sampleId={sample.id}
-                      missing={sample.missing}
-                      analyzing={analyzing}
-                      selected={selected}
-                      colored={coloredWaveforms}
-                      progress={playing ? playingProgress : null}
-                      onScrub={(fraction) => {
-                        onScrubRow(sample, fraction);
-                      }}
-                    />
-                  </div>
-                ) : null}
-
-                {hiddenColumns.has("tags") ? null : (
-                  <div className="col tags">
-                    {analyzing ? (
-                      <span className="analyzing-label">{tc("statusAnalyzing")}</span>
-                    ) : (
-                      sample.tags.map((tag) => {
-                        const palette = tagPalette(tag.path, tag.color);
-                        return (
-                          <span
-                            key={tag.id}
-                            className="tag-chip"
-                            style={{ background: palette.bg, color: palette.fg }}
-                          >
-                            {tag.path}
-                          </span>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
+                {columns.map((column) => renderCell(column, sample, analyzing, playing))}
                 <span aria-hidden />
               </div>
             );

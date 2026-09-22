@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { mergeColumnWidths } from "./columnWidths";
+import { mergeColumnOrder } from "./columnOrder";
 import { DEFAULT_SETTINGS, ipc, type AppSettings } from "./ipc";
 
 export interface SettingsStore {
@@ -31,6 +32,7 @@ export function useSettings(): SettingsStore {
       .then((stored) => {
         const merged = { ...DEFAULT_SETTINGS, ...stored };
         merged.column_widths = mergeColumnWidths(stored.column_widths ?? merged.column_widths);
+        merged.column_order = mergeColumnOrder(stored.column_order ?? merged.column_order);
         setSettings(merged);
       })
       .catch(console.error)

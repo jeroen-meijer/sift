@@ -47,6 +47,7 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
             "wave": 180,
             "tags": 210
         },
+        "column_order": ["name", "type", "bpm", "key", "wave", "tags"],
         "theme": "nocturne",
         "locale": "en"
     });

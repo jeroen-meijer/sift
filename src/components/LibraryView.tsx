@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding, primaryModHeld, shiftHeld as isShiftHeld } from "../lib/bindings";
 import { bpmFromBeats } from "../lib/bpm";
-import { mergeColumnWidths, type ColumnWidths } from "../lib/columnWidths";
+import { mergeColumnWidths, type ColumnWidths, type ResizableColumn } from "../lib/columnWidths";
+import { mergeColumnOrder } from "../lib/columnOrder";
 import { matchesHotkey } from "../lib/hotkey";
 import {
   ipc,
@@ -698,6 +699,7 @@ export function LibraryView({
             coloredWaveforms={settings.colored_waveforms}
             hiddenColumns={hiddenColumns}
             columnWidths={mergeColumnWidths(settings.column_widths)}
+            columnOrder={mergeColumnOrder(settings.column_order)}
             sortColumn={settings.sort_column}
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
@@ -725,6 +727,9 @@ export function LibraryView({
             }}
             onColumnWidthsChange={(widths: ColumnWidths) => {
               onSettingChange("column_widths", widths);
+            }}
+            onColumnOrderChange={(order: ResizableColumn[]) => {
+              onSettingChange("column_order", order);
             }}
             onOpenMenu={(x, y, sample) => {
               setMenu({ x, y, sample });

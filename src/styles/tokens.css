@@ -20,6 +20,8 @@
   --motion-base: 140ms;
   --motion-theme: 320ms;
   --motion-ease: cubic-bezier(0.2, 0, 0.13, 1);
+  /* Snappy start, soft landing — column shove / FLIP. */
+  --motion-ease-fast-in-out: cubic-bezier(0.15, 0.85, 0.2, 1);
   --motion-slide: 7px;
   --motion-hover-grace: 240ms;
 
