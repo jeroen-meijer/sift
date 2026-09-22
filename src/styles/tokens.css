@@ -89,6 +89,20 @@
   --radius-md: 8px;
   --radius-lg: 14px;
 
+  /*
+   * Motion. Every transition and flyout animation reads from these, and the
+   * JS side picks up --motion-hover-grace through src/ui/motion.ts, so this
+   * block is the only place to retune how the app feels.
+   */
+  --motion-fast: 90ms;
+  --motion-base: 140ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0.13, 1);
+  /* How far a flyout travels as it fades in. */
+  --motion-slide: 7px;
+  /* Grace period before a flyout closes when the pointer leaves its trigger,
+     so a diagonal sweep towards the flyout does not lose it on the way. */
+  --motion-hover-grace: 240ms;
+
   /* Window chrome geometry, straight from the design frame. */
   --sidebar-width: 248px;
   --titlebar-height: 38px;

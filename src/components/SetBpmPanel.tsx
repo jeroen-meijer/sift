@@ -26,6 +26,10 @@ interface Props {
  * Three ways into the same field: type a number, pick how many beats the
  * sample holds, or clear it. Each beat count shows the BPM it would produce,
  * so the choice is a decision rather than a guess.
+ *
+ * The field is not focused on mount — the flyout opens on hover, and grabbing
+ * focus every time the pointer sweeps past would be rude. `Menu` focuses it
+ * when the trigger is actually clicked.
  */
 export function SetBpmPanel({
   targets,
@@ -66,10 +70,19 @@ export function SetBpmPanel({
 
   const preview = (beats: number) => sharedBpmFromBeats(durations, beats, round);
 
-  const previewLabel = (value: number | "varies" | null) => {
-    if (value === "varies") return `→ ${t("bpmVaries")}`;
-    return value == null ? "" : `→ ${value}`;
-  };
+  /*
+   * The arrow and the number are separate cells so the arrows line up down the
+   * column while the numbers stay flush right.
+   */
+  const previewCells = (value: number | "varies" | null) =>
+    value == null ? null : (
+      <>
+        <span className="bpm-panel-arrow" aria-hidden>
+          →
+        </span>
+        <span className="bpm-panel-number">{value === "varies" ? t("bpmVaries") : value}</span>
+      </>
+    );
 
   const beatRow = (beats: number, key: string) => {
     const value = preview(beats);
@@ -79,15 +92,15 @@ export function SetBpmPanel({
       <button
         key={key}
         type="button"
-        className={`menu-item${outOfRange ? " muted" : ""}`}
+        className={`menu-item bpm-panel-beats${outOfRange ? " muted" : ""}${matches ? " current" : ""}`}
         disabled={value == null}
         onClick={() => {
           onSetFromBeats(beats);
         }}
       >
-        <span className="menu-icon">{matches ? <CheckIcon size={12} weight="bold" /> : null}</span>
         <span className="menu-label">{t("bpmBeats", { count: beats })}</span>
-        <span className="menu-hint">{previewLabel(value)}</span>
+        {matches ? <CheckIcon size={11} weight="bold" className="bpm-panel-tick" /> : null}
+        {previewCells(value)}
       </button>
     );
   };
@@ -102,7 +115,6 @@ export function SetBpmPanel({
           className="input input-mono bpm-panel-input"
           value={draft}
           inputMode="decimal"
-          autoFocus
           aria-label={t("bpmValue")}
           onChange={(e) => {
             setDraft(e.target.value);
@@ -146,9 +158,7 @@ export function SetBpmPanel({
               }}
             />
             <span className="bpm-panel-unit">{t("bpmCustomBeats")}</span>
-            <span className="menu-hint">
-              {customValid ? previewLabel(preview(customCount)) : ""}
-            </span>
+            {customValid ? previewCells(preview(customCount)) : null}
           </div>
         </>
       ) : (
@@ -165,13 +175,11 @@ export function SetBpmPanel({
 
       <button
         type="button"
-        className="menu-item danger"
+        className="menu-item bpm-panel-clear danger"
         disabled={targets.every((sample) => sample.bpm == null)}
         onClick={onClear}
       >
-        <span className="menu-icon">
-          <TrashIcon size={13} />
-        </span>
+        <TrashIcon size={13} />
         <span className="menu-label">{t("bpmClear")}</span>
       </button>
     </div>

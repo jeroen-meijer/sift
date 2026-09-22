@@ -418,6 +418,16 @@
   opacity: 0.5;
 }
 
+.menu-caret {
+  margin-left: auto;
+  flex: none;
+  opacity: 0.55;
+}
+
+.menu-item:hover:not(:disabled) .menu-caret {
+  opacity: 1;
+}
+
 .menu-sub {
   position: relative;
 }
@@ -427,6 +437,32 @@
   top: -5px;
   left: 100%;
   width: 176px;
+  --flyout-from: calc(var(--motion-slide) * -1);
+  animation: menu-flyout-in var(--motion-base) var(--motion-ease) both;
+}
+
+.menu-flyout.left {
+  left: auto;
+  right: 100%;
+  --flyout-from: var(--motion-slide);
+}
+
+@keyframes menu-flyout-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--flyout-from));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-flyout {
+    animation-duration: 1ms;
+  }
 }
 
 /* — popover ————————————————————————————————————————— */
@@ -485,12 +521,6 @@
   color: var(--color-text-faint);
 }
 
-/* A flyout holding controls sits left of its trigger when the menu is near
-   the right edge, so the panel never runs off screen. */
-.menu-flyout.left {
-  left: auto;
-  right: 100%;
-}
 
 .menu-item.muted .menu-label,
 .menu-item.muted .menu-hint {

@@ -835,23 +835,22 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 9px 4px;
-}
-
-.bpm-panel-field.custom {
-  padding-top: 4px;
+  padding: 1px 9px 3px;
 }
 
 .bpm-panel-input {
-  width: 74px;
+  width: 54px;
   flex: none;
-  min-height: 27px;
-  padding: 3px 8px;
+  min-height: 22px;
+  padding: 1px 6px;
+  border-radius: 6px;
   background: var(--color-surface);
+  font-size: 11.5px;
   text-align: center;
 }
 
 .bpm-panel-unit {
+  flex: 1;
   font-size: 11.5px;
   color: var(--color-text-muted);
 }
@@ -868,11 +867,56 @@
   color: var(--color-text-dim-2);
 }
 
+/* No leading icon slot: the beat counts sit flush with the section label. */
+.bpm-panel-beats {
+  gap: 6px;
+}
+
+.bpm-panel-beats .menu-label {
+  flex: none;
+}
+
+.bpm-panel-tick {
+  flex: none;
+  color: var(--color-accent-soft);
+}
+
+.bpm-panel-beats.current .menu-label {
+  color: var(--color-accent-soft);
+}
+
+.menu-item:hover:not(:disabled) .bpm-panel-tick,
+.menu-item:hover:not(:disabled).bpm-panel-beats.current .menu-label {
+  color: inherit;
+}
+
+/* The arrow keeps a fixed column; the number is right-aligned beside it. */
+.bpm-panel-arrow {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.5;
+}
+
+.bpm-panel-number {
+  min-width: 4ch;
+  flex: none;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+
 .bpm-panel-note {
   padding: 2px 9px 6px;
   font-size: 11px;
   line-height: 1.5;
   color: var(--color-text-faint);
+}
+
+.bpm-panel-clear {
+  gap: 7px;
 }
 
 .bpm-panel .checkbox-row {

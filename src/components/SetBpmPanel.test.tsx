@@ -52,11 +52,38 @@ function renderPanel(props: Partial<React.ComponentProps<typeof SetBpmPanel>> = 
   return handlers;
 }
 
+/** The BPM a beat row previews, read from its own cell. */
+function previewOf(label: RegExp): string | undefined {
+  return screen
+    .getByRole("button", { name: label })
+    .querySelector(".bpm-panel-number")?.textContent ?? undefined;
+}
+
 describe("SetBpmPanel", () => {
   it("previews the BPM each beat count would produce", () => {
     renderPanel();
-    expect(screen.getByRole("button", { name: /4 beats/ })).toHaveTextContent("→ 120");
-    expect(screen.getByRole("button", { name: /8 beats/ })).toHaveTextContent("→ 240");
+    expect(previewOf(/4 beats/)).toBe("120");
+    expect(previewOf(/8 beats/)).toBe("240");
+  });
+
+  it("keeps the arrows in one column and the numbers flush right", () => {
+    const { container } = render(
+      <SetBpmPanel
+        targets={[sample()]}
+        focused={sample()}
+        bpmMin={70}
+        bpmMax={180}
+        round
+        onRoundChange={vi.fn()}
+        onSetBpm={vi.fn()}
+        onSetFromBeats={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+    // One arrow cell and one number cell per preview, never a combined string.
+    expect(container.querySelectorAll(".bpm-panel-arrow")).toHaveLength(4);
+    expect(container.querySelectorAll(".bpm-panel-number")).toHaveLength(4);
+    expect(container.querySelector(".bpm-panel-beats .menu-icon")).toBeNull();
   });
 
   it("mutes beat counts that land outside the analysis range", () => {
@@ -80,12 +107,10 @@ describe("SetBpmPanel", () => {
         onClear={vi.fn()}
       />,
     );
-    const rows = [...container.querySelectorAll(".menu-item")];
-    const ticked = rows.filter(
-      (row) => row.querySelector("svg") && (row.textContent ?? "").includes("beats"),
-    );
+    const ticked = [...container.querySelectorAll(".bpm-panel-beats.current")];
     expect(ticked).toHaveLength(1);
     expect(ticked[0]).toHaveTextContent("4 beats");
+    expect(ticked[0]?.querySelector(".bpm-panel-tick")).not.toBeNull();
   });
 
   it("reports the length once for a selection that shares it", () => {
@@ -96,7 +121,7 @@ describe("SetBpmPanel", () => {
   it("says varies when the selection has different lengths", () => {
     renderPanel({ targets: [sample(), sample({ id: 2, duration_ms: 4000 })] });
     expect(screen.getAllByText("varies").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /4 beats/ })).toHaveTextContent("→ varies");
+    expect(previewOf(/4 beats/)).toBe("varies");
   });
 
   it("hands the beat count up rather than a computed BPM", async () => {
@@ -131,7 +156,7 @@ describe("SetBpmPanel", () => {
     renderPanel();
     await user.type(screen.getByRole("textbox", { name: "beats" }), "2");
     // 2 beats over 2 seconds is 60 BPM.
-    expect(screen.getByText("→ 60")).toBeVisible();
+    expect(screen.getByText("60")).toHaveClass("bpm-panel-number");
   });
 
   it("offers the beats section only when a length is known", () => {
