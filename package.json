@@ -14,9 +14,11 @@
     "test:watch": "vitest",
     "bench": "vitest bench --run",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "tauri:profile": "bun scripts/tauri-profile.ts"
+    "tauri:dev": "bun tool/sync-version.ts && tauri dev",
+    "tauri:build": "bun tool/build-tauri.ts",
+    "tauri:profile": "bun scripts/tauri-profile.ts",
+    "version:sync": "bun tool/sync-version.ts",
+    "version:set": "bun tool/sync-version.ts"
   },
   "dependencies": {
     "@crabnebula/tauri-plugin-drag": "2",

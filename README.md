@@ -44,7 +44,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo nextest run --all-features
 cargo bench --bench audio_hotpath
 
-# App package
+# App package (syncs version, lints, then tauri build)
 bun run tauri:build
 ```
 
@@ -52,3 +52,13 @@ Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`.
 Frontend micro-bench: `bun run bench`.
 
 Watch Clippy: `cd src-tauri && bacon clippy`.
+
+## Release
+
+Version lives in `package.json` (`bun run version:sync` / `version:set`). Changelog bullets go under `## Upcoming` in `CHANGELOG.md`.
+
+```bash
+./tool/prepare_release.sh 0.2.0   # on clean main: bump, push, triggers macOS + Windows installers
+```
+
+Optional PR path: `./tool/prepare_release.sh 0.2.0 --pr`. Retry a failed publish from Actions → **Publish Release**. Apple signing secrets are optional.

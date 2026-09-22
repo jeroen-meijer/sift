@@ -20,6 +20,7 @@ Local sample manager (Tauri 2 + React). Product rules: [SPEC.md](SPEC.md). Stack
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
 | Package manager | Bun |
 | CI | `.github/workflows/ci.yml` (fmt · clippy · nextest · eslint · tsc · vitest) |
+| Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (macOS + Windows) |
 
 ## Commands
 
@@ -40,7 +41,19 @@ bun run build
 bun run tauri:dev
 bun run tauri:profile
 bun run tauri:build
+
+# Version (package.json is canonical; syncs tauri.conf.json + Cargo.toml)
+bun run version:sync
+bun run version:set 0.2.0
 ```
+
+## Changelog / release
+
+- Prepend bullets under `## Upcoming` in `CHANGELOG.md` (newest first).
+- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (rewrites changelog, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers + GitHub release + tag).
+- Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.
+- Retry: Actions → **Publish Release** → Run workflow with the version.
+- macOS signing/notarization is optional (unsigned if Apple secrets are absent).
 
 ## Perf / profiling
 
