@@ -1,5 +1,12 @@
 import { CaretRightIcon, CheckIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  FLYOUT_WIDTH,
+  flyoutsGoLeft,
+  placeFlyout,
+  placeMenu,
+  type Placement,
+} from "./menuPlacement";
 import { motionMs } from "./motion";
 
 export interface MenuItem {
@@ -43,15 +50,14 @@ interface Props {
   label: string;
 }
 
-const MENU_WIDTH = 256;
-const FLYOUT_WIDTH = 176;
-const EDGE_GAP = 8;
-
 /** The design's 256px context menu, clamped to stay inside the window. */
 export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef(0);
-  const [pos, setPos] = useState({ left: x, top: y });
+  const [pos, setPos] = useState<Placement>({ left: x, top: y, maxHeight: 0 });
+  const [flyoutPos, setFlyoutPos] = useState<Placement | null>(null);
   const [openSub, setOpenSub] = useState<string | null>(null);
   const [flyoutsLeft, setFlyoutsLeft] = useState(false);
 
@@ -87,14 +93,35 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
   );
 
   useLayoutEffect(() => {
-    const height = ref.current?.offsetHeight ?? 0;
-    const left = Math.min(x, window.innerWidth - MENU_WIDTH - EDGE_GAP);
-    setPos({
-      left,
-      top: Math.max(EDGE_GAP, Math.min(y, window.innerHeight - height - EDGE_GAP)),
-    });
-    setFlyoutsLeft(left + MENU_WIDTH + widestFlyout + EDGE_GAP > window.innerWidth);
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const placement = placeMenu(x, y, ref.current?.offsetHeight ?? 0, viewport);
+    setPos(placement);
+    setFlyoutsLeft(flyoutsGoLeft(placement.left, widestFlyout, viewport));
   }, [x, y, entries, widestFlyout]);
+
+  /*
+   * Flyouts are fixed and placed from their trigger's box rather than nested
+   * inside it. An absolutely positioned flyout inherits the trigger's vertical
+   * position, so a tall one runs straight off the bottom of the window — and
+   * unlike a native menu, this one cannot draw outside it.
+   */
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current;
+    const flyout = flyoutRef.current;
+    if (openSub == null || !trigger || !flyout) {
+      setFlyoutPos(null);
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    setFlyoutPos(
+      placeFlyout(
+        rect,
+        { width: flyout.offsetWidth, height: flyout.offsetHeight },
+        flyoutsLeft,
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    );
+  }, [openSub, flyoutsLeft, pos, entries]);
 
   useEffect(() => {
     const close = () => {
@@ -113,10 +140,12 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
     };
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
@@ -126,13 +155,18 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
     onClose();
   };
 
+  /* Hidden for the first frame, while the layout effect measures and places it. */
+  const flyoutStyle: React.CSSProperties = flyoutPos
+    ? { left: flyoutPos.left, top: flyoutPos.top, maxHeight: flyoutPos.maxHeight }
+    : { visibility: "hidden" };
+
   return (
     <div
       ref={ref}
       className="menu"
       role="menu"
       aria-label={label}
-      style={{ left: pos.left, top: pos.top }}
+      style={{ left: pos.left, top: pos.top, maxHeight: pos.maxHeight || undefined }}
       onPointerDown={(e) => {
         e.stopPropagation();
       }}
@@ -144,6 +178,7 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
           <div
             key={entry.id}
             className="menu-sub"
+            ref={openSub === entry.id ? triggerRef : undefined}
             onMouseEnter={() => {
               if (!entry.disabled) openFlyout(entry.id);
             }}
@@ -168,10 +203,11 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
             </button>
             {openSub === entry.id ? (
               <div
+                ref={flyoutRef}
                 className={`menu menu-flyout${flyoutsLeft ? " left" : ""}`}
                 role="group"
                 aria-label={entry.label}
-                style={{ width: entry.width }}
+                style={{ width: entry.width, ...flyoutStyle }}
                 onMouseEnter={cancelClose}
               >
                 {entry.content}
@@ -182,6 +218,7 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
           <div
             key={entry.id}
             className="menu-sub"
+            ref={openSub === entry.id ? triggerRef : undefined}
             onMouseEnter={() => {
               if (!entry.disabled) openFlyout(entry.id);
             }}
@@ -201,9 +238,11 @@ export function Menu({ x, y, entries, onSelect, onClose, label }: Props) {
             </button>
             {openSub === entry.id ? (
               <div
+                ref={flyoutRef}
                 className={`menu menu-flyout${flyoutsLeft ? " left" : ""}`}
                 role="menu"
                 aria-label={entry.label}
+                style={flyoutStyle}
                 onMouseEnter={cancelClose}
               >
                 {entry.options.map((option) => (
