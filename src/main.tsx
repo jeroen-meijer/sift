@@ -1,11 +1,11 @@
 import "./i18n";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { AppShell } from "./components/AppShell";
+import { App } from "./components/App";
 import { applyTheme } from "./theme";
-import "./themes/dark-default.css";
+import "./styles/tokens.css";
 
-applyTheme("dark-default");
+applyTheme("nocturne");
 
 const root = document.getElementById("root");
 if (!root) {
@@ -14,6 +14,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <AppShell />
+    <App />
   </StrictMode>,
 );

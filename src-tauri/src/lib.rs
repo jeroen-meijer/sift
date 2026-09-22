@@ -27,7 +27,9 @@ use state::AppState;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-#[allow(clippy::expect_used, clippy::panic)] // Tauri entry: fail-fast on unrecoverable init
+// Tauri entry: `generate_context!` expands to a `process::exit`, and init failures
+// are unrecoverable, so this is the one place that may panic.
+#[allow(clippy::expect_used, clippy::panic, clippy::exit)]
 pub fn run() {
     let app_state = AppState::init().expect("failed to initialize Sift app state");
 
@@ -66,15 +68,19 @@ pub fn run() {
             commands::redo_meta,
             commands::get_peaks,
             commands::play_sample,
+            commands::set_play_region,
             commands::stop_playback,
             commands::pause_playback,
             commands::resume_playback,
+            commands::playback_state,
             commands::list_output_devices,
             commands::set_output_device,
             commands::set_preview_gain,
             commands::set_loop_preview,
             commands::render_jit_clip,
+            commands::snap_zero_crossings,
             commands::clear_jit_cache,
+            commands::set_clips_dir,
             commands::start_drag_files,
             commands::list_tags,
             commands::create_tag,

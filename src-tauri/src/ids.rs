@@ -43,6 +43,17 @@ pub const fn f64_to_f32(v: f64) -> f32 {
     v as f32
 }
 
+/// Frame / sample index widened to `f64` for time maths.
+#[allow(
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "single widening point; frame counts stay far below the f64 mantissa"
+)]
+#[must_use]
+pub const fn usize_to_f64(n: usize) -> f64 {
+    n as f64
+}
+
 /// Non-negative seconds/frames float clamped into a buffer index.
 #[allow(
     clippy::as_conversions,

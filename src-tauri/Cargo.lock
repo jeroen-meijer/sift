@@ -4028,6 +4028,8 @@ dependencies = [
  "libsqlite3-sys",
  "notify",
  "notify-debouncer-full",
+ "objc2",
+ "objc2-app-kit",
  "rtrb",
  "serde",
  "serde_json",

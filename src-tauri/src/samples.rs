@@ -16,6 +16,7 @@ use crate::ids::{id_from_i64, id_to_i64};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TagChip {
+    pub id: i64,
     pub path: String,
     pub color: Option<String>,
 }
@@ -28,6 +29,7 @@ pub struct SampleDto {
     pub filename: String,
     pub parent_path: String,
     pub extension: String,
+    pub size_bytes: Option<i64>,
     pub missing: bool,
     pub sample_rate: Option<i64>,
     pub bit_depth: Option<i64>,
@@ -74,6 +76,7 @@ fn sample_to_dto(s: Sample) -> SampleDto {
         filename: s.filename,
         parent_path: s.parent_path,
         extension: s.extension,
+        size_bytes: s.size_bytes,
         missing: s.missing != 0,
         sample_rate: s.sample_rate.map(id_to_i64),
         bit_depth: s.bit_depth.map(id_to_i64),
@@ -173,7 +176,11 @@ fn load_tags_for(conn: &mut SqliteConnection, samples: &mut [SampleDto]) -> AppR
         by_id
             .entry(id_to_i64(sample_id))
             .or_default()
-            .push(TagChip { path, color });
+            .push(TagChip {
+                id: id_to_i64(tag_id),
+                path,
+                color,
+            });
     }
     for sample in samples.iter_mut() {
         if let Some(tags) = by_id.remove(&sample.id) {

@@ -102,6 +102,20 @@ pub fn clear_cache(clips_dir: &Path) -> AppResult<()> {
     Ok(())
 }
 
+/// Total bytes of every file under `clips_dir`. Unreadable entries count as 0.
+pub fn cache_size(clips_dir: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(clips_dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|entry| match entry.path() {
+            path if path.is_dir() => cache_size(&path),
+            path => fs::metadata(path).map_or(0, |m| m.len()),
+        })
+        .sum()
+}
+
 fn format_secs(secs: f64) -> String {
     format!("{secs:.3}")
 }

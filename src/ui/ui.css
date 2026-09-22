@@ -1,0 +1,670 @@
+/* Primitives shared across views. Geometry follows Sift.dc.html exactly. */
+
+/* --- switch --- */
+
+.switch {
+  width: 34px;
+  height: 19px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-neutral-850);
+  position: relative;
+}
+
+.switch.on {
+  background: var(--color-accent-strong);
+}
+
+.switch-knob {
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  transition:
+    left 0.13s ease-out,
+    background 0.13s ease-out;
+}
+
+.switch.on .switch-knob {
+  left: 17.5px;
+  background: var(--color-neutral-100);
+}
+
+/* --- segmented --- */
+
+.seg {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--color-sunken);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+.seg-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 7px;
+  background: var(--color-accent-fill);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.seg-thumb.ready {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    width var(--motion-base) var(--motion-ease);
+}
+
+.seg-opt {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seg-opt.on {
+  color: var(--color-accent-soft);
+}
+
+.seg-opt:not(.on):hover {
+  color: var(--color-text);
+}
+
+.seg-opt:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg-thumb.ready {
+    transition: none;
+  }
+}
+
+/* --- sliders --- */
+
+.slider,
+.range-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 11px;
+  margin: 0;
+  background: transparent;
+}
+
+.slider {
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--color-accent-strong), var(--color-accent-strong)) no-repeat left center /
+      var(--slider-fill, 0%) 3px,
+    linear-gradient(var(--color-neutral-850), var(--color-neutral-850)) no-repeat left center / 100%
+      3px;
+}
+
+.slider::-webkit-slider-thumb,
+.range-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-neutral-300);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 60%);
+  cursor: pointer;
+}
+
+.slider:focus-visible,
+.range-slider-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.range-slider {
+  position: relative;
+  flex: 1;
+  height: 11px;
+  display: flex;
+  align-items: center;
+}
+
+.range-slider-track {
+  position: absolute;
+  inset: 4px 0;
+  border-radius: 2px;
+  background: var(--color-neutral-850);
+}
+
+.range-slider-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: var(--color-accent-strong);
+}
+
+.range-slider-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.range-slider-input::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+
+/* --- checkbox --- */
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 31px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.checkbox-row:hover {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.checkbox-row input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkbox-box {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--color-text-faint);
+  border-radius: 4px;
+  color: var(--color-bg);
+}
+
+.checkbox-row input:checked + .checkbox-box {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.checkbox-row input:focus-visible + .checkbox-box {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.checkbox-hint {
+  font-size: 11px;
+  color: var(--color-text-dim-2);
+}
+
+/* --- pill select --- */
+
+.pill-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--color-text-dim);
+}
+
+.pill-select select {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+.pill-select > svg {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.pill-select-pill select {
+  padding: 3px 21px 3px 8px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.pill-select-pill select:hover {
+  background: var(--color-surface-hover);
+}
+
+.pill-select-input select {
+  min-height: 30px;
+  padding: 3px 26px 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
+.pill-select-input > svg {
+  right: 10px;
+}
+
+.pill-select select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* --- dialog --- */
+
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--color-bg-deep) 62%, transparent);
+  animation: dialog-scrim-in var(--motion-base) var(--motion-ease) both;
+}
+
+.dialog-card {
+  max-width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-input);
+  box-shadow:
+    0 0 0 1px var(--color-text-ghost),
+    0 26px 60px rgb(0 0 0 / 72%);
+  animation: dialog-card-in var(--motion-base) var(--motion-ease) both;
+  transform-origin: 50% 40%;
+}
+
+.dialog-card.bare {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(820px, calc(100% - 24px));
+}
+
+.dialog-card:focus {
+  outline: none;
+}
+
+@keyframes dialog-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-slide)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-scrim,
+  .dialog-card {
+    animation-duration: 1ms;
+  }
+}
+
+.dialog-title {
+  margin: 0 0 5px;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.dialog-body {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.dialog-body strong {
+  font-weight: 400;
+  color: var(--color-text);
+}
+
+.dialog-head {
+  display: flex;
+  gap: 11px;
+  margin-bottom: 15px;
+}
+
+.dialog-head > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.dialog-panel {
+  padding: 11px 13px;
+  border-radius: 9px;
+  background: var(--color-sunken);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.dialog-panel.danger {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 22%, transparent);
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.dialog-actions .dialog-note {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+
+/* --- menu --- */
+
+.menu {
+  position: fixed;
+  z-index: 60;
+  width: 256px;
+  padding: 5px;
+  overflow-y: auto;
+  border-radius: 9px;
+  background: var(--color-bg-input);
+  box-shadow:
+    0 0 0 1px var(--color-text-ghost),
+    0 18px 44px rgb(0 0 0 / 72%);
+  font-size: 12.5px;
+  /* Opacity only. Transform would pin position:fixed flyouts to the menu
+     and open them off-screen or clipped. */
+  animation: menu-in var(--motion-base) var(--motion-ease) both;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.menu-rule {
+  height: 1px;
+  margin: 4px 8px;
+  background: color-mix(in srgb, var(--color-text) 11%, transparent);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-neutral-250);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: var(--color-accent);
+  color: var(--color-ink);
+  outline: none;
+}
+
+.menu-item:disabled {
+  opacity: 0.4;
+}
+
+.menu-item.danger {
+  color: var(--color-danger);
+}
+
+.menu-icon {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  flex: none;
+  opacity: 0.85;
+}
+
+.menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  opacity: 0.55;
+}
+
+.menu-hint-mod {
+  font-size: 1.08em;
+  line-height: 1;
+}
+
+.menu-hint-key {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.menu-caret {
+  margin-left: auto;
+  flex: none;
+  opacity: 0.55;
+}
+
+.menu-hint + .menu-caret {
+  margin-left: 4px;
+}
+
+.menu-item:hover:not(:disabled) .menu-caret {
+  opacity: 1;
+}
+
+.menu-sub {
+  position: relative;
+}
+
+/* Placed from its trigger's box by Menu, so it can be clamped to the window. */
+.menu-flyout {
+  position: fixed;
+  z-index: 70;
+  width: 176px;
+  overflow: visible;
+  --flyout-from: -8px;
+  animation: menu-flyout-in var(--motion-base) var(--motion-ease) both;
+}
+
+.menu-flyout.left {
+  --flyout-from: 8px;
+}
+
+.menu-flyout.leaving {
+  animation-name: menu-flyout-out;
+  pointer-events: none;
+}
+
+@keyframes menu-flyout-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--flyout-from));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes menu-flyout-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(var(--flyout-from));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .menu-flyout {
+    animation-duration: 1ms;
+  }
+}
+
+/* --- popover --- */
+
+.popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  z-index: 40;
+  min-width: 184px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 5px;
+  border-radius: 9px;
+  background: var(--color-bg-input);
+  box-shadow:
+    0 0 0 1px var(--color-text-ghost),
+    0 18px 44px rgb(0 0 0 / 72%);
+  font-size: 12.5px;
+  transform-origin: top right;
+  animation: popover-in var(--motion-base) var(--motion-ease) both;
+}
+
+.popover-left {
+  left: 0;
+  transform-origin: top left;
+}
+
+.popover-right {
+  right: 0;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--motion-slide) * -0.4)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .popover {
+    animation-duration: 1ms;
+  }
+}
+
+.popover button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-neutral-250);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.popover button:hover {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+.popover-label {
+  padding: 4px 9px 6px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.popover-search {
+  width: calc(100% - 8px);
+  margin: 2px 4px 6px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+
+.menu-item.muted .menu-label,
+.menu-item.muted .menu-hint {
+  opacity: 0.45;
+}
+
+.menu-item:hover:not(:disabled) .menu-hint {
+  opacity: 0.8;
+}

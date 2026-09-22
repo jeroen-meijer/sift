@@ -28,6 +28,7 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
         "preview_gain_db": -6.0,
         "bpm_range_min": 70,
         "bpm_range_max": 180,
+        "bpm_round_whole": true,
         "new_file_mode": "auto",
         "notify_auto_index": false,
         "ignore_list": DEFAULT_IGNORE,
@@ -37,7 +38,15 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
         "relative_key": false,
         "hold_hover_hotkey": null,
         "clips_dir": paths.clips_dir.to_string_lossy(),
-        "theme": "dark-default",
+        "column_widths": {
+            "name": 220,
+            "type": 58,
+            "bpm": 46,
+            "key": 54,
+            "wave": 180,
+            "tags": 210
+        },
+        "theme": "nocturne",
         "locale": "en"
     });
 
