@@ -196,6 +196,15 @@ export function LibraryView({
       setPeaks(null);
       return;
     }
+    const idx = samplesRef.current.findIndex((s) => s.id === focusedId);
+    const warmIds: number[] = [];
+    for (const offset of [-1, 0, 1, 2]) {
+      const sample = samplesRef.current[idx + offset];
+      if (sample && !sample.missing) warmIds.push(sample.id);
+    }
+    void ipc.prefetchDecode(warmIds).catch(() => {
+      /* best-effort */
+    });
     void ipc
       .getPeaks(focusedId)
       .then(setPeaks)
