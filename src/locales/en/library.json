@@ -25,6 +25,7 @@
   "emptyBody": "Remove a filter chip, or widen the BPM range.",
   "emptyCount_one": "{{formatted}} file is indexed.",
   "emptyCount_other": "{{formatted}} files are indexed.",
+  "loadingSamples": "Loading samples…",
   "selectedCount_one": "{{count}} sample selected",
   "selectedCount_other": "{{count}} samples selected",
   "selectionKeys": "⇧ range · ⌘ toggle",

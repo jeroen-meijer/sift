@@ -27,6 +27,22 @@ describe("spectralColor", () => {
     expect(blendSpectralRgb([0, 0, 255], bands)).toEqual([0, 0, 255]);
   });
 
+  it("keeps bass-heavy frames on the bass hue (not white)", () => {
+    const mixed = blendSpectralRgb([220, 40, 30], bands);
+    expect(mixed[0]).toBeGreaterThan(180);
+    expect(mixed[1]).toBeLessThan(60);
+    expect(mixed[2]).toBeLessThan(60);
+  });
+
+  it("does not paint equal band energy as pure white", () => {
+    const mixed = blendSpectralRgb([255, 255, 255], bands);
+    const max = Math.max(...mixed);
+    const min = Math.min(...mixed);
+    /* Primary R+G+B mix → greyish, not #fff. */
+    expect(max - min).toBeLessThan(40);
+    expect(max).toBeLessThan(200);
+  });
+
   it("mixes bass and treble into purple", () => {
     const mixed = blendSpectralRgb([200, 0, 200], bands);
     expect(mixed[0]).toBeGreaterThan(100);
@@ -40,7 +56,7 @@ describe("spectralColor", () => {
       mid: [100, 180, 120],
       treble: [100, 120, 180],
     };
-    const mixed = blendSpectralRgb([120, 120, 120], mutedBands);
+    const mixed = blendSpectralRgb([200, 80, 40], mutedBands);
     const max = Math.max(...mixed);
     const min = Math.min(...mixed);
     expect(max - min).toBeGreaterThan(20);

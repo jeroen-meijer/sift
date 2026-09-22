@@ -292,11 +292,15 @@ export function SettingsView({
                   />
                 </Row>
                 <Row title={t("coloredWaveforms")} hint={t("coloredWaveformsHint")}>
-                  <Switch
+                  <Segmented<"on" | "off">
                     label={t("coloredWaveforms")}
-                    checked={settings.colored_waveforms}
+                    value={settings.colored_waveforms ? "on" : "off"}
+                    options={[
+                      { value: "on", label: t("coloredWaveformsOn") },
+                      { value: "off", label: t("coloredWaveformsOff") },
+                    ]}
                     onChange={(v) => {
-                      onChange("colored_waveforms", v);
+                      onChange("colored_waveforms", v === "on");
                     }}
                   />
                 </Row>
