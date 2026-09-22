@@ -1,10 +1,10 @@
-import { Gear, Tag } from "@phosphor-icons/react";
+import { GearIcon, TagIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
-type Props = {
+interface Props {
   onSettings: () => void;
   onTags: () => void;
-};
+}
 
 export function TitleBar({ onSettings, onTags }: Props) {
   const { t } = useTranslation("common");
@@ -25,7 +25,7 @@ export function TitleBar({ onSettings, onTags }: Props) {
           aria-label={t("settings")}
           onClick={onSettings}
         >
-          <Gear size={15} />
+          <GearIcon size={15} />
         </button>
         <button
           type="button"
@@ -34,7 +34,7 @@ export function TitleBar({ onSettings, onTags }: Props) {
           aria-label={t("tags")}
           onClick={onTags}
         >
-          <Tag size={15} />
+          <TagIcon size={15} />
         </button>
       </div>
     </header>

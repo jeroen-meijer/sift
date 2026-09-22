@@ -1,14 +1,14 @@
 import { useEffect, useRef } from "react";
 
-export type PeakData = {
+export interface PeakData {
   channels: number;
   sample_rate: number;
   duration_ms: number;
   bucket_count: number;
   peaks: number[];
-};
+}
 
-type Props = {
+interface Props {
   peaks: PeakData | null;
   height?: number;
   playhead?: number | null;
@@ -16,7 +16,7 @@ type Props = {
   onSeek?: (secs: number) => void;
   onSelectRegion?: (start: number, end: number) => void;
   stereo?: boolean;
-};
+}
 
 export function WaveformCanvas({
   peaks,

@@ -26,20 +26,20 @@ impl AppState {
         // Seed player prefs from settings when present.
         let _ = db.with_conn(|conn| {
             use crate::db::settings;
-            if let Some(v) = settings::get(conn, "preview_gain_db")? {
-                if let Some(db_val) = v.as_f64() {
-                    player.set_gain_db(db_val as f32);
-                }
+            if let Some(v) = settings::get(conn, "preview_gain_db")?
+                && let Some(db_val) = v.as_f64()
+            {
+                player.set_gain_db(crate::ids::f64_to_f32(db_val));
             }
-            if let Some(v) = settings::get(conn, "loop_preview")? {
-                if let Some(on) = v.as_bool() {
-                    player.set_loop_preview(on);
-                }
+            if let Some(v) = settings::get(conn, "loop_preview")?
+                && let Some(on) = v.as_bool()
+            {
+                player.set_loop_preview(on);
             }
-            if let Some(v) = settings::get(conn, "output_device")? {
-                if let Some(id) = v.as_str() {
-                    let _ = player.set_device(id);
-                }
+            if let Some(v) = settings::get(conn, "output_device")?
+                && let Some(id) = v.as_str()
+            {
+                let _ = player.set_device(id);
             }
             Ok(())
         });

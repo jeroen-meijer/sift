@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
@@ -67,7 +67,10 @@ impl Db {
             conn: Mutex::new(conn),
         };
         {
-            let mut conn = db.conn.lock().expect("db lock");
+            let mut conn = db
+                .conn
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             settings::ensure_defaults(&mut conn, paths)?;
             taxonomy::seed_if_empty(&mut conn)?;
         }
@@ -78,7 +81,10 @@ impl Db {
         &self,
         f: impl FnOnce(&mut SqliteConnection) -> AppResult<T>,
     ) -> AppResult<T> {
-        let mut conn = self.conn.lock().expect("db lock");
+        let mut conn = self
+            .conn
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         f(&mut conn)
     }
 }

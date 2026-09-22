@@ -1,7 +1,7 @@
-import { HardDrives, Plus, Star } from "@phosphor-icons/react";
+import { HardDrivesIcon, PlusIcon, StarIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
-export type FolderNode = {
+export interface FolderNode {
   path: string;
   name: string;
   root_id: number;
@@ -9,14 +9,14 @@ export type FolderNode = {
   is_root: boolean;
   favorite: boolean;
   sample_count: number;
-};
+}
 
-type Props = {
+interface Props {
   nodes: FolderNode[];
   selectedPath: string | null;
   onSelect: (path: string) => void;
   onAddRoot: () => void;
-};
+}
 
 export function FolderSidebar({ nodes, selectedPath, onSelect, onAddRoot }: Props) {
   const { t } = useTranslation("library");
@@ -32,7 +32,7 @@ export function FolderSidebar({ nodes, selectedPath, onSelect, onAddRoot }: Prop
           aria-label={t("addRoot")}
           onClick={onAddRoot}
         >
-          <Plus size={12} />
+          <PlusIcon size={12} />
         </button>
       </div>
       <div className="sidebar-scroll">
@@ -47,11 +47,11 @@ export function FolderSidebar({ nodes, selectedPath, onSelect, onAddRoot }: Prop
                 type="button"
                 className={`folder-row${selected ? " selected" : ""}${node.is_root ? " root" : ""}`}
                 style={{ paddingLeft: 8 + node.depth * 12 }}
-                onClick={() => onSelect(node.path)}
+                onClick={() => void onSelect(node.path)}
               >
-                {node.is_root ? <HardDrives size={13} weight="fill" /> : null}
+                {node.is_root ? <HardDrivesIcon size={13} weight="fill" /> : null}
                 <span className="folder-name">{node.name}</span>
-                {node.favorite ? <Star size={9} weight="fill" className="folder-fav" /> : null}
+                {node.favorite ? <StarIcon size={9} weight="fill" className="folder-fav" /> : null}
                 <span className="folder-count">{node.sample_count}</span>
               </button>
             );

@@ -83,10 +83,12 @@ impl UndoStack {
         Ok(Some(action))
     }
 
+    #[allow(dead_code, reason = "public stack API used by future UI state")]
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
 
+    #[allow(dead_code, reason = "public stack API used by future UI state")]
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
@@ -102,9 +104,7 @@ fn apply_inverse(conn: &mut SqliteConnection, action: &UndoAction) -> AppResult<
             tags::add_sample_tag(conn, *sample_id, *tag_id)
         }
         UndoAction::Bpm { id, before, .. } => samples::set_sample_bpm(conn, *id, *before),
-        UndoAction::Key { id, before, .. } => {
-            samples::set_sample_key(conn, *id, before.as_deref())
-        }
+        UndoAction::Key { id, before, .. } => samples::set_sample_key(conn, *id, before.as_deref()),
         UndoAction::SampleType { id, before, .. } => {
             samples::set_sample_type(conn, *id, before.as_deref())
         }
@@ -114,9 +114,7 @@ fn apply_inverse(conn: &mut SqliteConnection, action: &UndoAction) -> AppResult<
 fn apply_forward(conn: &mut SqliteConnection, action: &UndoAction) -> AppResult<()> {
     match action {
         UndoAction::Favorite { id, after, .. } => samples::set_sample_favorite(conn, *id, *after),
-        UndoAction::TagAdd { sample_id, tag_id } => {
-            tags::add_sample_tag(conn, *sample_id, *tag_id)
-        }
+        UndoAction::TagAdd { sample_id, tag_id } => tags::add_sample_tag(conn, *sample_id, *tag_id),
         UndoAction::TagRemove { sample_id, tag_id } => {
             tags::remove_sample_tag(conn, *sample_id, *tag_id)
         }

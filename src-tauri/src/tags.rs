@@ -11,6 +11,7 @@ use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::schema::tag_rejects::dsl as rejects_dsl;
 use crate::db::schema::tags::dsl as tags_dsl;
 use crate::error::{AppError, AppResult};
+use crate::ids::{id_from_i64, id_to_i64};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TagNode {
@@ -20,7 +21,7 @@ pub struct TagNode {
     pub parent_id: Option<i64>,
     pub color: Option<String>,
     pub sample_count: i64,
-    pub children: Vec<TagNode>,
+    pub children: Vec<Self>,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,28 @@ struct TagRow {
     parent_id: Option<i64>,
     color: Option<String>,
     sample_count: i64,
+}
+
+fn build_tree(
+    by_parent: &mut HashMap<Option<i64>, Vec<TagRow>>,
+    parent: Option<i64>,
+) -> Vec<TagNode> {
+    let mut kids = by_parent.remove(&parent).unwrap_or_default();
+    kids.sort_by_key(|row| row.path.to_lowercase());
+    kids.into_iter()
+        .map(|row| {
+            let id = row.id;
+            TagNode {
+                id,
+                path: row.path,
+                name: row.name,
+                parent_id: row.parent_id,
+                color: row.color,
+                sample_count: row.sample_count,
+                children: build_tree(by_parent, Some(id)),
+            }
+        })
+        .collect()
 }
 
 pub fn list_tags(conn: &mut SqliteConnection) -> AppResult<Vec<TagNode>> {
@@ -46,10 +69,10 @@ pub fn list_tags(conn: &mut SqliteConnection) -> AppResult<Vec<TagNode>> {
             .select(count_star())
             .first(conn)?;
         rows.push(TagRow {
-            id: tag.id as i64,
+            id: id_to_i64(tag.id),
             path: tag.path,
             name: tag.name,
-            parent_id: tag.parent_id.map(|p| p as i64),
+            parent_id: tag.parent_id.map(id_to_i64),
             color: tag.color,
             sample_count,
         });
@@ -60,29 +83,7 @@ pub fn list_tags(conn: &mut SqliteConnection) -> AppResult<Vec<TagNode>> {
         by_parent.entry(row.parent_id).or_default().push(row);
     }
 
-    fn build(
-        by_parent: &mut HashMap<Option<i64>, Vec<TagRow>>,
-        parent: Option<i64>,
-    ) -> Vec<TagNode> {
-        let mut kids = by_parent.remove(&parent).unwrap_or_default();
-        kids.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
-        kids.into_iter()
-            .map(|row| {
-                let id = row.id;
-                TagNode {
-                    id,
-                    path: row.path,
-                    name: row.name,
-                    parent_id: row.parent_id,
-                    color: row.color,
-                    sample_count: row.sample_count,
-                    children: build(by_parent, Some(id)),
-                }
-            })
-            .collect()
-    }
-
-    Ok(build(&mut by_parent, None))
+    Ok(build_tree(&mut by_parent, None))
 }
 
 pub fn create_tag(
@@ -99,14 +100,12 @@ pub fn create_tag(
     }
 
     let name = path.rsplit('/').next().unwrap_or(path);
-    let parent_id = if let Some((parent_path, _)) = path.rsplit_once('/') {
-        Some(
+    let parent_id = match path.rsplit_once('/') {
+        Some((parent_path, _)) => Some(
             tag_id_by_path(conn, parent_path)?
-                .ok_or_else(|| AppError::msg(format!("parent tag not found: {parent_path}")))?
-                as i32,
-        )
-    } else {
-        None
+                .ok_or_else(|| AppError::msg(format!("parent tag not found: {parent_path}")))?,
+        ),
+        None => None,
     };
 
     let id: i32 = diesel::insert_into(tags_dsl::tags)
@@ -120,11 +119,11 @@ pub fn create_tag(
         .get_result(conn)?;
 
     Ok(TagNode {
-        id: id as i64,
+        id: id_to_i64(id),
         path: path.to_string(),
         name: name.to_string(),
-        parent_id: parent_id.map(|p| p as i64),
-        color: color.map(|c| c.to_string()),
+        parent_id: parent_id.map(id_to_i64),
+        color: color.map(ToString::to_string),
         sample_count: 0,
         children: Vec::new(),
     })
@@ -135,8 +134,9 @@ pub fn rename_tag(conn: &mut SqliteConnection, id: i64, name: &str) -> AppResult
     if name.is_empty() || name.contains('/') {
         return Err(AppError::msg("invalid tag name"));
     }
+    let id = id_from_i64(id)?;
     let (old_path, parent_id): (String, Option<i32>) = tags_dsl::tags
-        .find(id as i32)
+        .find(id)
         .select((tags_dsl::path, tags_dsl::parent_id))
         .first(conn)
         .optional()?
@@ -154,38 +154,35 @@ pub fn rename_tag(conn: &mut SqliteConnection, id: i64, name: &str) -> AppResult
     };
 
     if new_path == old_path {
-        diesel::update(tags_dsl::tags.find(id as i32))
+        diesel::update(tags_dsl::tags.find(id))
             .set(tags_dsl::name.eq(name))
             .execute(conn)?;
         return Ok(());
     }
 
     rewrite_paths(conn, &old_path, &new_path)?;
-    diesel::update(tags_dsl::tags.find(id as i32))
+    diesel::update(tags_dsl::tags.find(id))
         .set((tags_dsl::name.eq(name), tags_dsl::path.eq(new_path)))
         .execute(conn)?;
     Ok(())
 }
 
-pub fn move_tag(
-    conn: &mut SqliteConnection,
-    id: i64,
-    new_parent_id: Option<i64>,
-) -> AppResult<()> {
+pub fn move_tag(conn: &mut SqliteConnection, id: i64, new_parent_id: Option<i64>) -> AppResult<()> {
+    let id = id_from_i64(id)?;
     let (old_path, name, old_parent): (String, String, Option<i32>) = tags_dsl::tags
-        .find(id as i32)
+        .find(id)
         .select((tags_dsl::path, tags_dsl::name, tags_dsl::parent_id))
         .first(conn)
         .optional()?
         .ok_or_else(|| AppError::msg("tag not found"))?;
 
-    let new_parent_i32 = new_parent_id.map(|p| p as i32);
+    let new_parent_i32 = new_parent_id.map(id_from_i64).transpose()?;
     if old_parent == new_parent_i32 {
         return Ok(());
     }
 
     if let Some(pid) = new_parent_i32 {
-        if pid == id as i32 {
+        if pid == id {
             return Err(AppError::msg("cannot move tag under itself"));
         }
         let parent_path: String = tags_dsl::tags
@@ -199,31 +196,23 @@ pub fn move_tag(
         }
         let new_path = format!("{parent_path}/{name}");
         rewrite_paths(conn, &old_path, &new_path)?;
-        diesel::update(tags_dsl::tags.find(id as i32))
+        diesel::update(tags_dsl::tags.find(id))
             .set((
                 tags_dsl::parent_id.eq(Some(pid)),
                 tags_dsl::path.eq(new_path),
             ))
             .execute(conn)?;
     } else {
-        let new_path = name.clone();
-        rewrite_paths(conn, &old_path, &new_path)?;
-        diesel::update(tags_dsl::tags.find(id as i32))
-            .set((
-                tags_dsl::parent_id.eq(None::<i32>),
-                tags_dsl::path.eq(new_path),
-            ))
+        rewrite_paths(conn, &old_path, &name)?;
+        diesel::update(tags_dsl::tags.find(id))
+            .set((tags_dsl::parent_id.eq(None::<i32>), tags_dsl::path.eq(name)))
             .execute(conn)?;
     }
     Ok(())
 }
 
-pub fn set_tag_color(
-    conn: &mut SqliteConnection,
-    id: i64,
-    color: Option<&str>,
-) -> AppResult<()> {
-    let n = diesel::update(tags_dsl::tags.find(id as i32))
+pub fn set_tag_color(conn: &mut SqliteConnection, id: i64, color: Option<&str>) -> AppResult<()> {
+    let n = diesel::update(tags_dsl::tags.find(id_from_i64(id)?))
         .set(tags_dsl::color.eq(color))
         .execute(conn)?;
     if n == 0 {
@@ -233,8 +222,9 @@ pub fn set_tag_color(
 }
 
 pub fn delete_tag(conn: &mut SqliteConnection, id: i64, cascade: bool) -> AppResult<()> {
+    let id = id_from_i64(id)?;
     let path: String = tags_dsl::tags
-        .find(id as i32)
+        .find(id)
         .select(tags_dsl::path)
         .first(conn)
         .optional()?
@@ -252,7 +242,7 @@ pub fn delete_tag(conn: &mut SqliteConnection, id: i64, cascade: bool) -> AppRes
     }
 
     // FK ON DELETE CASCADE strips sample_tags / tag_rejects and child tags.
-    let n = diesel::delete(tags_dsl::tags.find(id as i32)).execute(conn)?;
+    let n = diesel::delete(tags_dsl::tags.find(id)).execute(conn)?;
     if n == 0 {
         return Err(AppError::msg("tag not found"));
     }
@@ -264,12 +254,12 @@ pub fn set_sample_tags(
     sample_id: i64,
     tag_ids: &[i64],
 ) -> AppResult<()> {
-    let sample_id = sample_id as i32;
+    let sample_id = id_from_i64(sample_id)?;
     ensure_sample(conn, sample_id)?;
     diesel::delete(sample_tags_dsl::sample_tags.filter(sample_tags_dsl::sample_id.eq(sample_id)))
         .execute(conn)?;
     for tag_id in tag_ids {
-        let tag_id = *tag_id as i32;
+        let tag_id = id_from_i64(*tag_id)?;
         ensure_tag(conn, tag_id)?;
         diesel::insert_into(sample_tags_dsl::sample_tags)
             .values(SampleTag {
@@ -288,13 +278,9 @@ pub fn set_sample_tags(
     Ok(())
 }
 
-pub fn add_sample_tag(
-    conn: &mut SqliteConnection,
-    sample_id: i64,
-    tag_id: i64,
-) -> AppResult<()> {
-    let sample_id = sample_id as i32;
-    let tag_id = tag_id as i32;
+pub fn add_sample_tag(conn: &mut SqliteConnection, sample_id: i64, tag_id: i64) -> AppResult<()> {
+    let sample_id = id_from_i64(sample_id)?;
+    let tag_id = id_from_i64(tag_id)?;
     ensure_sample(conn, sample_id)?;
     ensure_tag(conn, tag_id)?;
     diesel::insert_into(sample_tags_dsl::sample_tags)
@@ -321,8 +307,8 @@ pub fn remove_sample_tag(
     sample_id: i64,
     tag_id: i64,
 ) -> AppResult<()> {
-    let sample_id = sample_id as i32;
-    let tag_id = tag_id as i32;
+    let sample_id = id_from_i64(sample_id)?;
+    let tag_id = id_from_i64(tag_id)?;
     let source: Option<String> = sample_tags_dsl::sample_tags
         .filter(sample_tags_dsl::sample_id.eq(sample_id))
         .filter(sample_tags_dsl::tag_id.eq(tag_id))
@@ -343,10 +329,7 @@ pub fn remove_sample_tag(
 
     if source == "auto" {
         diesel::insert_into(rejects_dsl::tag_rejects)
-            .values(TagReject {
-                sample_id,
-                tag_id,
-            })
+            .values(TagReject { sample_id, tag_id })
             .on_conflict_do_nothing()
             .execute(conn)?;
     }
@@ -355,7 +338,7 @@ pub fn remove_sample_tag(
 
 /// Resolve stored color walking ancestors (nearest non-null wins).
 pub fn resolve_color(conn: &mut SqliteConnection, tag_id: i64) -> AppResult<Option<String>> {
-    let mut current = Some(tag_id as i32);
+    let mut current = Some(id_from_i64(tag_id)?);
     while let Some(id) = current {
         let (color, parent_id): (Option<String>, Option<i32>) = tags_dsl::tags
             .find(id)
@@ -369,13 +352,11 @@ pub fn resolve_color(conn: &mut SqliteConnection, tag_id: i64) -> AppResult<Opti
     Ok(None)
 }
 
-fn rewrite_paths(
-    conn: &mut SqliteConnection,
-    old_path: &str,
-    new_path: &str,
-) -> AppResult<()> {
+fn rewrite_paths(conn: &mut SqliteConnection, old_path: &str, new_path: &str) -> AppResult<()> {
     if tag_id_by_path(conn, new_path)?.is_some() {
-        return Err(AppError::msg(format!("tag path already exists: {new_path}")));
+        return Err(AppError::msg(format!(
+            "tag path already exists: {new_path}"
+        )));
     }
     // Descendants first (longer paths) so unique path constraint stays happy.
     let mut kids: Vec<(i32, String)> = tags_dsl::tags
@@ -385,7 +366,7 @@ fn rewrite_paths(
     kids.sort_by_key(|(_, p)| std::cmp::Reverse(p.len()));
 
     for (kid_id, kid_path) in kids {
-        let suffix = &kid_path[old_path.len()..];
+        let suffix = kid_path.strip_prefix(old_path).unwrap_or(kid_path.as_str());
         let updated = format!("{new_path}{suffix}");
         if tag_id_by_path(conn, &updated)?.is_some() {
             return Err(AppError::msg(format!("tag path already exists: {updated}")));
@@ -397,13 +378,12 @@ fn rewrite_paths(
     Ok(())
 }
 
-fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i64>> {
-    let id: Option<i32> = tags_dsl::tags
+fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i32>> {
+    Ok(tags_dsl::tags
         .filter(tags_dsl::path.eq(path))
         .select(tags_dsl::id)
         .first(conn)
-        .optional()?;
-    Ok(id.map(|i| i as i64))
+        .optional()?)
 }
 
 fn ensure_tag(conn: &mut SqliteConnection, id: i32) -> AppResult<()> {

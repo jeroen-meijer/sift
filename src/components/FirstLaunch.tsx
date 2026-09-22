@@ -1,10 +1,10 @@
-import { FolderPlus, Waveform } from "@phosphor-icons/react";
+import { FolderPlusIcon, WaveformIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
-type Props = {
+interface Props {
   onAddFolder: () => void;
   onPreferences: () => void;
-};
+}
 
 export function FirstLaunch({ onAddFolder, onPreferences }: Props) {
   const { t } = useTranslation("library");
@@ -19,13 +19,13 @@ export function FirstLaunch({ onAddFolder, onPreferences }: Props) {
       <section className="first-launch-main">
         <div className="first-launch-card">
           <div className="first-launch-icon">
-            <Waveform size={28} />
+            <WaveformIcon size={28} />
           </div>
           <h1>{t("firstLaunchTitle")}</h1>
           <p>{t("firstLaunchBody")}</p>
           <div className="first-launch-actions">
             <button type="button" className="btn btn-primary" onClick={onAddFolder}>
-              <FolderPlus size={15} />
+              <FolderPlusIcon size={15} />
               {t("addFolder")}
             </button>
             <button type="button" className="btn btn-secondary" onClick={onPreferences}>

@@ -13,6 +13,7 @@ use symphonia::core::meta::MetadataOptions;
 use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
+use crate::ids::id_from_i64;
 
 /// Fully decoded PCM, interleaved f32 in [-1.0, 1.0].
 #[derive(Debug, Clone)]
@@ -24,6 +25,11 @@ pub struct DecodedAudio {
 }
 
 impl DecodedAudio {
+    #[allow(
+        clippy::as_conversions,
+        clippy::cast_precision_loss,
+        reason = "sample counts stay far below f64 mantissa range"
+    )]
     pub fn duration_ms(&self) -> f64 {
         if self.sample_rate == 0 || self.channels == 0 {
             return 0.0;
@@ -33,20 +39,21 @@ impl DecodedAudio {
     }
 
     pub fn frame_count(&self) -> usize {
-        if self.channels == 0 {
-            0
-        } else {
-            self.samples.len() / usize::from(self.channels)
-        }
+        self.samples
+            .len()
+            .checked_div(usize::from(self.channels))
+            .unwrap_or(0)
     }
 }
 
 /// Decode an audio file to interleaved f32 PCM via Symphonia.
 pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
-    let file = File::open(path).map_err(|e| {
-        AppError::msg(format!("failed to open {}: {e}", path.display()))
-    })?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let file = File::open(path)
+        .map_err(|e| AppError::msg(format!("failed to open {}: {e}", path.display())))?;
+    let mss = MediaSourceStream::new(
+        Box::new(file),
+        symphonia::core::io::MediaSourceStreamOptions::default(),
+    );
 
     let mut hint = Hint::new();
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -80,8 +87,7 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
     let channels = audio_params
         .channels
         .as_ref()
-        .map(|c| c.count() as u16)
-        .unwrap_or(1);
+        .map_or(1, |c| u16::try_from(c.count()).unwrap_or(1));
     let bit_depth_hint = audio_params.bits_per_sample;
 
     let mut decoder = symphonia::default::get_codecs()
@@ -95,17 +101,12 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
     loop {
         let packet = match format.next_packet() {
             Ok(Some(packet)) => packet,
-            Ok(None) => break,
+
             Err(SymphoniaError::ResetRequired) => {
                 decoder.reset();
                 continue;
             }
-            Err(SymphoniaError::IoError(e))
-                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
-                break;
-            }
-            Err(SymphoniaError::IoError(_)) => break,
+            Ok(None) | Err(SymphoniaError::IoError(_)) => break,
             Err(e) => return Err(AppError::msg(format!("demux error: {e}"))),
         };
 
@@ -119,7 +120,7 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
                 audio_buf.copy_to_slice_interleaved(&mut packet_scratch);
                 samples.extend_from_slice(&packet_scratch);
             }
-            Err(SymphoniaError::DecodeError(_)) => continue,
+            Err(SymphoniaError::DecodeError(_)) => {}
             Err(SymphoniaError::IoError(_)) => break,
             Err(e) => return Err(AppError::msg(format!("decode error: {e}"))),
         }
@@ -150,15 +151,15 @@ pub fn probe_and_update_sample(
     let format = path
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.to_ascii_lowercase());
+        .map(str::to_ascii_lowercase);
     let duration_ms = decoded.duration_ms();
-    let bit_depth = decoded.bit_depth_hint.map(|b| b as i32);
-    let id = sample_id as i32;
+    let bit_depth = decoded.bit_depth_hint.and_then(|b| i32::try_from(b).ok());
+    let id = id_from_i64(sample_id)?;
 
     diesel::update(samples_dsl::samples.find(id))
         .set((
-            samples_dsl::sample_rate.eq(Some(decoded.sample_rate as i32)),
-            samples_dsl::channels.eq(Some(decoded.channels as i32)),
+            samples_dsl::sample_rate.eq(i32::try_from(decoded.sample_rate).ok()),
+            samples_dsl::channels.eq(Some(i32::from(decoded.channels))),
             samples_dsl::duration_ms.eq(Some(duration_ms)),
             samples_dsl::updated_at.eq(utc_now()),
         ))
@@ -194,7 +195,8 @@ mod tests {
         let decoded = decode_file(&path).expect("decode");
         assert!(decoded.sample_rate > 0);
         assert!(decoded.channels >= 1);
-        assert!(!decoded.samples.is_empty());
+        let empty: [f32; 0] = [];
+        assert_ne!(decoded.samples, empty);
         assert!(decoded.duration_ms() > 0.0);
         let _ = decoded.bit_depth_hint;
     }

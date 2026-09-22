@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::db::models::Setting;
 use crate::db::schema::settings::dsl as settings_dsl;

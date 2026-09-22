@@ -10,18 +10,14 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 
 use crate::audio::decode::decode_file;
 use crate::error::{AppError, AppResult};
+use crate::ids::f64_to_usize;
 
 /// Render `[start_secs, end_secs)` from `path` into a WAV at `out_path`.
 ///
 /// Matches source sample rate, channel count, and bit depth as closely as
 /// possible (16/24/32 PCM or 32-bit float). No cue/BPM/key chunks.
-pub fn render_clip(
-    path: &Path,
-    start_secs: f64,
-    end_secs: f64,
-    out_path: &Path,
-) -> AppResult<()> {
-    if !(end_secs > start_secs) {
+pub fn render_clip(path: &Path, start_secs: f64, end_secs: f64, out_path: &Path) -> AppResult<()> {
+    if end_secs <= start_secs {
         return Err(AppError::msg("clip end must be after start"));
     }
 
@@ -30,17 +26,27 @@ pub fn render_clip(
     let rate = decoded.sample_rate.max(1);
     let total_frames = decoded.frame_count();
 
-    let start_frame = ((start_secs.max(0.0) * f64::from(rate)).floor() as usize).min(total_frames);
-    let end_frame = ((end_secs * f64::from(rate)).ceil() as usize).min(total_frames);
+    let start_frame =
+        f64_to_usize((start_secs.max(0.0) * f64::from(rate)).floor()).min(total_frames);
+    let end_frame = f64_to_usize((end_secs * f64::from(rate)).ceil()).min(total_frames);
     if end_frame <= start_frame {
         return Err(AppError::msg("clip region is empty"));
     }
 
-    let start_i = start_frame * channels;
-    let end_i = end_frame * channels;
-    let slice = &decoded.samples[start_i..end_i];
+    let range_error = || AppError::msg("clip region out of range");
+    let start_i = start_frame.checked_mul(channels).ok_or_else(range_error)?;
+    let end_i = end_frame.checked_mul(channels).ok_or_else(range_error)?;
+    let slice = decoded
+        .samples
+        .get(start_i..end_i)
+        .ok_or_else(|| AppError::msg("clip region out of range"))?;
 
-    let spec = wav_spec_for_source(path, decoded.sample_rate, decoded.channels, decoded.bit_depth_hint);
+    let spec = wav_spec_for_source(
+        path,
+        decoded.sample_rate,
+        decoded.channels,
+        decoded.bit_depth_hint,
+    );
 
     if let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent)?;
@@ -73,7 +79,7 @@ pub fn allocate_clip_path(
     let mut n = 2u32;
     while candidate.exists() {
         candidate = clips_dir.join(format!("{base}_{n}.wav"));
-        n += 1;
+        n = n.saturating_add(1);
     }
     candidate
 }
@@ -159,7 +165,7 @@ fn wav_spec_for_source(
     }
 }
 
-fn normalize_spec(spec: WavSpec) -> WavSpec {
+const fn normalize_spec(spec: WavSpec) -> WavSpec {
     match (spec.sample_format, spec.bits_per_sample) {
         (SampleFormat::Float, _) => WavSpec {
             bits_per_sample: 32,
@@ -189,6 +195,12 @@ fn normalize_spec(spec: WavSpec) -> WavSpec {
     }
 }
 
+#[allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "PCM quantization: inputs are clamped to [-1.0, 1.0] before scaling"
+)]
 fn write_wav(out_path: &Path, spec: WavSpec, samples: &[f32]) -> AppResult<()> {
     let mut writer = WavWriter::create(out_path, spec)
         .map_err(|e| AppError::msg(format!("wav create failed: {e}")))?;

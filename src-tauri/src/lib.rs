@@ -3,6 +3,7 @@ mod audio;
 mod commands;
 mod db;
 mod error;
+mod ids;
 mod indexer;
 mod library;
 mod paths;
@@ -16,6 +17,7 @@ use state::AppState;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(clippy::expect_used, clippy::panic)] // Tauri entry: fail-fast on unrecoverable init
 pub fn run() {
     let app_state = AppState::init().expect("failed to initialize Sift app state");
 

@@ -1,10 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Star } from "@phosphor-icons/react";
+import { StarIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-export type TagChip = { path: string; color: string | null };
-export type SampleRow = {
+export interface TagChip { path: string; color: string | null }
+export interface SampleRow {
   id: number;
   root_id: number;
   path: string;
@@ -22,7 +22,7 @@ export type SampleRow = {
   sample_type: string | null;
   favorite: boolean;
   tags: TagChip[];
-};
+}
 
 type SortCol = "name" | "type" | "bpm" | "key" | "created_at" | "favorite";
 
@@ -36,7 +36,7 @@ export type ContextAction =
   | "showParent"
   | "removeMissing";
 
-type Props = {
+interface Props {
   samples: SampleRow[];
   selectedIds: Set<number>;
   focusedId: number | null;
@@ -47,10 +47,10 @@ type Props = {
   onToggleFavorite: (id: number, favorite: boolean) => void;
   onSort: (col: SortCol) => void;
   onContextAction: (action: ContextAction, sample: SampleRow) => void;
-};
+}
 
 function highlightName(name: string, query: string | undefined) {
-  if (!query || !query.trim()) return name;
+  if (!query?.trim()) return name;
   const q = query.trim();
   const lower = name.toLowerCase();
   const idx = lower.indexOf(q.toLowerCase());
@@ -69,7 +69,7 @@ function sortMark(active: boolean, dir: "asc" | "desc" | "clear") {
   return dir === "asc" ? " ↓" : " ↑";
 }
 
-type MenuState = { x: number; y: number; sample: SampleRow };
+interface MenuState { x: number; y: number; sample: SampleRow }
 
 export function SampleTable({
   samples,
@@ -96,7 +96,7 @@ export function SampleTable({
 
   useEffect(() => {
     if (!menu) return;
-    const close = () => setMenu(null);
+    const close = () => void setMenu(null);
     window.addEventListener("click", close);
     window.addEventListener("scroll", close, true);
     return () => {
@@ -114,22 +114,22 @@ export function SampleTable({
   return (
     <div className="sample-table">
       <div className="sample-table-header">
-        <button type="button" className="col fav" onClick={() => onSort("favorite")}>
+        <button type="button" className="col fav" onClick={() => void onSort("favorite")}>
           {sortMark(sortColumn === "favorite", sortDirection)}
         </button>
-        <button type="button" className="col name" onClick={() => onSort("name")}>
+        <button type="button" className="col name" onClick={() => void onSort("name")}>
           {t("colName")}
           {sortMark(sortColumn === "name", sortDirection)}
         </button>
-        <button type="button" className="col type" onClick={() => onSort("type")}>
+        <button type="button" className="col type" onClick={() => void onSort("type")}>
           {t("colType")}
           {sortMark(sortColumn === "type", sortDirection)}
         </button>
-        <button type="button" className="col bpm" onClick={() => onSort("bpm")}>
+        <button type="button" className="col bpm" onClick={() => void onSort("bpm")}>
           {t("colBpm")}
           {sortMark(sortColumn === "bpm", sortDirection)}
         </button>
-        <button type="button" className="col key" onClick={() => onSort("key")}>
+        <button type="button" className="col key" onClick={() => void onSort("key")}>
           {t("colKey")}
           {sortMark(sortColumn === "key", sortDirection)}
         </button>
@@ -146,6 +146,7 @@ export function SampleTable({
         >
           {rowVirtualizer.getVirtualItems().map((virt) => {
             const sample = samples[virt.index];
+            if (!sample) return null;
             const selected = selectedIds.has(sample.id);
             const focused = focusedId === sample.id;
             return (
@@ -160,7 +161,7 @@ export function SampleTable({
                   height: virt.size,
                   transform: `translateY(${virt.start}px)`,
                 }}
-                onClick={(e) => onSelect(sample.id, e)}
+                onClick={(e) => void onSelect(sample.id, e)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   if (!selectedIds.has(sample.id)) {
@@ -177,7 +178,7 @@ export function SampleTable({
                     onToggleFavorite(sample.id, !sample.favorite);
                   }}
                 >
-                  <Star size={12} weight={sample.favorite ? "fill" : "regular"} />
+                  <StarIcon size={12} weight={sample.favorite ? "fill" : "regular"} />
                 </button>
                 <div className="col name" title={sample.path}>
                   {highlightName(sample.filename, highlightText)}
@@ -210,31 +211,31 @@ export function SampleTable({
         <div
           className="context-menu"
           style={{ left: menu.x, top: menu.y }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => void e.stopPropagation()}
         >
-          <button type="button" onClick={() => run("open")} disabled={menu.sample.missing}>
+          <button type="button" onClick={() => void run("open")} disabled={menu.sample.missing}>
             {tc("ctxOpen")}
           </button>
-          <button type="button" onClick={() => run("favorite")}>
+          <button type="button" onClick={() => void run("favorite")}>
             {menu.sample.favorite ? tc("ctxUnfavorite") : tc("ctxFavorite")}
           </button>
-          <button type="button" onClick={() => run("reveal")} disabled={menu.sample.missing}>
+          <button type="button" onClick={() => void run("reveal")} disabled={menu.sample.missing}>
             {tc("ctxReveal")}
           </button>
-          <button type="button" onClick={() => run("copyPath")}>
+          <button type="button" onClick={() => void run("copyPath")}>
             {tc("ctxCopyPath")}
           </button>
-          <button type="button" onClick={() => run("copyFilename")}>
+          <button type="button" onClick={() => void run("copyFilename")}>
             {tc("ctxCopyFilename")}
           </button>
-          <button type="button" onClick={() => run("reanalyze")} disabled={menu.sample.missing}>
+          <button type="button" onClick={() => void run("reanalyze")} disabled={menu.sample.missing}>
             {tc("ctxReanalyze")}
           </button>
-          <button type="button" onClick={() => run("showParent")}>
+          <button type="button" onClick={() => void run("showParent")}>
             {tc("ctxShowParent")}
           </button>
           {menu.sample.missing ? (
-            <button type="button" className="danger" onClick={() => run("removeMissing")}>
+            <button type="button" className="danger" onClick={() => void run("removeMissing")}>
               {tc("ctxRemoveMissing")}
             </button>
           ) : null}

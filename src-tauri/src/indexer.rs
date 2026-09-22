@@ -14,6 +14,7 @@ use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::settings;
 use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
+use crate::ids::{id_from_i64, id_to_i64};
 
 const AUDIO_EXTS: &[&str] = &[
     "wav", "aiff", "aif", "flac", "mp3", "aac", "m4a", "ogg", "opus",
@@ -32,8 +33,7 @@ pub struct IndexProgress {
 pub fn is_audio_file(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| AUDIO_EXTS.iter().any(|x| e.eq_ignore_ascii_case(x)))
-        .unwrap_or(false)
+        .is_some_and(|e| AUDIO_EXTS.iter().any(|x| e.eq_ignore_ascii_case(x)))
 }
 
 fn build_ignore_set(conn: &mut SqliteConnection) -> AppResult<GlobSet> {
@@ -42,29 +42,27 @@ fn build_ignore_set(conn: &mut SqliteConnection) -> AppResult<GlobSet> {
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
     for item in list {
-        if let Some(pat) = item.as_str() {
-            if let Ok(glob) = Glob::new(pat) {
-                builder.add(glob);
-            }
+        if let Some(pat) = item.as_str()
+            && let Ok(glob) = Glob::new(pat)
+        {
+            builder.add(glob);
         }
     }
-    Ok(builder
-        .build()
-        .map_err(|e| AppError::msg(e.to_string()))?)
+    builder.build().map_err(|e| AppError::msg(e.to_string()))
 }
 
 fn mtime_ms(meta: &fs::Metadata) -> Option<i64> {
     meta.modified().ok().and_then(|t| {
         t.duration_since(SystemTime::UNIX_EPOCH)
             .ok()
-            .map(|d| d.as_millis() as i64)
+            .and_then(|d| i64::try_from(d.as_millis()).ok())
     })
 }
 
 #[cfg(unix)]
 fn inode_of(meta: &fs::Metadata) -> Option<i64> {
     use std::os::unix::fs::MetadataExt;
-    Some(meta.ino() as i64)
+    i64::try_from(meta.ino()).ok()
 }
 
 #[cfg(not(unix))]
@@ -77,8 +75,9 @@ pub fn index_root(
     root_id: i64,
     mut on_progress: impl FnMut(IndexProgress),
 ) -> AppResult<IndexProgress> {
+    let root_id_i32 = id_from_i64(root_id)?;
     let root_path: String = roots_dsl::roots
-        .find(root_id as i32)
+        .find(root_id_i32)
         .select(roots_dsl::path)
         .first(conn)
         .map_err(|_| AppError::msg("root not found"))?;
@@ -88,35 +87,31 @@ pub fn index_root(
     let mut scanned = 0u64;
     let mut indexed = 0u64;
     let mut skipped = 0u64;
-    let root_id_i32 = root_id as i32;
 
     for entry in WalkDir::new(&root)
         .follow_links(false)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
     {
         let path = entry.path();
         let path_str = path.to_string_lossy().to_string();
 
         if ignore.is_match(&path_str) || ignore.is_match(path) {
-            skipped += 1;
+            skipped = skipped.saturating_add(1);
             continue;
         }
         if !entry.file_type().is_file() {
             continue;
         }
         if !is_audio_file(path) {
-            skipped += 1;
+            skipped = skipped.saturating_add(1);
             continue;
         }
 
-        scanned += 1;
-        let meta = match fs::metadata(path) {
-            Ok(m) => m,
-            Err(_) => {
-                skipped += 1;
-                continue;
-            }
+        scanned = scanned.saturating_add(1);
+        let Ok(meta) = fs::metadata(path) else {
+            skipped = skipped.saturating_add(1);
+            continue;
         };
 
         let filename = path
@@ -133,7 +128,7 @@ pub fn index_root(
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        let size = meta.len() as i64;
+        let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
         let mtime = mtime_ms(&meta);
         let inode = inode_of(&meta);
 
@@ -170,7 +165,7 @@ pub fn index_root(
                         samples_dsl::updated_at.eq(utc_now()),
                     ))
                     .execute(conn)?;
-                indexed += 1;
+                indexed = indexed.saturating_add(1);
             }
             None => {
                 diesel::insert_into(samples_dsl::samples)
@@ -185,11 +180,11 @@ pub fn index_root(
                         inode,
                     })
                     .execute(conn)?;
-                indexed += 1;
+                indexed = indexed.saturating_add(1);
             }
         }
 
-        if scanned % 25 == 0 {
+        if scanned.is_multiple_of(25) {
             on_progress(IndexProgress {
                 root_id,
                 scanned,
@@ -219,7 +214,7 @@ pub fn index_all_roots(
 ) -> AppResult<()> {
     let ids: Vec<i32> = roots_dsl::roots.select(roots_dsl::id).load(conn)?;
     for id in ids {
-        index_root(conn, id as i64, &mut on_progress)?;
+        index_root(conn, id_to_i64(id), &mut on_progress)?;
     }
     Ok(())
 }
@@ -242,7 +237,7 @@ pub fn index_paths(conn: &mut SqliteConnection, paths: &[PathBuf]) -> AppResult<
             continue;
         };
         if upsert_sample(conn, root_id, path)? {
-            indexed += 1;
+            indexed = indexed.saturating_add(1);
         }
     }
     Ok(indexed)
@@ -254,7 +249,7 @@ fn list_root_paths(conn: &mut SqliteConnection) -> AppResult<Vec<(i64, PathBuf)>
         .load(conn)?;
     Ok(rows
         .into_iter()
-        .map(|(id, path)| (id as i64, PathBuf::from(path)))
+        .map(|(id, path)| (id_to_i64(id), PathBuf::from(path)))
         .collect())
 }
 
@@ -267,14 +262,9 @@ fn find_root_for(roots: &[(i64, PathBuf)], path: &Path) -> Option<(i64, PathBuf)
 }
 
 /// Insert or update a sample row from disk metadata. Returns true when a row was written.
-pub fn upsert_sample(
-    conn: &mut SqliteConnection,
-    root_id: i64,
-    path: &Path,
-) -> AppResult<bool> {
-    let meta = match fs::metadata(path) {
-        Ok(m) => m,
-        Err(_) => return Ok(false),
+pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> AppResult<bool> {
+    let Ok(meta) = fs::metadata(path) else {
+        return Ok(false);
     };
     let path_str = path.to_string_lossy().to_string();
     let filename = path
@@ -291,10 +281,10 @@ pub fn upsert_sample(
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
-    let size = meta.len() as i64;
+    let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
     let mtime = mtime_ms(&meta);
     let inode = inode_of(&meta);
-    let root_id_i32 = root_id as i32;
+    let root_id_i32 = id_from_i64(root_id)?;
 
     let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
         .filter(samples_dsl::path.eq(&path_str))
