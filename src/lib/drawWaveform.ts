@@ -125,7 +125,7 @@ function paintGradientEnvelope(
     }
     ctx.fillStyle = gradient;
   } else {
-    ctx.fillStyle = ink;
+    ctx.fillStyle = colored ? "#6a6d80" : ink;
   }
   ctx.fill();
 }
@@ -162,7 +162,7 @@ function paintColumns(
       const [r, g, b] = blendSpectralRgb(sample.weights, bands);
       ctx.fillStyle = `rgb(${String(r)} ${String(g)} ${String(b)})`;
     } else {
-      ctx.fillStyle = ink;
+      ctx.fillStyle = colored ? "#6a6d80" : ink;
     }
     ctx.fillRect(c, top, 1, h);
   }
