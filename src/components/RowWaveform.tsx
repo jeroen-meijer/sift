@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cachedRowPeaks, loadRowPeaks } from "../lib/rowPeaks";
 import { bucketWeights, readSpectralBands, spectralCss } from "../lib/spectralColor";
-import { useThemeId } from "../theme/useThemeId";
+import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
 interface Props {
   sampleId: number;
@@ -26,7 +26,6 @@ export function RowWaveform({
   onScrub,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const themeId = useThemeId();
   const [peaks, setPeaks] = useState(() => cachedRowPeaks(sampleId));
   const [hoverFraction, setHoverFraction] = useState<number | null>(null);
 
@@ -53,44 +52,50 @@ export function RowWaveform({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !peaks || idle) return;
-    const dpr = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth || 120;
-    const height = 18;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
 
-    const styles = getComputedStyle(canvas);
-    const ink = styles
-      .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
-      .trim();
-    const bands = readSpectralBands(canvas);
-    ctx.lineWidth = 1.05;
-    const mid = height / 2;
-    const channels = Math.max(1, peaks.channels);
-    const last = Math.max(1, peaks.bucket_count - 1);
-    const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
+    const paint = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth || 120;
+      const height = 18;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
 
-    for (let i = 0; i < peaks.bucket_count; i++) {
-      const base = i * channels * 2;
-      const amp = Math.max(
-        Math.abs(peaks.peaks[base] ?? 0),
-        Math.abs(peaks.peaks[base + 1] ?? 0),
-      );
-      const x = (i / last) * width;
-      const y = amp * (height * 0.42);
-      ctx.strokeStyle = hasColors
-        ? spectralCss(bucketWeights(peaks.colors, i), bands)
-        : ink;
-      ctx.beginPath();
-      ctx.moveTo(x, mid - y);
-      ctx.lineTo(x, mid + y);
-      ctx.stroke();
-    }
-  }, [peaks, idle, selected, colored, themeId]);
+      const styles = getComputedStyle(canvas);
+      const ink = styles
+        .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
+        .trim();
+      const bands = readSpectralBands(canvas);
+      ctx.lineWidth = 1.05;
+      const mid = height / 2;
+      const channels = Math.max(1, peaks.channels);
+      const last = Math.max(1, peaks.bucket_count - 1);
+      const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
+
+      for (let i = 0; i < peaks.bucket_count; i++) {
+        const base = i * channels * 2;
+        const amp = Math.max(
+          Math.abs(peaks.peaks[base] ?? 0),
+          Math.abs(peaks.peaks[base + 1] ?? 0),
+        );
+        const x = (i / last) * width;
+        const y = amp * (height * 0.42);
+        ctx.strokeStyle = hasColors
+          ? spectralCss(bucketWeights(peaks.colors, i), bands)
+          : ink;
+        ctx.beginPath();
+        ctx.moveTo(x, mid - y);
+        ctx.lineTo(x, mid + y);
+        ctx.stroke();
+      }
+    };
+
+    paint();
+    return subscribeThemePaint(paint);
+  }, [peaks, idle, selected, colored]);
 
   if (analyzing) {
     return (

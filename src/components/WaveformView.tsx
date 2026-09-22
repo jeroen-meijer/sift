@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { formatSpan, formatTime } from "../lib/format";
 import type { PeakData, SnapMode, WaveformView as WaveformMode } from "../lib/ipc";
 import { bucketWeights, readSpectralBands, spectralCss } from "../lib/spectralColor";
-import { useThemeId } from "../theme/useThemeId";
+import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
 export interface Selection {
   start: number;
@@ -64,7 +64,6 @@ export function WaveformView({
   onDragClip,
 }: Props) {
   const { t } = useTranslation("library");
-  const themeId = useThemeId();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -120,60 +119,66 @@ export function WaveformView({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !peaks || size.width === 0 || size.height === 0) return;
-    const dpr = window.devicePixelRatio || 1;
     const { width, height } = size;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
 
-    const styles = getComputedStyle(canvas);
-    const ink = styles.getPropertyValue("--color-wave-ink").trim();
-    const bands = readSpectralBands(canvas);
-    const laneHeight = height / lanes;
-    const channels = Math.max(1, peaks.channels);
-    const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
+    const paint = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
 
-    ctx.lineWidth = 1;
-    for (let lane = 0; lane < lanes; lane++) {
-      const mid = laneHeight * lane + laneHeight / 2;
-      if (hasColors) {
-        for (let i = 0; i < peaks.bucket_count; i++) {
-          const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
-          const min = peaks.peaks[base] ?? 0;
-          const max = peaks.peaks[base + 1] ?? 0;
-          ctx.strokeStyle = spectralCss(bucketWeights(peaks.colors, i), bands);
+      const styles = getComputedStyle(canvas);
+      const ink = styles.getPropertyValue("--color-wave-ink").trim();
+      const bands = readSpectralBands(canvas);
+      const laneHeight = height / lanes;
+      const channels = Math.max(1, peaks.channels);
+      const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
+
+      ctx.lineWidth = 1;
+      for (let lane = 0; lane < lanes; lane++) {
+        const mid = laneHeight * lane + laneHeight / 2;
+        if (hasColors) {
+          for (let i = 0; i < peaks.bucket_count; i++) {
+            const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
+            const min = peaks.peaks[base] ?? 0;
+            const max = peaks.peaks[base + 1] ?? 0;
+            ctx.strokeStyle = spectralCss(bucketWeights(peaks.colors, i), bands);
+            ctx.beginPath();
+            const x = (i / peaks.bucket_count) * width;
+            ctx.moveTo(x, mid - max * laneHeight * 0.46);
+            ctx.lineTo(x, mid - min * laneHeight * 0.46);
+            ctx.stroke();
+          }
+        } else {
+          ctx.strokeStyle = ink;
           ctx.beginPath();
-          const x = (i / peaks.bucket_count) * width;
-          ctx.moveTo(x, mid - max * laneHeight * 0.46);
-          ctx.lineTo(x, mid - min * laneHeight * 0.46);
+          for (let i = 0; i < peaks.bucket_count; i++) {
+            const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
+            const min = peaks.peaks[base] ?? 0;
+            const max = peaks.peaks[base + 1] ?? 0;
+            const x = (i / peaks.bucket_count) * width;
+            ctx.moveTo(x, mid - max * laneHeight * 0.46);
+            ctx.lineTo(x, mid - min * laneHeight * 0.46);
+          }
           ctx.stroke();
         }
-      } else {
-        ctx.strokeStyle = ink;
+      }
+
+      if (lanes === 2) {
+        ctx.strokeStyle = "rgba(233,233,237,0.09)";
         ctx.beginPath();
-        for (let i = 0; i < peaks.bucket_count; i++) {
-          const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
-          const min = peaks.peaks[base] ?? 0;
-          const max = peaks.peaks[base + 1] ?? 0;
-          const x = (i / peaks.bucket_count) * width;
-          ctx.moveTo(x, mid - max * laneHeight * 0.46);
-          ctx.lineTo(x, mid - min * laneHeight * 0.46);
-        }
+        ctx.moveTo(0, laneHeight);
+        ctx.lineTo(width, laneHeight);
         ctx.stroke();
       }
-    }
+    };
 
-    if (lanes === 2) {
-      ctx.strokeStyle = "rgba(233,233,237,0.09)";
-      ctx.beginPath();
-      ctx.moveTo(0, laneHeight);
-      ctx.lineTo(width, laneHeight);
-      ctx.stroke();
-    }
-  }, [peaks, size, lanes, colored, themeId]);
+    paint();
+    return subscribeThemePaint(paint);
+  }, [peaks, size, lanes, colored]);
 
   const gridStyle = useMemo(() => {
     const divisor = snapDivisor(snap);

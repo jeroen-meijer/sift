@@ -12,7 +12,24 @@ export interface SpectralBandColors {
   treble: Rgb;
 }
 
-/** Parse `rgb()`, `rgba()`, or `#rrggbb` / `#rgb` from a CSS computed value. */
+let probeCtx: CanvasRenderingContext2D | null | undefined;
+
+function canvasProbe(): CanvasRenderingContext2D | null {
+  if (probeCtx !== undefined) return probeCtx;
+  if (typeof document === "undefined") {
+    probeCtx = null;
+    return null;
+  }
+  const canvas = document.createElement("canvas");
+  probeCtx = canvas.getContext("2d");
+  return probeCtx;
+}
+
+/**
+ * Parse a CSS color string into 0–255 RGB. Handles hex, rgb()/rgba(),
+ * space-separated rgb, color(srgb …), and falls back to a canvas probe
+ * so @property-interpolated values still resolve.
+ */
 export function parseCssColor(raw: string): Rgb | null {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
@@ -37,14 +54,57 @@ export function parseCssColor(raw: string): Rgb | null {
     ];
   }
 
-  const rgb = /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i.exec(trimmed);
-  if (rgb) {
+  const rgbComma =
+    /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i.exec(trimmed);
+  if (rgbComma) {
     return [
-      Math.round(Number(rgb[1])),
-      Math.round(Number(rgb[2])),
-      Math.round(Number(rgb[3])),
+      Math.round(Number(rgbComma[1])),
+      Math.round(Number(rgbComma[2])),
+      Math.round(Number(rgbComma[3])),
     ];
   }
+
+  const rgbSpace =
+    /^rgba?\(\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)/i.exec(trimmed);
+  if (rgbSpace) {
+    return [
+      Math.round(Number(rgbSpace[1])),
+      Math.round(Number(rgbSpace[2])),
+      Math.round(Number(rgbSpace[3])),
+    ];
+  }
+
+  const srgb =
+    /^color\(\s*srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)/i.exec(trimmed);
+  if (srgb) {
+    return [
+      Math.round(Number(srgb[1]) * 255),
+      Math.round(Number(srgb[2]) * 255),
+      Math.round(Number(srgb[3]) * 255),
+    ];
+  }
+
+  const probe = canvasProbe();
+  if (probe) {
+    probe.fillStyle = "#000000";
+    probe.fillStyle = trimmed;
+    const normalized = probe.fillStyle;
+    if (normalized !== trimmed) {
+      return parseCssColor(normalized);
+    }
+    const fromProbe =
+      /^#([0-9a-f]{6})$/i.exec(normalized) ??
+      /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i.exec(normalized);
+    if (fromProbe && fromProbe[0].startsWith("#") && fromProbe[1]) {
+      const h = fromProbe[1];
+      return [
+        Number.parseInt(h.slice(0, 2), 16),
+        Number.parseInt(h.slice(2, 4), 16),
+        Number.parseInt(h.slice(4, 6), 16),
+      ];
+    }
+  }
+
   return null;
 }
 
@@ -67,10 +127,7 @@ export function readSpectralBands(el: Element): SpectralBandColors {
  * Blend Classic weights with theme band colors. Soft floor keeps quiet
  * spectral energy visible on dark chrome.
  */
-export function blendSpectralRgb(
-  weights: Rgb,
-  bands: SpectralBandColors,
-): Rgb {
+export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   const wb = weights[0] / 255;
   const wm = weights[1] / 255;
   const wt = weights[2] / 255;
