@@ -1,6 +1,7 @@
 import { CheckIcon, TrashIcon } from "@phosphor-icons/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { keys, matchesBinding } from "../lib/bindings";
 import { BEAT_PRESETS, beatsMatchBpm, sharedBpmFromBeats, sharedDuration } from "../lib/bpm";
 import type { SampleRow } from "../lib/ipc";
 import { Checkbox } from "../ui/Checkbox";
@@ -24,12 +25,7 @@ interface Props {
 
 /**
  * Three ways into the same field: type a number, pick how many beats the
- * sample holds, or clear it. Each beat count shows the BPM it would produce,
- * so the choice is a decision rather than a guess.
- *
- * The field is not focused on mount — the flyout opens on hover, and grabbing
- * focus every time the pointer sweeps past would be rude. `Menu` focuses it
- * when the trigger is actually clicked.
+ * sample holds, or clear it. Each beat count shows the BPM it would produce.
  */
 export function SetBpmPanel({
   targets,
@@ -44,9 +40,17 @@ export function SetBpmPanel({
 }: Props) {
   const { t } = useTranslation("library");
   const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const stored = focused.bpm == null ? "" : String(Math.round(focused.bpm));
   const [draft, setDraft] = useState(stored);
   const [customBeats, setCustomBeats] = useState("");
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, []);
 
   const durations = targets.map((sample) => sample.duration_ms);
   const duration = sharedDuration(durations);
@@ -112,6 +116,7 @@ export function SetBpmPanel({
     <div className="bpm-panel" ref={panelRef}>
       <div className="bpm-panel-field">
         <input
+          ref={inputRef}
           className="input input-mono bpm-panel-input"
           value={draft}
           inputMode="decimal"
@@ -120,7 +125,7 @@ export function SetBpmPanel({
             setDraft(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") commitDraft();
+            if (matchesBinding(e, keys.confirm)) commitDraft();
           }}
           onBlur={commitOnLeavingPanel}
         />
@@ -154,7 +159,7 @@ export function SetBpmPanel({
                 setCustomBeats(e.target.value);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && customValid) onSetFromBeats(customCount);
+                if (matchesBinding(e, keys.confirm) && customValid) onSetFromBeats(customCount);
               }}
             />
             <span className="bpm-panel-unit">{t("bpmCustomBeats")}</span>

@@ -14,9 +14,11 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
+import { keys, isApplePlatform } from "../lib/bindings";
 import type { SampleRow } from "../lib/ipc";
 import { Menu, type MenuEntry } from "../ui/Menu";
 import { BPM_PANEL_WIDTH, SetBpmPanel } from "./SetBpmPanel";
+import { KEY_PANEL_WIDTH, SetKeyPanel } from "./SetKeyPanel";
 
 export type SampleAction =
   | "open"
@@ -25,7 +27,6 @@ export type SampleAction =
   | "type:loop"
   | "type:one-shot"
   | "type:none"
-  | "key"
   | "showParent"
   | "reveal"
   | "copyPath"
@@ -33,8 +34,6 @@ export type SampleAction =
   | "reanalyze"
   | "customAnalysis"
   | "removeMissing";
-
-const IS_MAC = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
 
 interface Props {
   x: number;
@@ -48,8 +47,11 @@ interface Props {
   onRoundBpmChange: (round: boolean) => void;
   onSetBpm: (bpm: number | null) => void;
   onSetBpmFromBeats: (beats: number) => void;
+  onSetKey: (key: string | null) => void;
   onSelect: (action: SampleAction, sample: SampleRow) => void;
   onClose: () => void;
+  /** Open Set key / Set BPM as a standalone panel (keyboard K / B). */
+  openPanel?: "key" | "bpm";
 }
 
 export function SampleMenu({
@@ -63,12 +65,13 @@ export function SampleMenu({
   onRoundBpmChange,
   onSetBpm,
   onSetBpmFromBeats,
+  onSetKey,
   onSelect,
   onClose,
+  openPanel,
 }: Props) {
   const { t } = useTranslation("common");
   const { t: tl } = useTranslation("library");
-  const mod = IS_MAC ? "⌘" : "Ctrl";
 
   const entries: MenuEntry[] = [
     {
@@ -76,7 +79,7 @@ export function SampleMenu({
       id: "open",
       label: t("ctxOpen"),
       icon: <ArrowSquareOutIcon size={14} />,
-      hint: `${mod}O`,
+      hint: keys.open.hint,
       disabled: sample.missing,
     },
     { kind: "rule" },
@@ -85,14 +88,21 @@ export function SampleMenu({
       id: "favorite",
       label: sample.favorite ? t("ctxUnfavorite") : t("ctxFavorite"),
       icon: <StarIcon size={14} weight={sample.favorite ? "fill" : "regular"} />,
-      hint: "F",
+      hint: keys.favorite.hint,
     },
-    { kind: "item", id: "tags", label: t("ctxAddTags"), icon: <TagIcon size={14} />, hint: "T" },
+    {
+      kind: "item",
+      id: "tags",
+      label: t("ctxAddTags"),
+      icon: <TagIcon size={14} />,
+      hint: keys.tags.hint,
+    },
     {
       kind: "submenu",
       id: "type",
       label: t("ctxSetType"),
       icon: <ShapesIcon size={14} />,
+      hint: keys.cycleType.hint,
       options: [
         { id: "type:loop", label: tl("typeLoop"), checked: sample.sample_type === "loop" },
         {
@@ -108,6 +118,7 @@ export function SampleMenu({
       id: "bpm",
       label: t("ctxSetBpm"),
       icon: <MetronomeIcon size={14} />,
+      hint: keys.setBpm.hint,
       width: BPM_PANEL_WIDTH,
       content: (
         <SetBpmPanel
@@ -132,7 +143,23 @@ export function SampleMenu({
         />
       ),
     },
-    { kind: "item", id: "key", label: t("ctxSetKey"), icon: <MusicNotesIcon size={14} /> },
+    {
+      kind: "panel",
+      id: "key",
+      label: t("ctxSetKey"),
+      icon: <MusicNotesIcon size={14} />,
+      hint: keys.setKey.hint,
+      width: KEY_PANEL_WIDTH,
+      content: (
+        <SetKeyPanel
+          focused={sample}
+          onSetKey={(key) => {
+            onSetKey(key);
+            onClose();
+          }}
+        />
+      ),
+    },
     { kind: "rule" },
     {
       kind: "item",
@@ -144,9 +171,9 @@ export function SampleMenu({
     {
       kind: "item",
       id: "reveal",
-      label: IS_MAC ? t("ctxReveal") : t("ctxRevealWindows"),
+      label: isApplePlatform() ? t("ctxReveal") : t("ctxRevealWindows"),
       icon: <FolderOpenIcon size={14} />,
-      hint: `${mod}R`,
+      hint: keys.reveal.hint,
       disabled: sample.missing,
     },
     {
@@ -154,14 +181,14 @@ export function SampleMenu({
       id: "copyPath",
       label: t("ctxCopyPath"),
       icon: <LinkSimpleIcon size={14} />,
-      hint: IS_MAC ? "⌥⌘C" : "Alt Ctrl C",
+      hint: keys.copyPath.hint,
     },
     {
       kind: "item",
       id: "copyFilename",
       label: t("ctxCopyFilename"),
       icon: <TextboxIcon size={14} />,
-      hint: `${mod}C`,
+      hint: keys.copyFilename.hint,
     },
     { kind: "rule" },
     {
@@ -199,6 +226,7 @@ export function SampleMenu({
       y={y}
       label={sample.filename}
       entries={entries}
+      {...(openPanel != null ? { initialOpen: openPanel, panelOnly: true } : {})}
       onClose={onClose}
       onSelect={(id) => {
         onSelect(id as SampleAction, sample);

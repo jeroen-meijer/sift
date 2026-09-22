@@ -56,6 +56,15 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       onOpenMenu={noop}
       onDragSelected={noop}
       onScrubRow={noop}
+      columnWidths={{
+        name: 220,
+        type: 58,
+        bpm: 46,
+        key: 54,
+        wave: 180,
+        tags: 210,
+      }}
+      onColumnWidthsChange={noop}
       {...props}
     />,
   );
@@ -73,8 +82,8 @@ describe("SampleTable", () => {
 
   it("marks the sorted column and leaves the others unmarked", () => {
     renderTable({ sortColumn: "bpm", sortDirection: "desc" });
-    expect(screen.getByRole("button", { name: /BPM/ })).toHaveAttribute("aria-sort", "descending");
-    expect(screen.getByRole("button", { name: /Name/ })).toHaveAttribute("aria-sort", "none");
+    expect(screen.getByRole("button", { name: "BPM" })).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByRole("button", { name: "Name" })).toHaveAttribute("aria-sort", "none");
   });
 
   it("drops a hidden column from the header and the rows", () => {
@@ -143,6 +152,15 @@ describe("SampleTable", () => {
         onOpenMenu={noop}
         onDragSelected={noop}
         onScrubRow={noop}
+        columnWidths={{
+          name: 220,
+          type: 58,
+          bpm: 46,
+          key: 54,
+          wave: 180,
+          tags: 210,
+        }}
+        onColumnWidthsChange={noop}
       />,
     );
     expect(screen.getByRole("button", { name: "Unfavorite" })).toHaveAttribute(
@@ -153,6 +171,7 @@ describe("SampleTable", () => {
 
   it("marks the playing row", () => {
     const { container } = renderTable({ playingId: 1, playingProgress: 0.4 });
-    expect(container.querySelector(".sample-row .row-playing")).not.toBeNull();
+    expect(container.querySelector(".sample-row .col.fav.playing")).not.toBeNull();
+    expect(container.querySelector(".sample-row .fav-play")).not.toBeNull();
   });
 });

@@ -2,8 +2,8 @@
  * Where a menu and its flyouts sit.
  *
  * An HTML menu cannot draw outside the window the way a native one can, so
- * every box has to be clamped into the viewport — and made scrollable when it
- * is taller than the viewport itself.
+ * every box is clamped into the viewport and made scrollable when it is taller
+ * than the viewport itself.
  */
 
 export const MENU_WIDTH = 256;
@@ -37,9 +37,15 @@ function clampVertically(preferredTop: number, height: number, viewport: Viewpor
 }
 
 /** The menu itself, anchored at the pointer. */
-export function placeMenu(x: number, y: number, height: number, viewport: Viewport): Placement {
+export function placeMenu(
+  x: number,
+  y: number,
+  height: number,
+  viewport: Viewport,
+  width = MENU_WIDTH,
+): Placement {
   return {
-    left: Math.max(EDGE_GAP, Math.min(x, viewport.width - MENU_WIDTH - EDGE_GAP)),
+    left: Math.max(EDGE_GAP, Math.min(x, viewport.width - width - EDGE_GAP)),
     ...clampVertically(y, height, viewport),
   };
 }

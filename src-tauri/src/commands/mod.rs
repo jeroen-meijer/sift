@@ -400,6 +400,8 @@ pub fn play_sample(
     state: State<'_, AppState>,
     sample_id: i64,
     start_secs: Option<f64>,
+    region_start_secs: Option<f64>,
+    region_end_secs: Option<f64>,
 ) -> AppResult<()> {
     let sample = state
         .db
@@ -413,11 +415,27 @@ pub fn play_sample(
         .player
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let region = region_start_secs
+        .zip(region_end_secs)
+        .filter(|(a, b)| b > a);
     player.play_file(
         Path::new(&sample.path),
-        start_secs.unwrap_or(0.0),
+        start_secs.or(region_start_secs).unwrap_or(0.0),
         play_type,
+        region,
     )
+}
+
+/// Retune the loop window while a preview runs, so dragging a selection handle
+/// changes what loops without restarting the audio.
+#[tauri::command]
+pub fn set_play_region(state: State<'_, AppState>, start_secs: Option<f64>, end_secs: Option<f64>) {
+    let region = start_secs.zip(end_secs).filter(|(a, b)| b > a);
+    state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .set_region(region);
 }
 
 #[tauri::command]
@@ -665,11 +683,10 @@ pub fn set_clips_dir(state: State<'_, AppState>, path: String) -> AppResult<()> 
 
 /// True while `AppKit` still has the mouse event a drag session can attach to.
 ///
-/// The drag plugin asks `AppKit` for a session and unwraps the result. When the
-/// webview's `dragstart` has already finished — which is what happens if
-/// anything slow runs between the gesture and this command — `AppKit` hands back
-/// NULL and the plugin takes the whole process down with it. Checking first
-/// turns that crash into an ordinary error.
+/// The drag plugin asks `AppKit` for a session and unwraps the result. If the
+/// webview's `dragstart` has already finished (anything slow between the
+/// gesture and this command), `AppKit` returns NULL and the plugin panics.
+/// Checking first turns that crash into an ordinary error.
 #[cfg(target_os = "macos")]
 fn drag_gesture_is_live() -> bool {
     use objc2_app_kit::{NSApplication, NSEventType};

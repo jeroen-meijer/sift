@@ -1,12 +1,177 @@
 /*
- * Sift dark-default — Nocturne ramps plus the surface fills the Sift design
- * adds on top of them. Components reference var(--…) only; no raw hex.
+ * Theme tokens. Shared geometry / motion live on :root; each
+ * `[data-theme="…"]` block owns the color ramps. Components use var(--…) only.
+ *
+ * Nocturne is the default (legacy id: dark-default).
+ * Ink / Graphite / Snow follow Monospace VS Code themes.
  */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
+:root {
+  --font-heading: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+
+  --motion-fast: 90ms;
+  --motion-base: 140ms;
+  --motion-theme: 320ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0.13, 1);
+  --motion-slide: 7px;
+  --motion-hover-grace: 240ms;
+
+  --sidebar-width: 248px;
+  --titlebar-height: 38px;
+  --statusbar-height: 28px;
+  --omnibar-height: 52px;
+  --detail-height: 300px;
+  --row-height: 28px;
+}
+
+/*
+ * Register color tokens as interpolatable `<color>` values. initial-value
+ * matches Nocturne. With `html.theme-lerp`, theme switches animate.
+ */
+@property --color-ink { syntax: "<color>"; inherits: true; initial-value: #100f1a; }
+@property --color-bg-deep { syntax: "<color>"; inherits: true; initial-value: #0d0e15; }
+@property --color-bg-input { syntax: "<color>"; inherits: true; initial-value: #101220; }
+@property --color-bg-sidebar { syntax: "<color>"; inherits: true; initial-value: #12141f; }
+@property --color-bg-toolbar { syntax: "<color>"; inherits: true; initial-value: #181a28; }
+@property --color-sunken { syntax: "<color>"; inherits: true; initial-value: #191b27; }
+@property --color-bg { syntax: "<color>"; inherits: true; initial-value: #161826; }
+@property --color-bg-detail { syntax: "<color>"; inherits: true; initial-value: #1b1d2b; }
+@property --color-bg-title { syntax: "<color>"; inherits: true; initial-value: #1c1e2c; }
+@property --color-elevated { syntax: "<color>"; inherits: true; initial-value: #22242f; }
+@property --color-surface { syntax: "<color>"; inherits: true; initial-value: #232532; }
+@property --color-surface-hover { syntax: "<color>"; inherits: true; initial-value: #2b2e3d; }
+@property --color-neutral-100 { syntax: "<color>"; inherits: true; initial-value: #f3f5fe; }
+@property --color-neutral-200 { syntax: "<color>"; inherits: true; initial-value: #e4e7f5; }
+@property --color-neutral-250 { syntax: "<color>"; inherits: true; initial-value: #dedfe6; }
+@property --color-neutral-300 { syntax: "<color>"; inherits: true; initial-value: #cfd3e5; }
+@property --color-neutral-400 { syntax: "<color>"; inherits: true; initial-value: #b2b6ca; }
+@property --color-neutral-500 { syntax: "<color>"; inherits: true; initial-value: #9397ab; }
+@property --color-neutral-600 { syntax: "<color>"; inherits: true; initial-value: #75798c; }
+@property --color-neutral-700 { syntax: "<color>"; inherits: true; initial-value: #595d6c; }
+@property --color-neutral-800 { syntax: "<color>"; inherits: true; initial-value: #3f424d; }
+@property --color-neutral-850 { syntax: "<color>"; inherits: true; initial-value: #31333d; }
+@property --color-neutral-900 { syntax: "<color>"; inherits: true; initial-value: #292b31; }
+@property --color-accent-100 { syntax: "<color>"; inherits: true; initial-value: #f5f4ff; }
+@property --color-accent-200 { syntax: "<color>"; inherits: true; initial-value: #e7e5fe; }
+@property --color-accent-300 { syntax: "<color>"; inherits: true; initial-value: #d2cefd; }
+@property --color-accent-400 { syntax: "<color>"; inherits: true; initial-value: #b5abfc; }
+@property --color-accent-500 { syntax: "<color>"; inherits: true; initial-value: #968ae0; }
+@property --color-accent-600 { syntax: "<color>"; inherits: true; initial-value: #796cbf; }
+@property --color-accent-700 { syntax: "<color>"; inherits: true; initial-value: #5d5294; }
+@property --color-accent-800 { syntax: "<color>"; inherits: true; initial-value: #423a6a; }
+@property --color-accent-900 { syntax: "<color>"; inherits: true; initial-value: #2b2741; }
+@property --color-text { syntax: "<color>"; inherits: true; initial-value: #e9e9ed; }
+@property --color-text-selected { syntax: "<color>"; inherits: true; initial-value: #e7e5fe; }
+@property --color-text-muted { syntax: "<color>"; inherits: true; initial-value: #9397ab; }
+@property --color-text-dim { syntax: "<color>"; inherits: true; initial-value: #75798c; }
+@property --color-text-dim-2 { syntax: "<color>"; inherits: true; initial-value: #6d6f7c; }
+@property --color-text-faint { syntax: "<color>"; inherits: true; initial-value: #5b5f70; }
+@property --color-text-ghost { syntax: "<color>"; inherits: true; initial-value: #4a4e5d; }
+@property --color-count-selected { syntax: "<color>"; inherits: true; initial-value: #8b84ad; }
+@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #9184d9; }
+@property --color-accent-soft { syntax: "<color>"; inherits: true; initial-value: #b5abfc; }
+@property --color-accent-strong { syntax: "<color>"; inherits: true; initial-value: #796cbf; }
+@property --color-accent-fill { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 14%); }
+@property --color-accent-fill-strong { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 16%); }
+@property --color-accent-fill-row { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 15%); }
+@property --color-danger { syntax: "<color>"; inherits: true; initial-value: #d4837d; }
+@property --color-danger-text { syntax: "<color>"; inherits: true; initial-value: #e08b85; }
+@property --color-danger-ink { syntax: "<color>"; inherits: true; initial-value: #c9736d; }
+@property --color-danger-border { syntax: "<color>"; inherits: true; initial-value: #a8524c; }
+@property --color-danger-fill { syntax: "<color>"; inherits: true; initial-value: rgb(168 82 76 / 14%); }
+@property --color-ok { syntax: "<color>"; inherits: true; initial-value: #7fbf95; }
+@property --color-ok-text { syntax: "<color>"; inherits: true; initial-value: #a9cdb6; }
+@property --color-ok-fill { syntax: "<color>"; inherits: true; initial-value: rgb(95 154 114 / 10%); }
+@property --color-divider { syntax: "<color>"; inherits: true; initial-value: rgb(233 233 237 / 9%); }
+@property --color-border { syntax: "<color>"; inherits: true; initial-value: rgb(233 233 237 / 13%); }
+@property --color-hairline { syntax: "<color>"; inherits: true; initial-value: rgb(233 233 237 / 4%); }
+@property --color-wave-ink { syntax: "<color>"; inherits: true; initial-value: #7b71b8; }
+@property --color-row-wave { syntax: "<color>"; inherits: true; initial-value: #6a6d80; }
+@property --color-row-wave-sel { syntax: "<color>"; inherits: true; initial-value: #b9b0f0; }
+
+/* Smooth lerp when data-theme flips (skipped on first paint and reduced-motion). */
+html.theme-lerp {
+  transition:
+    --color-ink var(--motion-theme) var(--motion-ease),
+    --color-bg-deep var(--motion-theme) var(--motion-ease),
+    --color-bg-input var(--motion-theme) var(--motion-ease),
+    --color-bg-sidebar var(--motion-theme) var(--motion-ease),
+    --color-bg-toolbar var(--motion-theme) var(--motion-ease),
+    --color-sunken var(--motion-theme) var(--motion-ease),
+    --color-bg var(--motion-theme) var(--motion-ease),
+    --color-bg-detail var(--motion-theme) var(--motion-ease),
+    --color-bg-title var(--motion-theme) var(--motion-ease),
+    --color-elevated var(--motion-theme) var(--motion-ease),
+    --color-surface var(--motion-theme) var(--motion-ease),
+    --color-surface-hover var(--motion-theme) var(--motion-ease),
+    --color-neutral-100 var(--motion-theme) var(--motion-ease),
+    --color-neutral-200 var(--motion-theme) var(--motion-ease),
+    --color-neutral-250 var(--motion-theme) var(--motion-ease),
+    --color-neutral-300 var(--motion-theme) var(--motion-ease),
+    --color-neutral-400 var(--motion-theme) var(--motion-ease),
+    --color-neutral-500 var(--motion-theme) var(--motion-ease),
+    --color-neutral-600 var(--motion-theme) var(--motion-ease),
+    --color-neutral-700 var(--motion-theme) var(--motion-ease),
+    --color-neutral-800 var(--motion-theme) var(--motion-ease),
+    --color-neutral-850 var(--motion-theme) var(--motion-ease),
+    --color-neutral-900 var(--motion-theme) var(--motion-ease),
+    --color-accent-100 var(--motion-theme) var(--motion-ease),
+    --color-accent-200 var(--motion-theme) var(--motion-ease),
+    --color-accent-300 var(--motion-theme) var(--motion-ease),
+    --color-accent-400 var(--motion-theme) var(--motion-ease),
+    --color-accent-500 var(--motion-theme) var(--motion-ease),
+    --color-accent-600 var(--motion-theme) var(--motion-ease),
+    --color-accent-700 var(--motion-theme) var(--motion-ease),
+    --color-accent-800 var(--motion-theme) var(--motion-ease),
+    --color-accent-900 var(--motion-theme) var(--motion-ease),
+    --color-text var(--motion-theme) var(--motion-ease),
+    --color-text-selected var(--motion-theme) var(--motion-ease),
+    --color-text-muted var(--motion-theme) var(--motion-ease),
+    --color-text-dim var(--motion-theme) var(--motion-ease),
+    --color-text-dim-2 var(--motion-theme) var(--motion-ease),
+    --color-text-faint var(--motion-theme) var(--motion-ease),
+    --color-text-ghost var(--motion-theme) var(--motion-ease),
+    --color-count-selected var(--motion-theme) var(--motion-ease),
+    --color-accent var(--motion-theme) var(--motion-ease),
+    --color-accent-soft var(--motion-theme) var(--motion-ease),
+    --color-accent-strong var(--motion-theme) var(--motion-ease),
+    --color-accent-fill var(--motion-theme) var(--motion-ease),
+    --color-accent-fill-strong var(--motion-theme) var(--motion-ease),
+    --color-accent-fill-row var(--motion-theme) var(--motion-ease),
+    --color-danger var(--motion-theme) var(--motion-ease),
+    --color-danger-text var(--motion-theme) var(--motion-ease),
+    --color-danger-ink var(--motion-theme) var(--motion-ease),
+    --color-danger-border var(--motion-theme) var(--motion-ease),
+    --color-danger-fill var(--motion-theme) var(--motion-ease),
+    --color-ok var(--motion-theme) var(--motion-ease),
+    --color-ok-text var(--motion-theme) var(--motion-ease),
+    --color-ok-fill var(--motion-theme) var(--motion-ease),
+    --color-divider var(--motion-theme) var(--motion-ease),
+    --color-border var(--motion-theme) var(--motion-ease),
+    --color-hairline var(--motion-theme) var(--motion-ease),
+    --color-wave-ink var(--motion-theme) var(--motion-ease),
+    --color-row-wave var(--motion-theme) var(--motion-ease),
+    --color-row-wave-sel var(--motion-theme) var(--motion-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-lerp {
+    transition: none;
+  }
+}
+
+/* --- Nocturne (default; legacy alias dark-default) --- */
+
 :root,
+[data-theme="nocturne"],
 [data-theme="dark-default"] {
-  /* Surfaces, darkest to lightest. */
   --color-ink: #100f1a;
   --color-bg-deep: #0d0e15;
   --color-bg-input: #101220;
@@ -20,7 +185,6 @@
   --color-surface: #232532;
   --color-surface-hover: #2b2e3d;
 
-  /* Neutral ramp (Nocturne) plus the two steps the app screens need. */
   --color-neutral-100: #f3f5fe;
   --color-neutral-200: #e4e7f5;
   --color-neutral-250: #dedfe6;
@@ -43,7 +207,6 @@
   --color-accent-800: #423a6a;
   --color-accent-900: #2b2741;
 
-  /* Text roles. */
   --color-text: #e9e9ed;
   --color-text-selected: #e7e5fe;
   --color-text-muted: #9397ab;
@@ -53,7 +216,6 @@
   --color-text-ghost: #4a4e5d;
   --color-count-selected: #8b84ad;
 
-  /* Accent. */
   --color-accent: #9184d9;
   --color-accent-soft: #b5abfc;
   --color-accent-strong: #796cbf;
@@ -61,7 +223,6 @@
   --color-accent-fill-strong: rgb(145 132 217 / 16%);
   --color-accent-fill-row: rgb(145 132 217 / 15%);
 
-  /* Status. */
   --color-danger: #d4837d;
   --color-danger-text: #e08b85;
   --color-danger-ink: #c9736d;
@@ -71,43 +232,227 @@
   --color-ok-text: #a9cdb6;
   --color-ok-fill: rgb(95 154 114 / 10%);
 
-  /* Lines. */
-  --color-divider: color-mix(in srgb, #e9e9ed 9%, transparent);
-  --color-border: color-mix(in srgb, #e9e9ed 13%, transparent);
-  --color-hairline: color-mix(in srgb, #e9e9ed 4%, transparent);
+  --color-divider: rgb(233 233 237 / 9%);
+  --color-border: rgb(233 233 237 / 13%);
+  --color-hairline: rgb(233 233 237 / 4%);
 
-  /* Waveform ink. */
   --color-wave-ink: #7b71b8;
   --color-row-wave: #6a6d80;
   --color-row-wave-sel: #b9b0f0;
+}
 
-  --font-heading: "Inter", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+/* --- Ink (Monospace Ink) --- */
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 14px;
+[data-theme="ink"] {
+  --color-ink: #05060a;
+  --color-bg-deep: #07080c;
+  --color-bg-input: #141b26;
+  --color-bg-sidebar: #07080c;
+  --color-bg-toolbar: #0e121a;
+  --color-sunken: #10151e;
+  --color-bg: #0b0f16;
+  --color-bg-detail: #10151e;
+  --color-bg-title: #06080b;
+  --color-elevated: #151a27;
+  --color-surface: #1a2130;
+  --color-surface-hover: #232b3c;
 
-  /*
-   * Motion. Every transition and flyout animation reads from these, and the
-   * JS side picks up --motion-hover-grace through src/ui/motion.ts, so this
-   * block is the only place to retune how the app feels.
-   */
-  --motion-fast: 90ms;
-  --motion-base: 140ms;
-  --motion-ease: cubic-bezier(0.2, 0, 0.13, 1);
-  /* How far a flyout travels as it fades in. */
-  --motion-slide: 7px;
-  /* Grace period before a flyout closes when the pointer leaves its trigger,
-     so a diagonal sweep towards the flyout does not lose it on the way. */
-  --motion-hover-grace: 240ms;
+  --color-neutral-100: #fafbfe;
+  --color-neutral-200: #e8edf4;
+  --color-neutral-250: #d9dfe7;
+  --color-neutral-300: #c2cad6;
+  --color-neutral-400: #a4afbd;
+  --color-neutral-500: #8b98a9;
+  --color-neutral-600: #738295;
+  --color-neutral-700: #5d6a7d;
+  --color-neutral-800: #475365;
+  --color-neutral-850: #2a2f3b;
+  --color-neutral-900: #1a1f2a;
 
-  /* Window chrome geometry, straight from the design frame. */
-  --sidebar-width: 248px;
-  --titlebar-height: 38px;
-  --statusbar-height: 28px;
-  --omnibar-height: 52px;
-  --detail-height: 300px;
-  --row-height: 28px;
+  --color-accent-100: #f4efff;
+  --color-accent-200: #e0ccff;
+  --color-accent-300: #c9aefd;
+  --color-accent-400: #b895fd;
+  --color-accent-500: #a87ffb;
+  --color-accent-600: #976fe1;
+  --color-accent-700: #8964e8;
+  --color-accent-800: #5d4499;
+  --color-accent-900: #3a2a5c;
+
+  --color-text: #d9dfe7;
+  --color-text-selected: #e0ccff;
+  --color-text-muted: #8b98a9;
+  --color-text-dim: #738295;
+  --color-text-dim-2: #5d6a7d;
+  --color-text-faint: #475365;
+  --color-text-ghost: #2a2f3b;
+  --color-count-selected: #a494c9;
+
+  --color-accent: #976fe1;
+  --color-accent-soft: #b895fd;
+  --color-accent-strong: #8964e8;
+  --color-accent-fill: rgb(151 111 225 / 16%);
+  --color-accent-fill-strong: rgb(151 111 225 / 20%);
+  --color-accent-fill-row: rgb(151 111 225 / 16%);
+
+  --color-danger: #f57f6c;
+  --color-danger-text: #f76769;
+  --color-danger-ink: #e05555;
+  --color-danger-border: #c44545;
+  --color-danger-fill: rgb(245 127 108 / 14%);
+  --color-ok: #52b87a;
+  --color-ok-text: #66ce98;
+  --color-ok-fill: rgb(23 184 119 / 12%);
+
+  --color-divider: rgb(217 223 231 / 9%);
+  --color-border: rgb(217 223 231 / 13%);
+  --color-hairline: rgb(217 223 231 / 4%);
+
+  --color-wave-ink: #8a6fd4;
+  --color-row-wave: #5d6a7d;
+  --color-row-wave-sel: #c9aefd;
+}
+
+/* --- Graphite (Monospace Graphite) --- */
+
+[data-theme="graphite"] {
+  --color-ink: #050505;
+  --color-bg-deep: #0a0a0a;
+  --color-bg-input: #1a1a1a;
+  --color-bg-sidebar: #0e0e0e;
+  --color-bg-toolbar: #141414;
+  --color-sunken: #161616;
+  --color-bg: #121212;
+  --color-bg-detail: #181818;
+  --color-bg-title: #0a0a0a;
+  --color-elevated: #1e1e1e;
+  --color-surface: #242424;
+  --color-surface-hover: #2e2e2e;
+
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-200: #e8e8e8;
+  --color-neutral-250: #e2e2e2;
+  --color-neutral-300: #cfcfcf;
+  --color-neutral-400: #b0b0b0;
+  --color-neutral-500: #8f8f8f;
+  --color-neutral-600: #6b6b6b;
+  --color-neutral-700: #5c5c5c;
+  --color-neutral-800: #3d3d3d;
+  --color-neutral-850: #333333;
+  --color-neutral-900: #2a2a2a;
+
+  --color-accent-100: #f0f0f0;
+  --color-accent-200: #e2e2e2;
+  --color-accent-300: #c4c4c4;
+  --color-accent-400: #b8b8b8;
+  --color-accent-500: #989898;
+  --color-accent-600: #808080;
+  --color-accent-700: #707070;
+  --color-accent-800: #454545;
+  --color-accent-900: #2a2a2a;
+
+  --color-text: #e2e2e2;
+  --color-text-selected: #f5f5f5;
+  --color-text-muted: #8f8f8f;
+  --color-text-dim: #6b6b6b;
+  --color-text-dim-2: #5c5c5c;
+  --color-text-faint: #454545;
+  --color-text-ghost: #333333;
+  --color-count-selected: #9a9a9a;
+
+  --color-accent: #989898;
+  --color-accent-soft: #c4c4c4;
+  --color-accent-strong: #707070;
+  --color-accent-fill: rgb(152 152 152 / 16%);
+  --color-accent-fill-strong: rgb(152 152 152 / 20%);
+  --color-accent-fill-row: rgb(152 152 152 / 16%);
+
+  --color-danger: #f57f6c;
+  --color-danger-text: #f76769;
+  --color-danger-ink: #e05555;
+  --color-danger-border: #c44545;
+  --color-danger-fill: rgb(245 127 108 / 14%);
+  --color-ok: #52b87a;
+  --color-ok-text: #66ce98;
+  --color-ok-fill: rgb(23 184 119 / 12%);
+
+  --color-divider: rgb(226 226 226 / 9%);
+  --color-border: rgb(226 226 226 / 13%);
+  --color-hairline: rgb(226 226 226 / 4%);
+
+  --color-wave-ink: #8a8a8a;
+  --color-row-wave: #5c5c5c;
+  --color-row-wave-sel: #c4c4c4;
+}
+
+/* --- Snow (Monospace Snow, light) --- */
+
+[data-theme="snow"] {
+  --color-ink: #ffffff;
+  --color-bg-deep: #eef1f5;
+  --color-bg-input: #ffffff;
+  --color-bg-sidebar: #f5f7fa;
+  --color-bg-toolbar: #f0f3f7;
+  --color-sunken: #e8ecf1;
+  --color-bg: #ffffff;
+  --color-bg-detail: #f7f9fc;
+  --color-bg-title: #ffffff;
+  --color-elevated: #ffffff;
+  --color-surface: #f5f7fa;
+  --color-surface-hover: #e8ecf1;
+
+  --color-neutral-100: #1b1f24;
+  --color-neutral-200: #24292e;
+  --color-neutral-250: #2f363d;
+  --color-neutral-300: #444d56;
+  --color-neutral-400: #586069;
+  --color-neutral-500: #6e7681;
+  --color-neutral-600: #959da5;
+  --color-neutral-700: #d1d5da;
+  --color-neutral-800: #e1e4e8;
+  --color-neutral-850: #eaecef;
+  --color-neutral-900: #f6f8fa;
+
+  --color-accent-100: #f1f8ff;
+  --color-accent-200: #dbedff;
+  --color-accent-300: #c8e1ff;
+  --color-accent-400: #79b8ff;
+  --color-accent-500: #2188ff;
+  --color-accent-600: #0366d6;
+  --color-accent-700: #044289;
+  --color-accent-800: #032f62;
+  --color-accent-900: #05264c;
+
+  --color-text: #24292e;
+  --color-text-selected: #032f62;
+  --color-text-muted: #6e7681;
+  --color-text-dim: #586069;
+  --color-text-dim-2: #959da5;
+  --color-text-faint: #959da5;
+  --color-text-ghost: #d1d5da;
+  --color-count-selected: #044289;
+
+  --color-accent: #0366d6;
+  --color-accent-soft: #2188ff;
+  --color-accent-strong: #044289;
+  --color-accent-fill: rgb(3 102 214 / 12%);
+  --color-accent-fill-strong: rgb(3 102 214 / 16%);
+  --color-accent-fill-row: rgb(3 102 214 / 12%);
+
+  --color-danger: #cb2431;
+  --color-danger-text: #d73a49;
+  --color-danger-ink: #b31d28;
+  --color-danger-border: #9b1c23;
+  --color-danger-fill: rgb(203 36 49 / 10%);
+  --color-ok: #17975f;
+  --color-ok-text: #28a745;
+  --color-ok-fill: rgb(23 151 95 / 10%);
+
+  --color-divider: rgb(36 41 46 / 9%);
+  --color-border: rgb(36 41 46 / 14%);
+  --color-hairline: rgb(36 41 46 / 5%);
+
+  --color-wave-ink: #0366d6;
+  --color-row-wave: #959da5;
+  --color-row-wave-sel: #2188ff;
 }

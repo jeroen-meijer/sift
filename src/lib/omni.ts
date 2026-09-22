@@ -33,3 +33,21 @@ export function omniHasQuery(value: OmniState): boolean {
     value.key != null
   );
 }
+
+/**
+ * Chip label for a folder filter: root folder name + path under it, matching
+ * the sidebar (e.g. `example_samples/limbowrld_drumkit/808s`).
+ */
+export function folderChipLabel(
+  folderPath: string,
+  roots: readonly { path: string; name: string }[],
+): string {
+  const normalized = folderPath.replace(/\\/g, "/");
+  const root = roots
+    .map((r) => ({ ...r, path: r.path.replace(/\\/g, "/") }))
+    .filter((r) => normalized === r.path || normalized.startsWith(`${r.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+  if (!root) return folderPath;
+  if (normalized === root.path) return root.name;
+  return `${root.name}/${normalized.slice(root.path.length + 1)}`;
+}

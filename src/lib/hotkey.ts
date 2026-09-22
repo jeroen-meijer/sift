@@ -1,9 +1,20 @@
-/** Hold-to-hover-preview hotkey: recording it, storing it, matching it. */
+/** Hold-to-hover-preview hotkey: recording it, storing it, matching it.
+ * Fixed app chords live in `bindings.ts`. */
 
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
+/** Fields every keyboard event (native or React) exposes for chord matching. */
+export interface ChordEvent {
+  key: string;
+  code: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}
+
 /** A stable id for a key press, e.g. `alt+KeyH` or `Space`. */
-export function hotkeyId(event: KeyboardEvent): string | null {
+export function hotkeyId(event: ChordEvent): string | null {
   if (MODIFIER_KEYS.has(event.key)) return null;
   const parts: string[] = [];
   if (event.metaKey) parts.push("meta");
@@ -36,6 +47,6 @@ export function hotkeyLabel(id: string | null): string | null {
 }
 
 /** True when this keyboard event is the bound hotkey. */
-export function matchesHotkey(event: KeyboardEvent, id: string | null): boolean {
+export function matchesHotkey(event: ChordEvent, id: string | null): boolean {
   return id != null && hotkeyId(event) === id;
 }

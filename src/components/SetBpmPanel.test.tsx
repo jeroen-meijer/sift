@@ -88,7 +88,7 @@ describe("SetBpmPanel", () => {
 
   it("mutes beat counts that land outside the analysis range", () => {
     renderPanel();
-    // 240 BPM is past the 70–180 range, 120 sits inside it.
+    // 240 BPM is past the 70-180 range, 120 sits inside it.
     expect(screen.getByRole("button", { name: /8 beats/ })).toHaveClass("muted");
     expect(screen.getByRole("button", { name: /4 beats/ })).not.toHaveClass("muted");
   });
@@ -124,7 +124,7 @@ describe("SetBpmPanel", () => {
     expect(previewOf(/4 beats/)).toBe("varies");
   });
 
-  it("hands the beat count up rather than a computed BPM", async () => {
+  it("hands the beat count up, not a computed BPM", async () => {
     const user = userEvent.setup();
     const handlers = renderPanel();
     await user.click(screen.getByRole("button", { name: /16 beats/ }));

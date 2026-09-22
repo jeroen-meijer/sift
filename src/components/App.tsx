@@ -1,7 +1,8 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { keys, matchesBinding } from "../lib/bindings";
 import { formatCount } from "../lib/format";
 import {
   ipc,
@@ -13,6 +14,7 @@ import {
   type TagNode,
 } from "../lib/ipc";
 import { useSettings } from "../lib/useSettings";
+import { applyTheme } from "../theme";
 import { groupByFolder } from "../lib/askIndex";
 import { AskIndexToast } from "./AskIndexToast";
 import { FirstLaunch } from "./FirstLaunch";
@@ -45,6 +47,11 @@ export function App() {
   const { t: tl } = useTranslation("library");
   const { settings, set: setSetting, loaded } = useSettings();
 
+  useEffect(() => {
+    if (!loaded) return;
+    applyTheme(settings.theme);
+  }, [loaded, settings.theme]);
+
   const [view, setView] = useState<View>("library");
   const [stats, setStats] = useState<DbStats>(EMPTY_STATS);
   const [folders, setFolders] = useState<FolderNode[]>([]);
@@ -71,6 +78,19 @@ export function App() {
     refreshLibrary();
     void ipc.listOutputDevices().then(setOutputDevices).catch(console.error);
   }, [refreshLibrary]);
+
+  /* Preferences shortcut; Esc is handled inside the settings dialog. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchesBinding(e, keys.preferences)) return;
+      e.preventDefault();
+      setView((current) => (current === "settings" ? "library" : "settings"));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
   /* Backend events: indexing, analysis, watcher. */
   useEffect(() => {
@@ -160,7 +180,7 @@ export function App() {
         }}
       />
 
-      {view === "library" && isEmpty ? (
+      {isEmpty ? (
         <>
           <FirstLaunch
             onAddFolder={addRoot}
@@ -172,7 +192,7 @@ export function App() {
         </>
       ) : null}
 
-      {view === "library" && !isEmpty && loaded ? (
+      {!isEmpty && loaded ? (
         <LibraryView
           settings={settings}
           onSettingChange={setSetting}
@@ -239,7 +259,7 @@ export function App() {
         />
       ) : null}
 
-      {view === "library" && askGroups.length > 0 ? (
+      {askGroups.length > 0 ? (
         <AskIndexToast
           groups={askGroups}
           onRespond={respondAsk}
