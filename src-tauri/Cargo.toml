@@ -42,6 +42,12 @@ diesel = { version = "2.2.12", features = ["sqlite", "returning_clauses_for_sqli
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.38.2", features = ["bundled"] }
 
+# macOS only: used to check AppKit still has a live mouse event before handing a
+# drag to the plugin, which aborts the process on a NULL drag session.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSEvent", "NSResponder"] }
+
 [dev-dependencies]
 criterion = "0.8"
 tempfile = "3"

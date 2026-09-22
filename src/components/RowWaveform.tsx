@@ -1,94 +1,143 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import type { PeakData } from "./WaveformCanvas";
+import { ipc, type PeakData } from "../lib/ipc";
 
-const cache = new Map<number, PeakData>();
+/** Peaks are immutable per sample, so one cache serves every row that scrolls by. */
+const peakCache = new Map<number, PeakData>();
+const inFlight = new Map<number, Promise<PeakData | null>>();
+
+function loadPeaks(sampleId: number): Promise<PeakData | null> {
+  const cached = peakCache.get(sampleId);
+  if (cached) return Promise.resolve(cached);
+  const existing = inFlight.get(sampleId);
+  if (existing) return existing;
+  const request = ipc
+    .getPeaks(sampleId)
+    .then((data) => {
+      peakCache.set(sampleId, data);
+      return data;
+    })
+    .catch(() => null)
+    .finally(() => inFlight.delete(sampleId));
+  inFlight.set(sampleId, request);
+  return request;
+}
 
 interface Props {
   sampleId: number;
   missing: boolean;
   analyzing: boolean;
-  showWaveform: boolean;
+  selected: boolean;
+  /** Fraction 0–1 of the playhead, or null when this row is not playing. */
+  progress: number | null;
+  onScrub?: ((fraction: number) => void) | undefined;
 }
 
-/** Compact row waveform matching the Claude Design ink stroke. */
-export function RowWaveform({ sampleId, missing, analyzing, showWaveform }: Props) {
+/** The compact row waveform: one vertical tick per peak bucket. */
+export function RowWaveform({
+  sampleId,
+  missing,
+  analyzing,
+  selected,
+  progress,
+  onScrub,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [peaks, setPeaks] = useState<PeakData | null>(() => cache.get(sampleId) ?? null);
+  const [peaks, setPeaks] = useState<PeakData | null>(() => peakCache.get(sampleId) ?? null);
+  const [hoverFraction, setHoverFraction] = useState<number | null>(null);
+
+  const idle = missing || analyzing;
 
   useEffect(() => {
-    if (!showWaveform || missing || analyzing) {
-      return;
-    }
-    const cached = cache.get(sampleId);
-    if (cached) {
-      setPeaks(cached);
-      return;
-    }
-    let cancelled = false;
-    void invoke<PeakData>("get_peaks", { sampleId })
-      .then((data) => {
-        cache.set(sampleId, data);
-        if (!cancelled) setPeaks(data);
-      })
-      .catch(() => {
-        if (!cancelled) setPeaks(null);
-      });
+    if (idle) return;
+    let alive = true;
+    void loadPeaks(sampleId).then((data) => {
+      if (alive) setPeaks(data);
+    });
     return () => {
-      cancelled = true;
+      alive = false;
     };
-  }, [sampleId, showWaveform, missing, analyzing]);
+  }, [sampleId, idle]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !peaks || !showWaveform || analyzing || missing) return;
+    if (!canvas || !peaks || idle) return;
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth || 120;
     const height = 18;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const ink =
-      getComputedStyle(document.documentElement).getPropertyValue("--color-neutral-500").trim() ||
-      "#75798c";
-    const mid = height / 2;
-    const ch = Math.max(1, peaks.channels);
-    ctx.strokeStyle = ink;
+    const styles = getComputedStyle(canvas);
+    ctx.strokeStyle = styles
+      .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
+      .trim();
     ctx.lineWidth = 1.05;
+    const mid = height / 2;
+    const channels = Math.max(1, peaks.channels);
+    const last = Math.max(1, peaks.bucket_count - 1);
     ctx.beginPath();
     for (let i = 0; i < peaks.bucket_count; i++) {
-      const base = i * ch * 2;
-      const min = peaks.peaks[base] ?? 0;
-      const max = peaks.peaks[base + 1] ?? 0;
-      const amp = Math.max(Math.abs(min), Math.abs(max));
-      const x = (i / Math.max(1, peaks.bucket_count - 1)) * width;
+      const base = i * channels * 2;
+      const amp = Math.max(
+        Math.abs(peaks.peaks[base] ?? 0),
+        Math.abs(peaks.peaks[base + 1] ?? 0),
+      );
+      const x = (i / last) * width;
       const y = amp * (height * 0.42);
       ctx.moveTo(x, mid - y);
       ctx.lineTo(x, mid + y);
     }
     ctx.stroke();
-  }, [peaks, showWaveform, analyzing, missing]);
+  }, [peaks, idle, selected]);
 
   if (analyzing) {
     return (
       <div className="row-wave row-wave-analyzing" aria-hidden>
-        <div className="row-wave-shimmer" />
+        <span className="row-wave-shimmer" />
       </div>
     );
   }
   if (missing) {
     return <div className="row-wave row-wave-missing" aria-hidden />;
   }
-  if (!showWaveform) {
-    return <div className="row-wave row-wave-off" aria-hidden />;
-  }
+
+  const fractionAt = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+  };
+
   return (
-    <div className="row-wave">
+    <div
+      className="row-wave"
+      onMouseMove={(e) => {
+        setHoverFraction(fractionAt(e));
+      }}
+      onMouseLeave={() => {
+        setHoverFraction(null);
+      }}
+      onClick={(e) => {
+        if (!onScrub) return;
+        e.stopPropagation();
+        onScrub(fractionAt(e));
+      }}
+    >
       <canvas ref={canvasRef} className="row-wave-canvas" />
+      {progress != null ? (
+        <>
+          <span className="row-wave-played" style={{ width: `${(progress * 100).toFixed(2)}%` }} />
+          <span className="row-wave-playhead" style={{ left: `${(progress * 100).toFixed(2)}%` }} />
+        </>
+      ) : null}
+      {hoverFraction != null ? (
+        <span
+          className="row-wave-cursor"
+          style={{ left: `${(hoverFraction * 100).toFixed(2)}%` }}
+        />
+      ) : null}
     </div>
   );
 }

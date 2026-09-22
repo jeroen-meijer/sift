@@ -12,8 +12,8 @@ export function FirstLaunch({ onAddFolder, onPreferences }: Props) {
 
   return (
     <div className="first-launch">
-      <aside className="sidebar empty">
-        <div className="sidebar-label">{t("library")}</div>
+      <aside className="sidebar">
+        <div className="sidebar-title kicker">{t("library")}</div>
         <div className="sidebar-empty">{t("noRoots")}</div>
       </aside>
       <section className="first-launch-main">
@@ -32,7 +32,7 @@ export function FirstLaunch({ onAddFolder, onPreferences }: Props) {
               {tc("preferences")}
             </button>
           </div>
-          <div className="first-launch-hint">{t("firstLaunchHint")}</div>
+          <div className="first-launch-hint rule">{t("firstLaunchHint")}</div>
         </div>
       </section>
     </div>
