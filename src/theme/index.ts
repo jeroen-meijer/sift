@@ -26,25 +26,25 @@ export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
     id: "nocturne",
     blurb: "slate blue, low glare",
     swatches: ["#161826", "#9184d9", "#e9e9ed", "#d4837d"],
-    waveBands: { bass: "#f0608c", mid: "#6ed496", treble: "#82b4ff" },
+    waveBands: { bass: "#ff3d8a", mid: "#2ee89a", treble: "#4eb8ff" },
   },
   ink: {
     id: "ink",
     blurb: "OLED ink, violet accent",
     swatches: ["#0b0f16", "#976fe1", "#d9dfe7", "#f57f6c"],
-    waveBands: { bass: "#ff6b9d", mid: "#7dffb3", treble: "#9ec5ff" },
+    waveBands: { bass: "#ff2d7b", mid: "#1dff9a", treble: "#3db8ff" },
   },
   graphite: {
     id: "graphite",
     blurb: "neutral warm grey",
     swatches: ["#121212", "#989898", "#e2e2e2", "#f57f6c"],
-    waveBands: { bass: "#ff7070", mid: "#90e090", treble: "#90b8ff" },
+    waveBands: { bass: "#ff4a4a", mid: "#4ade80", treble: "#60a5fa" },
   },
   snow: {
     id: "snow",
     blurb: "light chrome",
     swatches: ["#ffffff", "#0366d6", "#24292e", "#cb2431"],
-    waveBands: { bass: "#d73a49", mid: "#22863a", treble: "#0366d6" },
+    waveBands: { bass: "#cf222e", mid: "#1a7f37", treble: "#0550ae" },
   },
 };
 

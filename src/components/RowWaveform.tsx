@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
 import { cachedRowPeaks, loadRowPeaks } from "../lib/rowPeaks";
-import { bucketWeights, readSpectralBands, spectralCss } from "../lib/spectralColor";
+import { readSpectralBands } from "../lib/spectralColor";
 import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
   onScrub?: ((fraction: number) => void) | undefined;
 }
 
-/** The compact row waveform: one vertical tick per peak bucket. */
+/** The compact row waveform: filled envelope tinted by spectral weights. */
 export function RowWaveform({
   sampleId,
   missing,
@@ -57,40 +58,35 @@ export function RowWaveform({
       const dpr = window.devicePixelRatio || 1;
       const width = canvas.clientWidth || 120;
       const height = 18;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      const ctx = canvas.getContext("2d");
+      const ctx = syncCanvasSize(canvas, width, height, dpr);
       if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
       const styles = getComputedStyle(canvas);
-      const ink = styles
-        .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
-        .trim();
+      const ink =
+        styles
+          .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
+          .trim() || "#6a6d80";
       const bands = readSpectralBands(canvas);
-      ctx.lineWidth = 1.05;
-      const mid = height / 2;
-      const channels = Math.max(1, peaks.channels);
-      const last = Math.max(1, peaks.bucket_count - 1);
-      const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
-
-      for (let i = 0; i < peaks.bucket_count; i++) {
-        const base = i * channels * 2;
-        const amp = Math.max(
-          Math.abs(peaks.peaks[base] ?? 0),
-          Math.abs(peaks.peaks[base + 1] ?? 0),
-        );
-        const x = (i / last) * width;
-        const y = amp * (height * 0.42);
-        ctx.strokeStyle = hasColors
-          ? spectralCss(bucketWeights(peaks.colors, i), bands)
-          : ink;
-        ctx.beginPath();
-        ctx.moveTo(x, mid - y);
-        ctx.lineTo(x, mid + y);
-        ctx.stroke();
-      }
+      paintWaveLane(
+        ctx,
+        {
+          peaks: peaks.peaks,
+          colors: peaks.colors,
+          bucketCount: peaks.bucket_count,
+          channels: Math.max(1, peaks.channels),
+        },
+        {
+          width,
+          midY: height / 2,
+          ampScale: height * 0.42,
+          channelIndex: 0,
+          colored,
+          bands,
+          ink,
+          maxColorStops: 32,
+        },
+      );
     };
 
     paint();
