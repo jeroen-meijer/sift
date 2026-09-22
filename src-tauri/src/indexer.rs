@@ -121,8 +121,7 @@ pub fn index_root(
             .to_string();
         let parent = path
             .parent()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
+            .map_or_default(|p| p.to_string_lossy().to_string());
         let extension = path
             .extension()
             .and_then(|e| e.to_str())
@@ -274,8 +273,7 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
         .to_string();
     let parent = path
         .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
+        .map_or_default(|p| p.to_string_lossy().to_string());
     let extension = path
         .extension()
         .and_then(|e| e.to_str())

@@ -499,8 +499,7 @@ pub fn update_path(conn: &mut SqliteConnection, from: &str, to: &str) -> AppResu
         .to_string();
     let parent = path
         .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
+        .map_or_default(|p| p.to_string_lossy().to_string());
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
