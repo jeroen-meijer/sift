@@ -26,7 +26,7 @@ function canvasProbe(): CanvasRenderingContext2D | null {
 }
 
 /**
- * Parse a CSS color string into 0–255 RGB. Handles hex, rgb()/rgba(),
+ * Parse a CSS color string into 0-255 RGB. Handles hex, rgb()/rgba(),
  * space-separated rgb, color(srgb …), and falls back to a canvas probe
  * so @property-interpolated values still resolve.
  */

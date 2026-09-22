@@ -97,7 +97,7 @@ if ! bun run build; then
 fi
 
 git add "$CHANGELOG_PATH" "$PACKAGE_PATH" src-tauri/tauri.conf.json src-tauri/Cargo.toml
-# Cargo.lock may change if version bump touches the package stanza only — still add if dirty.
+# Cargo.lock may change if the version bump touches the package stanza only. Add it when dirty.
 if git status --porcelain -- src-tauri/Cargo.lock | grep -q .; then
   git add src-tauri/Cargo.toml src-tauri/Cargo.lock
 fi

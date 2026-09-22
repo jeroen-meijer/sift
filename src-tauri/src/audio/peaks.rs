@@ -279,7 +279,7 @@ fn generate_spectral_colors(decoded: &DecodedAudio, buckets: usize) -> Vec<u8> {
         normalize_mode: NormalizeMode::GlobalPeak,
         // Musical cuts for sample browsing:
         // - <200 Hz: sub / 808 / kick body
-        // - 200–6 kHz: vocals, snare body, most melodic content
+        // - 200 Hz to 6 kHz: vocals, snare body, most melodic content
         // - >6 kHz: air / hats (amen was ~75% treble at 3.5 kHz)
         low_cut_hz: 200.0,
         mid_cut_hz: 6000.0,

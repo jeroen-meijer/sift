@@ -10,7 +10,7 @@
   overflow: hidden;
 }
 
-/* — title bar ——————————————————————————————————————— */
+/* title bar */
 
 .titlebar {
   height: var(--titlebar-height);
@@ -50,7 +50,7 @@
   app-region: no-drag;
 }
 
-/* — status bar —————————————————————————————————————— */
+/* status bar */
 
 .statusbar {
   height: var(--statusbar-height);
@@ -113,7 +113,7 @@
   color: var(--color-text-faint);
 }
 
-/* — first launch ———————————————————————————————————— */
+/* first launch */
 
 .first-launch {
   flex: 1;

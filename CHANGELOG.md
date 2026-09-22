@@ -9,4 +9,4 @@
 
 ## 0.1.0
 
-- feat: initial Sift desktop app (Tauri 2 + React) — browse, audition, tag, and drag local samples
+- feat: initial Sift desktop app (Tauri 2 + React). Browse, audition, tag, and drag local samples into a DAW.

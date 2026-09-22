@@ -11,7 +11,7 @@ export function formatBytes(bytes: number): string {
   return `${value < 10 && exp > 0 ? value.toFixed(1) : Math.round(value).toString()} ${unit}`;
 }
 
-/** `0:04.36` — the ruler and the selection pill both use this. */
+/** `0:04.36`. The ruler and the selection pill both use this. */
 export function formatTime(secs: number): string {
   const safe = Number.isFinite(secs) && secs > 0 ? secs : 0;
   const minutes = Math.floor(safe / 60);
@@ -25,7 +25,7 @@ export function formatDb(db: number): string {
   return "0.0 dB";
 }
 
-/** `4,402` — thousands separators for every count in the chrome. */
+/** `4,402`. Thousands separators for every count in the chrome. */
 export function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }

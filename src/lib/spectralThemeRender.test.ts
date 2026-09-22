@@ -30,7 +30,7 @@ describe("nocturne themed spectral strips", () => {
 
     /*
      * Amen-shaped Classic weights are mid-heavy with treble accents. After
-     * Nocturne remap that must read as green stretches + violet accents —
+     * Nocturne remap that must read as green stretches + violet accents.
      * never a single purple (that was --color-wave-ink when colors failed).
      */
     expect(strip.midLed).toBeGreaterThan(strip.width * 0.35);
