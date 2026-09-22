@@ -8,10 +8,10 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+/** Always invoked from the repo root (`bun tool/…` / package scripts). */
+const ROOT = process.cwd();
 const PKG_PATH = join(ROOT, "package.json");
 const TAURI_CONF_PATH = join(ROOT, "src-tauri/tauri.conf.json");
 const CARGO_PATH = join(ROOT, "src-tauri/Cargo.toml");
