@@ -1,4 +1,11 @@
-import { MagnifyingGlassIcon, XCircleIcon, XIcon } from "@phosphor-icons/react";
+import {
+  ColumnsIcon,
+  MagnifyingGlassIcon,
+  StarIcon,
+  WaveformIcon,
+  XCircleIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
 export interface OmniState {
@@ -17,6 +24,10 @@ interface Props {
   onChange: (next: OmniState) => void;
   onToggleHalfDouble: () => void;
   onToggleRelativeKey: () => void;
+  showWaveforms: boolean;
+  onToggleWaveforms: () => void;
+  favoritesOnly: boolean;
+  onToggleFavoritesOnly: () => void;
 }
 
 export function OmniSearch({
@@ -24,6 +35,10 @@ export function OmniSearch({
   onChange,
   onToggleHalfDouble,
   onToggleRelativeKey,
+  showWaveforms,
+  onToggleWaveforms,
+  favoritesOnly,
+  onToggleFavoritesOnly,
 }: Props) {
   const { t } = useTranslation("common");
   const hasQuery =
@@ -153,19 +168,30 @@ export function OmniSearch({
       <div className="omni-actions">
         <button
           type="button"
-          className={`omni-toggle-btn${value.halfDouble ? " on" : ""}`}
-          onClick={onToggleHalfDouble}
-          title={t("halfDouble")}
+          className={`omni-tool-btn${showWaveforms ? " on" : ""}`}
+          onClick={onToggleWaveforms}
+          title={t("waveforms")}
         >
-          {t("halfDoubleShort")}
+          <WaveformIcon size={14} />
+          <span>{t("waveforms")}</span>
         </button>
         <button
           type="button"
-          className={`omni-toggle-btn${value.relativeKey ? " on" : ""}`}
-          onClick={onToggleRelativeKey}
-          title={t("relativeKey")}
+          className={`omni-icon-btn${favoritesOnly ? " on" : ""}`}
+          onClick={onToggleFavoritesOnly}
+          title={t("favoritesOnly")}
+          aria-label={t("favoritesOnly")}
         >
-          {t("relativeShort")}
+          <StarIcon size={15} weight={favoritesOnly ? "fill" : "regular"} />
+        </button>
+        <button
+          type="button"
+          className="omni-icon-btn"
+          title={t("columns")}
+          aria-label={t("columns")}
+          disabled
+        >
+          <ColumnsIcon size={15} />
         </button>
       </div>
     </div>

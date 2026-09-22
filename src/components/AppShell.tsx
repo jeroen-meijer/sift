@@ -84,6 +84,10 @@ export function AppShell() {
   const [confirmRemove, setConfirmRemove] = useState<FolderNode | null>(null);
   const [indexStatus, setIndexStatus] = useState<string | undefined>();
   const [analysisStatus, setAnalysisStatus] = useState<string | undefined>();
+  const [analyzingIds, setAnalyzingIds] = useState<Set<number>>(() => new Set());
+  const [analysisBar, setAnalysisBar] = useState<{ done: number; total: number } | null>(null);
+  const [showWaveforms, setShowWaveforms] = useState(true);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [samples, setSamples] = useState<SampleRow[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [focusedId, setFocusedId] = useState<number | null>(null);
@@ -137,7 +141,7 @@ export function AppShell() {
         key: omni.key,
         half_double: omni.halfDouble,
         relative_key: omni.relativeKey,
-        favorites_only: false,
+        favorites_only: favoritesOnly,
         sort_column: sortColumn,
         sort_direction: sortDirection,
         limit: 5000,
@@ -145,7 +149,7 @@ export function AppShell() {
       },
     });
     setSamples(rows);
-  }, [omni, sortColumn, sortDirection]);
+  }, [omni, sortColumn, sortDirection, favoritesOnly]);
 
   useEffect(() => {
     void refreshStats().catch(console.error);
@@ -261,6 +265,7 @@ export function AppShell() {
   useEffect(() => {
     let unlistenIndex: (() => void) | undefined;
     let unlistenAnalysis: (() => void) | undefined;
+    let unlistenQueue: (() => void) | undefined;
     let unlistenLibrary: (() => void) | undefined;
     let unlistenAsk: (() => void) | undefined;
     void listen<IndexProgress>("index-progress", (event) => {
@@ -275,14 +280,30 @@ export function AppShell() {
     }).then((fn) => {
       unlistenIndex = fn;
     });
+    void listen<number[]>("analysis-queue", (event) => {
+      const ids = event.payload;
+      setAnalyzingIds(new Set(ids));
+      setAnalysisBar({ done: 0, total: ids.length });
+      setAnalysisStatus(t("statusAnalyzing"));
+    }).then((fn) => {
+      unlistenQueue = fn;
+    });
     void listen<AnalysisProgress>("analysis-progress", (event) => {
       const p = event.payload;
       const total = p.done + p.remaining;
+      setAnalyzingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(p.sample_id);
+        return next;
+      });
       if (p.remaining === 0) {
         setAnalysisStatus(undefined);
+        setAnalysisBar(null);
+        setAnalyzingIds(new Set());
         void refreshSamples();
         void refreshStats();
       } else {
+        setAnalysisBar({ done: p.done, total });
         setAnalysisStatus(t("statusAnalyzingProgress", { done: p.done, total }));
       }
     }).then((fn) => {
@@ -305,6 +326,7 @@ export function AppShell() {
     return () => {
       unlistenIndex?.();
       unlistenAnalysis?.();
+      unlistenQueue?.();
       unlistenLibrary?.();
       unlistenAsk?.();
     };
@@ -545,6 +567,10 @@ export function AppShell() {
                   return { ...prev, relativeKey: next };
                 });
               }}
+              showWaveforms={showWaveforms}
+              onToggleWaveforms={() => void setShowWaveforms((v) => !v)}
+              favoritesOnly={favoritesOnly}
+              onToggleFavoritesOnly={() => void setFavoritesOnly((v) => !v)}
             />
             <div className="library-toolbar">
               <button
@@ -576,6 +602,8 @@ export function AppShell() {
               samples={samples}
               selectedIds={selectedIds}
               focusedId={focusedId}
+              analyzingIds={analyzingIds}
+              showWaveforms={showWaveforms}
               sortColumn={sortColumn}
               sortDirection={sortDirection === "clear" ? "clear" : sortDirection}
               highlightText={omni.text}
@@ -995,7 +1023,13 @@ export function AppShell() {
         </div>
       ) : null}
 
-      <StatusBar rootCount={stats.roots} fileCount={stats.samples} statusText={statusText} />
+      <StatusBar
+        rootCount={stats.roots}
+        fileCount={stats.samples}
+        shownCount={isEmpty ? undefined : samples.length}
+        statusText={statusText}
+        analysis={analysisBar}
+      />
     </div>
   );
 }

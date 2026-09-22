@@ -18,6 +18,21 @@ python3 -m http.server 8765 --bind 127.0.0.1
 
 Needs network (React/fonts from CDN via `support.js`).
 
+## Screenshots
+
+PNG captures of the design canvas (for quick gap checks without spinning the HTML):
+
+| File | View |
+|------|------|
+| [screenshots/01-first-launch.png](screenshots/01-first-launch.png) | First launch |
+| [screenshots/02-library.png](screenshots/02-library.png) | Library + analyzing row + status progress |
+| [screenshots/03-omni-search.png](screenshots/03-omni-search.png) | Omni search chips |
+| [screenshots/07-missing-file.png](screenshots/07-missing-file.png) | Missing file banner |
+| [screenshots/08-ask-index.png](screenshots/08-ask-index.png) | Ask before index toast |
+| [screenshots/09-custom-analysis.png](screenshots/09-custom-analysis.png) | Custom analysis dialog |
+| [screenshots/11-settings.png](screenshots/11-settings.png) | Settings |
+| [screenshots/12-context-menu.png](screenshots/12-context-menu.png) | Context menu |
+
 ## Views (canvas switcher)
 
 | Key | Label |
@@ -46,6 +61,16 @@ Needs network (React/fonts from CDN via `support.js`).
 - Center: virtualized sample table (name, type, BPM, key, waveform, tags)
 - Bottom: detail dual L/R waveform + transport (loop preview, gain, snap)
 - Status bar: roots / indexed / analysis progress
+
+## Row analysis animation (design contract)
+
+When a sample is in the analysis queue:
+
+1. Waveform cell: 4px track (`#22242f`) with a purple shimmer (`siftShimmer`, 1.4s linear infinite, 38% width gradient).
+2. Tags cell: italic `Analyzing…` in accent `#9184d9` (no tag chips until done).
+3. Status bar (right): `CircleNotch` spinner + `Analyzing N of M` + thin progress bar + `browse and play while this runs`.
+
+Missing rows: warning icon + strikethrough name + dashed waveform stub.
 
 ## Tokens (Nocturne)
 

@@ -1,7 +1,8 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { StarIcon } from "@phosphor-icons/react";
+import { StarIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { RowWaveform } from "./RowWaveform";
 
 export interface TagChip { path: string; color: string | null }
 export interface SampleRow {
@@ -40,6 +41,8 @@ interface Props {
   samples: SampleRow[];
   selectedIds: Set<number>;
   focusedId: number | null;
+  analyzingIds: Set<number>;
+  showWaveforms: boolean;
   sortColumn: SortCol;
   sortDirection: "asc" | "desc" | "clear";
   highlightText?: string;
@@ -75,6 +78,8 @@ export function SampleTable({
   samples,
   selectedIds,
   focusedId,
+  analyzingIds,
+  showWaveforms,
   sortColumn,
   sortDirection,
   highlightText,
@@ -149,10 +154,11 @@ export function SampleTable({
             if (!sample) return null;
             const selected = selectedIds.has(sample.id);
             const focused = focusedId === sample.id;
+            const analyzing = analyzingIds.has(sample.id);
             return (
               <div
                 key={sample.id}
-                className={`sample-row${selected ? " selected" : ""}${focused ? " focused" : ""}${sample.missing ? " missing" : ""}`}
+                className={`sample-row${selected ? " selected" : ""}${focused ? " focused" : ""}${sample.missing ? " missing" : ""}${analyzing ? " analyzing" : ""}`}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -181,25 +187,41 @@ export function SampleTable({
                   <StarIcon size={12} weight={sample.favorite ? "fill" : "regular"} />
                 </button>
                 <div className="col name" title={sample.path}>
-                  {highlightName(sample.filename, highlightText)}
+                  {sample.missing ? (
+                    <WarningCircleIcon size={11} weight="fill" className="missing-icon" />
+                  ) : null}
+                  <span className="name-text">
+                    {highlightName(sample.filename, highlightText)}
+                  </span>
                 </div>
                 <div className="col type">{sample.sample_type ?? ""}</div>
                 <div className="col bpm">{sample.bpm != null ? Math.round(sample.bpm) : ""}</div>
                 <div className="col key">{sample.key_name ?? ""}</div>
-                <div className="col wave wave-placeholder" />
+                <div className="col wave">
+                  <RowWaveform
+                    sampleId={sample.id}
+                    missing={sample.missing}
+                    analyzing={analyzing}
+                    showWaveform={showWaveforms}
+                  />
+                </div>
                 <div className="col tags">
-                  {sample.tags.map((tag) => (
-                    <span
-                      key={tag.path}
-                      className="tag-chip"
-                      style={{
-                        background: tag.color ? `${tag.color}33` : undefined,
-                        borderColor: tag.color ?? undefined,
-                      }}
-                    >
-                      {tag.path}
-                    </span>
-                  ))}
+                  {analyzing ? (
+                    <span className="analyzing-label">{tc("statusAnalyzing")}</span>
+                  ) : (
+                    sample.tags.map((tag) => (
+                      <span
+                        key={tag.path}
+                        className="tag-chip"
+                        style={{
+                          background: tag.color ? `${tag.color}33` : undefined,
+                          borderColor: tag.color ?? undefined,
+                        }}
+                      >
+                        {tag.path}
+                      </span>
+                    ))
+                  )}
                 </div>
               </div>
             );
