@@ -2,3 +2,10 @@
 [profile.default]
 # Fail the run if any test is slow; keep CI feedback tight.
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+# Soft wall-clock guards for audio/analyze hot paths (`src/perf_budgets.rs`).
+# Criterion (`cargo bench`) is the detailed profiler; these only catch blow-ups.
+[[profile.default.overrides]]
+filter = 'test(/^perf_/)'
+# Heuristic analyze can be multi-second in debug; still fail the run if hung.
+slow-timeout = { period = "45s", terminate-after = 2 }

@@ -223,3 +223,4 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 | 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72–Q75) |
 | 2026-09-22 | Index DB: Diesel + embedded migrations (replace rusqlite hand SQL) |
 | 2026-09-22 | Tooling: chat-search namtao clippy/nextest/bacon; ESLint strictTypeChecked + Vitest |
+| 2026-09-22 | Perf: Criterion `audio_hotpath` benches + soft `perf_*` budget tests; Vitest bench |

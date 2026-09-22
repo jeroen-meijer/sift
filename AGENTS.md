@@ -11,10 +11,13 @@ Local sample manager (Tauri 2 + React). Product SoT: [SPEC.md](SPEC.md). Stack: 
 | Lints | namtao clippy deny set in `src-tauri/Cargo.toml` + `clippy.toml` |
 | Watch | `bacon clippy` from `src-tauri/` (`bacon.toml`) |
 | Tests (Rust) | `cargo nextest run` (unit tests beside code; `.config/nextest.toml`) |
+| Bench (Rust) | Criterion `benches/audio_hotpath.rs` (`cargo bench`) |
+| Soft perf guards | `src-tauri/src/perf_budgets.rs` (`perf_*` tests in nextest) |
 | Format | `cargo fmt` |
 | Frontend lint | ESLint flat + `typescript-eslint` `strictTypeChecked` + `stylisticTypeChecked` |
 | Frontend types | `tsc --noEmit` (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) |
 | Frontend tests | Vitest (`src/**/*.{test,spec}.{ts,tsx}`) |
+| Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
 | Package manager | Bun |
 | CI | `.github/workflows/ci.yml` (fmt · clippy · nextest · eslint · tsc · vitest) |
 
@@ -25,15 +28,23 @@ Local sample manager (Tauri 2 + React). Product SoT: [SPEC.md](SPEC.md). Stack: 
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings
 cargo nextest run --all-features
+cargo bench --bench audio_hotpath
 bacon clippy
 
 # Frontend (repo root)
 bun run lint
 bun run typecheck
 bun run test
+bun run bench
 bun run build
 bun run tauri:dev
 ```
+
+## Perf / profiling
+
+- Soft budgets (CI): `cargo nextest run -E 'test(/^perf_/)' --no-capture`
+- Detailed timings: `cargo bench --bench audio_hotpath` (decode, peaks, JIT clip, path tokens, heuristic BPM/key)
+- UI micro: `bun run bench`
 
 ## Conventions
 

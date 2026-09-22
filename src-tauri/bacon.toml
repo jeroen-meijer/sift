@@ -13,3 +13,8 @@ need_stdout = true
 [jobs.check]
 command = ["cargo", "check", "--all-targets", "--all-features"]
 need_stdout = false
+
+[jobs.bench]
+command = ["cargo", "bench", "--bench", "audio_hotpath", "--", "--warm-up-time", "1", "--measurement-time", "2"]
+need_stdout = true
+watch = ["benches"]

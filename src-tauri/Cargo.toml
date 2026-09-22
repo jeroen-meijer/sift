@@ -43,7 +43,12 @@ diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.38.2", features = ["bundled"] }
 
 [dev-dependencies]
+criterion = "0.8"
 tempfile = "3"
+
+[[bench]]
+name = "audio_hotpath"
+harness = false
 
 [profile.release]
 codegen-units = 1
