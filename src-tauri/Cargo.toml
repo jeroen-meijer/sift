@@ -3,8 +3,10 @@ name = "sift"
 version = "0.1.0"
 description = "Local sample manager for producers"
 authors = ["Jeroen Meijer"]
-edition = "2021"
-rust-version = "1.86.0"
+edition = "2024"
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/jeroen-meijer/sift"
 
 [lib]
 name = "sift_lib"
@@ -40,9 +42,43 @@ diesel = { version = "2.2.12", features = ["sqlite", "returning_clauses_for_sqli
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.38.2", features = ["bundled"] }
 
+[dev-dependencies]
+tempfile = "3"
+
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+# https://www.namtao.com/rust-toolkit-2026/ (same deny set as chat-search)
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+# App crate: Tauri lib is not a published public API.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+# Tauri `#[tauri::command]` handlers must take owned IPC args.
+needless_pass_by_value = "allow"
+# Large orchestrators (watch loop, analyze batch) stay cohesive; prefer
+# extracting helpers when practical, but do not force 100-line splits.
+too_many_lines = "allow"
+# Diesel Integer (i32) ↔ IPC/JS (i64) and audio sizes: use `crate::ids` helpers.
+as_conversions = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"

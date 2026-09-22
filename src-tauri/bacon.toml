@@ -1,0 +1,15 @@
+# https://dystroy.org/bacon/
+default_job = "clippy"
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+need_stdout = false
+watch = ["clippy.toml"]
+
+[jobs.test]
+command = ["cargo", "nextest", "run", "--all-features", "--no-tests=pass"]
+need_stdout = true
+
+[jobs.check]
+command = ["cargo", "check", "--all-targets", "--all-features"]
+need_stdout = false

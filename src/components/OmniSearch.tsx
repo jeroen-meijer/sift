@@ -1,7 +1,7 @@
-import { MagnifyingGlass, X, XCircle } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon, XCircleIcon, XIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
-export type OmniState = {
+export interface OmniState {
   text: string;
   folder: string | null;
   tags: string[];
@@ -10,14 +10,14 @@ export type OmniState = {
   key: string | null;
   halfDouble: boolean;
   relativeKey: boolean;
-};
+}
 
-type Props = {
+interface Props {
   value: OmniState;
   onChange: (next: OmniState) => void;
   onToggleHalfDouble: () => void;
   onToggleRelativeKey: () => void;
-};
+}
 
 export function OmniSearch({
   value,
@@ -35,7 +35,7 @@ export function OmniSearch({
     value.key != null;
 
   const clearAll = () =>
-    onChange({
+    void onChange({
       ...value,
       text: "",
       folder: null,
@@ -48,7 +48,7 @@ export function OmniSearch({
   return (
     <div className="omni-bar">
       <div className="omni-field">
-        <MagnifyingGlass size={14} className="omni-icon" />
+        <MagnifyingGlassIcon size={14} className="omni-icon" />
         <div className="omni-chips">
           {value.folder ? (
             <span className="omni-chip">
@@ -58,9 +58,9 @@ export function OmniSearch({
                 type="button"
                 className="omni-chip-x"
                 aria-label={t("clear")}
-                onClick={() => onChange({ ...value, folder: null })}
+                onClick={() => void onChange({ ...value, folder: null })}
               >
-                <X size={10} />
+                <XIcon size={10} />
               </button>
             </span>
           ) : null}
@@ -74,10 +74,10 @@ export function OmniSearch({
                 className="omni-chip-x"
                 aria-label={t("clear")}
                 onClick={() =>
-                  onChange({ ...value, tags: value.tags.filter((x) => x !== tag) })
+                  void onChange({ ...value, tags: value.tags.filter((x) => x !== tag) })
                 }
               >
-                <X size={10} />
+                <XIcon size={10} />
               </button>
             </span>
           ))}
@@ -99,9 +99,9 @@ export function OmniSearch({
                 type="button"
                 className="omni-chip-x"
                 aria-label={t("clear")}
-                onClick={() => onChange({ ...value, bpmMin: null, bpmMax: null })}
+                onClick={() => void onChange({ ...value, bpmMin: null, bpmMax: null })}
               >
-                <X size={10} />
+                <XIcon size={10} />
               </button>
             </span>
           ) : null}
@@ -121,9 +121,9 @@ export function OmniSearch({
                 type="button"
                 className="omni-chip-x"
                 aria-label={t("clear")}
-                onClick={() => onChange({ ...value, key: null })}
+                onClick={() => void onChange({ ...value, key: null })}
               >
-                <X size={10} />
+                <XIcon size={10} />
               </button>
             </span>
           ) : null}
@@ -131,7 +131,7 @@ export function OmniSearch({
             className="omni-input"
             value={value.text}
             placeholder={hasQuery ? "" : t("searchPlaceholder")}
-            onChange={(e) => onChange({ ...value, text: e.target.value })}
+            onChange={(e) => void onChange({ ...value, text: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === "Backspace" && value.text === "") {
                 if (value.key) onChange({ ...value, key: null });
@@ -146,7 +146,7 @@ export function OmniSearch({
         </div>
         {hasQuery ? (
           <button type="button" className="omni-clear" onClick={clearAll} aria-label={t("clear")}>
-            <XCircle size={14} />
+            <XCircleIcon size={14} />
           </button>
         ) : null}
       </div>

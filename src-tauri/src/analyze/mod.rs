@@ -8,14 +8,15 @@ use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::audio::{decode_file, probe_and_update_sample, DecodedAudio};
+use crate::audio::{DecodedAudio, decode_file, probe_and_update_sample};
 use crate::db::models::SampleTag;
 use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
 use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::schema::tag_rejects::dsl as rejects_dsl;
 use crate::db::schema::tags::dsl as tags_dsl;
-use crate::db::{settings, utc_now, Db};
+use crate::db::{Db, settings, utc_now};
 use crate::error::{AppError, AppResult};
+use crate::ids::{f64_to_f32, id_from_i64, id_to_i64};
 
 const BPM_CONF_MIN: f64 = 0.08;
 const KEY_CONF_MIN: f64 = 0.25;
@@ -43,7 +44,7 @@ pub trait Analyzer {
     ) -> AnalysisResult;
 }
 
-/// Filename / path token matching into DEFAULT_TAXONOMY. Primary auto-tag source.
+/// Filename / path token matching into `DEFAULT_TAXONOMY`. Primary auto-tag source.
 pub struct PathTokenAnalyzer;
 
 impl Analyzer for PathTokenAnalyzer {
@@ -102,13 +103,13 @@ impl Analyzer for PathTokenAnalyzer {
                 "arp" | "arpeggio" => push_tag("Synths/Arp"),
                 "piano" => push_tag("Piano"),
                 "guitar" | "gtr" => push_tag("Guitar"),
-                "electric"
-                    if tokens.iter().any(|t| t == "guitar" || t == "gtr") =>
-                {
+                "electric" if tokens.iter().any(|t| t == "guitar" || t == "gtr") => {
                     push_tag("Guitar/Electric");
                 }
                 "acoustic"
-                    if tokens.iter().any(|t| t == "guitar" || t == "gtr" || t == "bass") =>
+                    if tokens
+                        .iter()
+                        .any(|t| t == "guitar" || t == "gtr" || t == "bass") =>
                 {
                     if tokens.iter().any(|t| t == "bass") {
                         push_tag("Bass/Acoustic");
@@ -134,10 +135,8 @@ impl Analyzer for PathTokenAnalyzer {
                 "loop" | "loops" | "looped" => {
                     sample_type = Some("loop".into());
                 }
-                "oneshot" | "shot" => {
-                    if sample_type.is_none() {
-                        sample_type = Some("one-shot".into());
-                    }
+                "oneshot" | "shot" if sample_type.is_none() => {
+                    sample_type = Some("one-shot".into());
                 }
                 _ => {}
             }
@@ -199,14 +198,16 @@ impl Analyzer for HeuristicAnalyzer {
             return result;
         }
 
-        let mut config = stratum_dsp::AnalysisConfig::default();
-        config.min_bpm = bpm_min as f32;
-        config.max_bpm = bpm_max as f32;
         // Keep analysis cheap for short one-shots / pack browsing.
-        config.enable_tempogram_multi_resolution = false;
-        config.enable_tempogram_percussive_fallback = false;
-        config.enable_hpss_onsets = false;
-        config.enable_key_hpss_harmonic = false;
+        let config = stratum_dsp::AnalysisConfig {
+            min_bpm: f64_to_f32(bpm_min),
+            max_bpm: f64_to_f32(bpm_max),
+            enable_tempogram_multi_resolution: false,
+            enable_tempogram_percussive_fallback: false,
+            enable_hpss_onsets: false,
+            enable_key_hpss_harmonic: false,
+            ..stratum_dsp::AnalysisConfig::default()
+        };
 
         match stratum_dsp::analyze_audio(&mono, pcm.sample_rate, config) {
             Ok(r) => {
@@ -236,23 +237,31 @@ impl Analyzer for HeuristicAnalyzer {
     }
 }
 
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "channel downmix: float average over a fixed-size frame"
+)]
+fn frame_mean(frame: &[f32]) -> f32 {
+    if frame.is_empty() {
+        return 0.0;
+    }
+    frame.iter().sum::<f32>() / frame.len() as f32
+}
+
 fn to_mono(pcm: &DecodedAudio) -> Vec<f32> {
     let ch = usize::from(pcm.channels.max(1));
     if ch == 1 {
         return pcm.samples.clone();
     }
-    let frames = pcm.samples.len() / ch;
-    let mut mono = Vec::with_capacity(frames);
-    for i in 0..frames {
-        let mut sum = 0.0f32;
-        for c in 0..ch {
-            sum += pcm.samples[i * ch + c];
-        }
-        mono.push(sum / ch as f32);
-    }
-    mono
+    pcm.samples.chunks_exact(ch).map(frame_mean).collect()
 }
 
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "tempo octave folding: bounded float doubling/halving"
+)]
 fn clamp_bpm_to_range(mut bpm: f64, min: f64, max: f64) -> f64 {
     if bpm <= 0.0 {
         return bpm;
@@ -280,16 +289,20 @@ fn detect_loop_or_oneshot(pcm: &DecodedAudio) -> String {
 }
 
 /// Cheap check: envelope autocorrelation peak suggests periodic energy.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "envelope autocorrelation: float DSP over bounded, non-empty windows"
+)]
 fn has_repeating_energy(mono: &[f32], sample_rate: u32) -> bool {
     if mono.len() < sample_rate as usize {
         return false;
     }
     let hop = (sample_rate as usize / 50).max(1);
-    let mut env: Vec<f32> = Vec::new();
-    for chunk in mono.chunks(hop) {
-        let e: f32 = chunk.iter().map(|x| x.abs()).sum::<f32>() / chunk.len() as f32;
-        env.push(e);
-    }
+    let env: Vec<f32> = mono.chunks(hop).map(frame_mean_abs).collect();
     if env.len() < 16 {
         return false;
     }
@@ -304,13 +317,12 @@ fn has_repeating_energy(mono: &[f32], sample_rate: u32) -> bool {
         let mut num = 0.0f32;
         let mut den_a = 0.0f32;
         let mut den_b = 0.0f32;
-        let n = env.len() - lag;
-        for i in 0..n {
-            let a = env[i] - mean;
-            let b = env[i + lag] - mean;
-            num += a * b;
-            den_a += a * a;
-            den_b += b * b;
+        for (x, y) in env.iter().zip(env.iter().skip(lag)) {
+            let a = x - mean;
+            let b = y - mean;
+            num = a.mul_add(b, num);
+            den_a = a.mul_add(a, den_a);
+            den_b = b.mul_add(b, den_b);
         }
         let den = (den_a * den_b).sqrt();
         if den > 1e-9 {
@@ -320,6 +332,27 @@ fn has_repeating_energy(mono: &[f32], sample_rate: u32) -> bool {
     best > 0.35
 }
 
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "envelope magnitude: float average over a non-empty chunk"
+)]
+fn frame_mean_abs(chunk: &[f32]) -> f32 {
+    if chunk.is_empty() {
+        return 0.0;
+    }
+    chunk.iter().map(|x| x.abs()).sum::<f32>() / chunk.len() as f32
+}
+
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "fallback tempo estimation: float DSP over bounded, non-empty windows"
+)]
 fn estimate_bpm_envelope(
     mono: &[f32],
     sample_rate: u32,
@@ -327,11 +360,7 @@ fn estimate_bpm_envelope(
     bpm_max: f64,
 ) -> Option<(f64, f64)> {
     let hop = (sample_rate as usize / 100).max(1);
-    let mut env: Vec<f32> = Vec::new();
-    for chunk in mono.chunks(hop) {
-        let e: f32 = chunk.iter().map(|x| x * x).sum::<f32>() / chunk.len() as f32;
-        env.push(e.sqrt());
-    }
+    let env: Vec<f32> = mono.chunks(hop).map(frame_rms).collect();
     if env.len() < 32 {
         return None;
     }
@@ -345,9 +374,8 @@ fn estimate_bpm_envelope(
     let mut best_corr = 0.0f32;
     for lag in min_lag..=max_lag {
         let mut num = 0.0f32;
-        let n = env.len() - lag;
-        for i in 0..n {
-            num += (env[i] - mean) * (env[i + lag] - mean);
+        for (x, y) in env.iter().zip(env.iter().skip(lag)) {
+            num = (x - mean).mul_add(y - mean, num);
         }
         if num > best_corr {
             best_corr = num;
@@ -365,7 +393,24 @@ fn estimate_bpm_envelope(
     Some((bpm, 0.15))
 }
 
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "envelope RMS: float average over a non-empty chunk"
+)]
+fn frame_rms(chunk: &[f32]) -> f32 {
+    if chunk.is_empty() {
+        return 0.0;
+    }
+    (chunk.iter().map(|x| x * x).sum::<f32>() / chunk.len() as f32).sqrt()
+}
+
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "IPC options payload: one independent flag per analysis step"
+)]
 pub struct CustomOpts {
     #[serde(default)]
     pub overwrite_tags: bool,
@@ -406,8 +451,7 @@ pub fn analyze_sample(
     mode: &AnalyzeMode,
     bpm_range: (f64, f64),
 ) -> AppResult<()> {
-    let row = load_sample_row(conn, sample_id)?
-        .ok_or_else(|| AppError::msg("sample not found"))?;
+    let row = load_sample_row(conn, sample_id)?.ok_or_else(|| AppError::msg("sample not found"))?;
     if row.missing {
         return Ok(());
     }
@@ -438,14 +482,14 @@ pub fn analyze_sample(
     let detected_type = path_result
         .sample_type
         .clone()
-        .or(audio_result.sample_type.clone());
+        .or_else(|| audio_result.sample_type.clone());
 
     let write_bpm = row.bpm.is_none() || rerun_bpm;
     let write_key = row.key_name.is_none() || rerun_key;
     let write_type = row.sample_type.is_none() || rerun_type;
 
     let now = utc_now();
-    let id = sample_id as i32;
+    let id = id_from_i64(sample_id)?;
 
     if write_bpm {
         if let Some(v) = audio_result.bpm {
@@ -471,12 +515,10 @@ pub fn analyze_sample(
                 .execute(conn)?;
         }
     }
-    if write_type {
-        if let Some(ref v) = detected_type {
-            diesel::update(samples_dsl::samples.find(id))
-                .set(samples_dsl::sample_type.eq(v))
-                .execute(conn)?;
-        }
+    if write_type && let Some(ref v) = detected_type {
+        diesel::update(samples_dsl::samples.find(id))
+            .set(samples_dsl::sample_type.eq(v))
+            .execute(conn)?;
     }
 
     diesel::update(samples_dsl::samples.find(id))
@@ -506,7 +548,7 @@ fn apply_suggested_tags(
         return Ok(());
     }
 
-    let sample_id_i32 = sample_id as i32;
+    let sample_id_i32 = id_from_i64(sample_id)?;
 
     if overwrite_tags {
         // Drop previous auto tags; keep user tags. Clear rejects so suggestions can return.
@@ -564,26 +606,29 @@ fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i
         .optional()?)
 }
 
+type SampleRowTuple = (String, i32, Option<f64>, Option<String>, Option<String>);
+
 fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleRow>> {
-    let row: Option<(String, i32, Option<f64>, Option<String>, Option<String>)> =
-        samples_dsl::samples
-            .find(id as i32)
-            .select((
-                samples_dsl::path,
-                samples_dsl::missing,
-                samples_dsl::bpm,
-                samples_dsl::key_name,
-                samples_dsl::sample_type,
-            ))
-            .first(conn)
-            .optional()?;
-    Ok(row.map(|(path, missing, bpm, key_name, sample_type)| SampleRow {
-        path,
-        missing: missing != 0,
-        bpm,
-        key_name,
-        sample_type,
-    }))
+    let row: Option<SampleRowTuple> = samples_dsl::samples
+        .find(id_from_i64(id)?)
+        .select((
+            samples_dsl::path,
+            samples_dsl::missing,
+            samples_dsl::bpm,
+            samples_dsl::key_name,
+            samples_dsl::sample_type,
+        ))
+        .first(conn)
+        .optional()?;
+    Ok(
+        row.map(|(path, missing, bpm, key_name, sample_type)| SampleRow {
+            path,
+            missing: missing != 0,
+            bpm,
+            key_name,
+            sample_type,
+        }),
+    )
 }
 
 pub fn bpm_range_from_settings(conn: &mut SqliteConnection) -> AppResult<(f64, f64)> {
@@ -603,28 +648,23 @@ pub fn list_unanalyzed_ids(conn: &mut SqliteConnection) -> AppResult<Vec<i64>> {
         .select(samples_dsl::id)
         .order(samples_dsl::id.asc())
         .load(conn)?;
-    Ok(ids.into_iter().map(|id| id as i64).collect())
+    Ok(ids.into_iter().map(id_to_i64).collect())
 }
 
 /// Fire-and-forget batch on a background thread.
-pub fn spawn_analysis_batch(
-    app: AppHandle,
-    db: Arc<Db>,
-    sample_ids: Vec<i64>,
-    mode: AnalyzeMode,
-) {
+pub fn spawn_analysis_batch(app: AppHandle, db: Arc<Db>, sample_ids: Vec<i64>, mode: AnalyzeMode) {
     if sample_ids.is_empty() {
         return;
     }
     std::thread::spawn(move || {
-        let total = sample_ids.len() as u64;
+        let total = u64::try_from(sample_ids.len()).unwrap_or(u64::MAX);
         let mut done = 0u64;
         for sample_id in sample_ids {
             let bpm_range = db
                 .with_conn(bpm_range_from_settings)
                 .unwrap_or((70.0, 180.0));
             let _ = db.with_conn(|conn| analyze_sample(conn, sample_id, &mode, bpm_range));
-            done += 1;
+            done = done.saturating_add(1);
             let remaining = total.saturating_sub(done);
             let _ = app.emit(
                 "analysis-progress",
@@ -677,12 +717,8 @@ mod tests {
             bit_depth_hint: Some(16),
             samples: vec![0.0; 100],
         };
-        let r = PathTokenAnalyzer.analyze(
-            Path::new("/loops/melody_loop_120.wav"),
-            &pcm,
-            70.0,
-            180.0,
-        );
+        let r =
+            PathTokenAnalyzer.analyze(Path::new("/loops/melody_loop_120.wav"), &pcm, 70.0, 180.0);
         assert_eq!(r.sample_type.as_deref(), Some("loop"));
     }
 

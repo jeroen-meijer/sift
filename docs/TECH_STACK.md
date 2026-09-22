@@ -222,3 +222,4 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 | 2026-09-22 | Crate currency pass: keep cpal/symphonia/rusqlite/notify/hound; Opus via libopus adapter; analysis still behind trait (`stratum-dsp` candidate) |
 | 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72–Q75) |
 | 2026-09-22 | Index DB: Diesel + embedded migrations (replace rusqlite hand SQL) |
+| 2026-09-22 | Tooling: chat-search namtao clippy/nextest/bacon; ESLint strictTypeChecked + Vitest |

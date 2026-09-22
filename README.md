@@ -2,11 +2,11 @@
 
 Local desktop sample manager for producers and audio engineers (macOS + Windows).
 
-Product rules: [SPEC.md](SPEC.md). Decision log: [DECISIONS.md](DECISIONS.md). Stack: [docs/TECH_STACK.md](docs/TECH_STACK.md). Plans: [docs/plans/index.plan.md](docs/plans/index.plan.md). Design: [docs/design/](docs/design/).
+Product rules: [SPEC.md](SPEC.md). Decision log: [DECISIONS.md](DECISIONS.md). Stack: [docs/TECH_STACK.md](docs/TECH_STACK.md). Plans: [docs/plans/index.plan.md](docs/plans/index.plan.md). Design: [docs/design/](docs/design/). Agent/tooling notes: [AGENTS.md](AGENTS.md).
 
 ## Dogfood (v1)
 
-Requires Rust (stable), Bun, and platform Tauri deps (Xcode CLT on macOS).
+Requires Bun, Xcode CLT, and Rust **nightly** (pinned by `src-tauri/rust-toolchain.toml`).
 
 ```bash
 bun install
@@ -29,14 +29,22 @@ rm -f ~/Library/Application\ Support/dev.jfk.Sift/library.sqlite3*
 
 (That only removes Sift’s index; sample files on disk are untouched.)
 
-Build:
+## Lint, test, build
 
 ```bash
+# Frontend
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+
+# Rust (from src-tauri/)
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo nextest run --all-features
+
+# App package
 bun run tauri:build
 ```
 
-Frontend-only typecheck/bundle:
-
-```bash
-bun run build
-```
+Watch Clippy: `cd src-tauri && bacon clippy`.

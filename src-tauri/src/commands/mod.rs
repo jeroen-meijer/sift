@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, State, Window};
 
 use crate::audio::jit;
-use crate::audio::peaks::{self, PeakData, DEFAULT_BUCKETS};
+use crate::audio::peaks::{self, DEFAULT_BUCKETS, PeakData};
 use crate::audio::player::{OutputDeviceInfo, SamplePlayType};
 use crate::db::settings;
 use crate::error::{AppError, AppResult};
@@ -43,11 +43,11 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: Value) -> App
 #[tauri::command]
 pub fn db_stats(state: State<'_, AppState>) -> AppResult<DbStats> {
     state.db.with_conn(|conn| {
-        use diesel::dsl::count_star;
-        use diesel::prelude::*;
         use crate::db::schema::roots::dsl as roots_dsl;
         use crate::db::schema::samples::dsl as samples_dsl;
         use crate::db::schema::tags::dsl as tags_dsl;
+        use diesel::dsl::count_star;
+        use diesel::prelude::*;
 
         let roots: i64 = roots_dsl::roots.select(count_star()).first(conn)?;
         let samples: i64 = samples_dsl::samples.select(count_star()).first(conn)?;
@@ -105,7 +105,10 @@ pub fn remove_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) -> 
 }
 
 #[tauri::command]
-pub fn folder_tree(state: State<'_, AppState>, max_depth: Option<u32>) -> AppResult<Vec<FolderNode>> {
+pub fn folder_tree(
+    state: State<'_, AppState>,
+    max_depth: Option<u32>,
+) -> AppResult<Vec<FolderNode>> {
     state
         .db
         .with_conn(|conn| library::folder_tree(conn, max_depth.unwrap_or(6)))
@@ -123,6 +126,10 @@ pub fn set_folder_favorite(
 }
 
 #[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
 pub fn reindex_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) -> AppResult<()> {
     let db = state.db.clone();
     std::thread::spawn(move || {
@@ -137,6 +144,10 @@ pub fn reindex_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) ->
 }
 
 #[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
 pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let db = state.db.clone();
     std::thread::spawn(move || {
@@ -152,15 +163,13 @@ pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> 
 
 #[tauri::command]
 pub fn list_samples(state: State<'_, AppState>, query: SampleQuery) -> AppResult<Vec<SampleDto>> {
-    state.db.with_conn(|conn| samples::list_samples(conn, &query))
+    state
+        .db
+        .with_conn(|conn| samples::list_samples(conn, &query))
 }
 
 #[tauri::command]
-pub fn set_sample_favorite(
-    state: State<'_, AppState>,
-    id: i64,
-    favorite: bool,
-) -> AppResult<()> {
+pub fn set_sample_favorite(state: State<'_, AppState>, id: i64, favorite: bool) -> AppResult<()> {
     let before = state.db.with_conn(|conn| {
         let (fav, _, _, _) = samples::sample_meta_snapshot(conn, id)?;
         Ok(fav)
@@ -169,21 +178,21 @@ pub fn set_sample_favorite(
         .db
         .with_conn(|conn| samples::set_sample_favorite(conn, id, favorite))?;
     if before != favorite {
-        state.undo.lock().expect("undo lock").push(UndoAction::Favorite {
-            id,
-            before,
-            after: favorite,
-        });
+        state
+            .undo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(UndoAction::Favorite {
+                id,
+                before,
+                after: favorite,
+            });
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn set_sample_bpm(
-    state: State<'_, AppState>,
-    id: i64,
-    bpm: Option<f64>,
-) -> AppResult<()> {
+pub fn set_sample_bpm(state: State<'_, AppState>, id: i64, bpm: Option<f64>) -> AppResult<()> {
     let before = state.db.with_conn(|conn| {
         let (_, b, _, _) = samples::sample_meta_snapshot(conn, id)?;
         Ok(b)
@@ -192,21 +201,21 @@ pub fn set_sample_bpm(
         .db
         .with_conn(|conn| samples::set_sample_bpm(conn, id, bpm))?;
     if before != bpm {
-        state.undo.lock().expect("undo lock").push(UndoAction::Bpm {
-            id,
-            before,
-            after: bpm,
-        });
+        state
+            .undo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(UndoAction::Bpm {
+                id,
+                before,
+                after: bpm,
+            });
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn set_sample_key(
-    state: State<'_, AppState>,
-    id: i64,
-    key: Option<String>,
-) -> AppResult<()> {
+pub fn set_sample_key(state: State<'_, AppState>, id: i64, key: Option<String>) -> AppResult<()> {
     let before = state.db.with_conn(|conn| {
         let (_, _, k, _) = samples::sample_meta_snapshot(conn, id)?;
         Ok(k)
@@ -215,11 +224,15 @@ pub fn set_sample_key(
         .db
         .with_conn(|conn| samples::set_sample_key(conn, id, key.as_deref()))?;
     if before != key {
-        state.undo.lock().expect("undo lock").push(UndoAction::Key {
-            id,
-            before,
-            after: key,
-        });
+        state
+            .undo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(UndoAction::Key {
+                id,
+                before,
+                after: key,
+            });
     }
     Ok(())
 }
@@ -241,7 +254,7 @@ pub fn set_sample_type(
         state
             .undo
             .lock()
-            .expect("undo lock")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(UndoAction::SampleType {
                 id,
                 before,
@@ -252,12 +265,16 @@ pub fn set_sample_type(
 }
 
 #[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
 pub fn reanalyze_samples(
     app: AppHandle,
     state: State<'_, AppState>,
     ids: Vec<i64>,
 ) -> AppResult<u64> {
-    let n = ids.len() as u64;
+    let n = u64::try_from(ids.len()).unwrap_or(u64::MAX);
     crate::analyze::spawn_analysis_batch(
         app,
         state.db.clone(),
@@ -268,23 +285,22 @@ pub fn reanalyze_samples(
 }
 
 #[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
 pub fn analyze_samples(
     app: AppHandle,
     state: State<'_, AppState>,
     ids: Vec<i64>,
     custom: Option<crate::analyze::CustomOpts>,
 ) -> AppResult<u64> {
-    let n = ids.len() as u64;
-    let mode = match custom {
-        Some(opts) => crate::analyze::AnalyzeMode::Custom(opts),
-        None => crate::analyze::AnalyzeMode::Normal,
-    };
-    crate::analyze::spawn_analysis_batch(
-        app,
-        state.db.clone(),
-        ids,
-        mode,
+    let n = u64::try_from(ids.len()).unwrap_or(u64::MAX);
+    let mode = custom.map_or(
+        crate::analyze::AnalyzeMode::Normal,
+        crate::analyze::AnalyzeMode::Custom,
     );
+    crate::analyze::spawn_analysis_batch(app, state.db.clone(), ids, mode);
     Ok(n)
 }
 
@@ -317,16 +333,19 @@ pub fn respond_ask_index(
                     reason: "ask-index".into(),
                 },
             );
-            crate::analyze::enqueue_unanalyzed(
-                app,
-                state.db.clone(),
-            );
+            crate::analyze::enqueue_unanalyzed(app, state.db.clone());
         }
         Ok(n)
     } else {
-        let mut skip = state.watch_shared.skip_paths.lock().expect("skip lock");
-        for p in paths {
-            skip.insert(p);
+        {
+            let mut skip = state
+                .watch_shared
+                .skip_paths
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for p in paths {
+                skip.insert(p);
+            }
         }
         Ok(0)
     }
@@ -334,14 +353,20 @@ pub fn respond_ask_index(
 
 #[tauri::command]
 pub fn undo_meta(state: State<'_, AppState>) -> AppResult<bool> {
-    let mut stack = state.undo.lock().expect("undo lock");
+    let mut stack = state
+        .undo
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let action = state.db.with_conn(|conn| stack.undo(conn))?;
     Ok(action.is_some())
 }
 
 #[tauri::command]
 pub fn redo_meta(state: State<'_, AppState>) -> AppResult<bool> {
-    let mut stack = state.undo.lock().expect("undo lock");
+    let mut stack = state
+        .undo
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let action = state.db.with_conn(|conn| stack.redo(conn))?;
     Ok(action.is_some())
 }
@@ -375,7 +400,10 @@ pub fn play_sample(
         return Err(AppError::msg("sample file is missing"));
     }
     let play_type = SamplePlayType::from_str_opt(sample.sample_type.as_deref());
-    let mut player = state.player.lock().expect("player lock");
+    let mut player = state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     player.play_file(
         Path::new(&sample.path),
         start_secs.unwrap_or(0.0),
@@ -384,25 +412,49 @@ pub fn play_sample(
 }
 
 #[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
 pub fn stop_playback(state: State<'_, AppState>) -> AppResult<()> {
-    state.player.lock().expect("player lock").stop();
+    state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .stop();
     Ok(())
 }
 
 #[tauri::command]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Tauri command: keep the Result IPC shape stable"
+)]
 pub fn pause_playback(state: State<'_, AppState>) -> AppResult<()> {
-    state.player.lock().expect("player lock").pause();
+    state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .pause();
     Ok(())
 }
 
 #[tauri::command]
 pub fn resume_playback(state: State<'_, AppState>) -> AppResult<()> {
-    state.player.lock().expect("player lock").resume()
+    state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .resume()
 }
 
 #[tauri::command]
 pub fn list_output_devices(state: State<'_, AppState>) -> AppResult<Vec<OutputDeviceInfo>> {
-    state.player.lock().expect("player lock").list_devices()
+    state
+        .player
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .list_devices()
 }
 
 #[tauri::command]
@@ -410,7 +462,7 @@ pub fn set_output_device(state: State<'_, AppState>, id: String) -> AppResult<()
     state
         .player
         .lock()
-        .expect("player lock")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .set_device(&id)?;
     state
         .db
@@ -422,8 +474,8 @@ pub fn set_preview_gain(state: State<'_, AppState>, db: f64) -> AppResult<()> {
     state
         .player
         .lock()
-        .expect("player lock")
-        .set_gain_db(db as f32);
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .set_gain_db(crate::ids::f64_to_f32(db));
     state
         .db
         .with_conn(|conn| settings::set(conn, "preview_gain_db", &json!(db)))
@@ -434,7 +486,7 @@ pub fn set_loop_preview(state: State<'_, AppState>, on: bool) -> AppResult<()> {
     state
         .player
         .lock()
-        .expect("player lock")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .set_loop_preview(on);
     state
         .db
@@ -459,28 +511,18 @@ pub fn create_tag(
 
 #[tauri::command]
 pub fn rename_tag(state: State<'_, AppState>, id: i64, name: String) -> AppResult<()> {
-    state
-        .db
-        .with_conn(|conn| tags::rename_tag(conn, id, &name))
+    state.db.with_conn(|conn| tags::rename_tag(conn, id, &name))
 }
 
 #[tauri::command]
-pub fn move_tag(
-    state: State<'_, AppState>,
-    id: i64,
-    new_parent_id: Option<i64>,
-) -> AppResult<()> {
+pub fn move_tag(state: State<'_, AppState>, id: i64, new_parent_id: Option<i64>) -> AppResult<()> {
     state
         .db
         .with_conn(|conn| tags::move_tag(conn, id, new_parent_id))
 }
 
 #[tauri::command]
-pub fn set_tag_color(
-    state: State<'_, AppState>,
-    id: i64,
-    color: Option<String>,
-) -> AppResult<()> {
+pub fn set_tag_color(state: State<'_, AppState>, id: i64, color: Option<String>) -> AppResult<()> {
     state
         .db
         .with_conn(|conn| tags::set_tag_color(conn, id, color.as_deref()))
@@ -505,35 +547,27 @@ pub fn set_sample_tags(
 }
 
 #[tauri::command]
-pub fn add_sample_tag(
-    state: State<'_, AppState>,
-    sample_id: i64,
-    tag_id: i64,
-) -> AppResult<()> {
+pub fn add_sample_tag(state: State<'_, AppState>, sample_id: i64, tag_id: i64) -> AppResult<()> {
     state
         .db
         .with_conn(|conn| tags::add_sample_tag(conn, sample_id, tag_id))?;
     state
         .undo
         .lock()
-        .expect("undo lock")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .push(UndoAction::TagAdd { sample_id, tag_id });
     Ok(())
 }
 
 #[tauri::command]
-pub fn remove_sample_tag(
-    state: State<'_, AppState>,
-    sample_id: i64,
-    tag_id: i64,
-) -> AppResult<()> {
+pub fn remove_sample_tag(state: State<'_, AppState>, sample_id: i64, tag_id: i64) -> AppResult<()> {
     state
         .db
         .with_conn(|conn| tags::remove_sample_tag(conn, sample_id, tag_id))?;
     state
         .undo
         .lock()
-        .expect("undo lock")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .push(UndoAction::TagRemove { sample_id, tag_id });
     Ok(())
 }
@@ -568,11 +602,7 @@ pub fn clear_jit_cache(state: State<'_, AppState>) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn start_drag_files(
-    app: AppHandle,
-    window: Window,
-    paths: Vec<String>,
-) -> AppResult<()> {
+pub async fn start_drag_files(app: AppHandle, window: Window, paths: Vec<String>) -> AppResult<()> {
     if paths.is_empty() {
         return Err(AppError::msg("no paths to drag"));
     }
@@ -585,7 +615,10 @@ pub async fn start_drag_files(
             )));
         }
         if !path.exists() {
-            return Err(AppError::msg(format!("drag path missing: {}", path.display())));
+            return Err(AppError::msg(format!(
+                "drag path missing: {}",
+                path.display()
+            )));
         }
     }
 
@@ -615,6 +648,5 @@ pub async fn start_drag_files(
     })
     .map_err(|e| AppError::msg(e.to_string()))?;
 
-    rx.recv()
-        .map_err(|e| AppError::msg(e.to_string()))?
+    rx.recv().map_err(|e| AppError::msg(e.to_string()))?
 }

@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
 
-type Props = {
+interface Props {
   rootCount: number;
   fileCount: number;
-  statusText?: string;
-};
+  statusText?: string | undefined;
+}
 
 export function StatusBar({ rootCount, fileCount, statusText }: Props) {
   const { t } = useTranslation("common");

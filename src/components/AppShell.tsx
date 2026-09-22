@@ -16,39 +16,39 @@ import "./AppShell.css";
 
 export type AppView = "library" | "settings" | "tags";
 
-type DbStats = {
+interface DbStats {
   roots: number;
   samples: number;
   tags: number;
   data_dir: string;
   clips_dir: string;
-};
+}
 
-type IndexProgress = {
+interface IndexProgress {
   root_id: number;
   scanned: number;
   indexed: number;
   skipped: number;
   current_path: string;
   done: boolean;
-};
+}
 
-type AnalysisProgress = {
+interface AnalysisProgress {
   sample_id: number;
   done: number;
   remaining: number;
-};
+}
 
-type CustomOpts = {
+interface CustomOpts {
   overwrite_tags: boolean;
   rerun_bpm: boolean;
   rerun_key: boolean;
   rerun_type: boolean;
-};
+}
 
 type SortCol = "name" | "type" | "bpm" | "key" | "created_at" | "favorite";
 
-const BPM_PRESETS: Array<{ min: number; max: number; labelKey: string }> = [
+const BPM_PRESETS: { min: number; max: number; labelKey: string }[] = [
   { min: 60, max: 150, labelKey: "bpmPreset_60_150" },
   { min: 68, max: 135, labelKey: "bpmPreset_68_135" },
   { min: 70, max: 180, labelKey: "bpmPreset_70_180" },
@@ -110,7 +110,7 @@ export function AppShell() {
   const [notifyAutoIndex, setNotifyAutoIndex] = useState(false);
   const [ignoreList, setIgnoreList] = useState<string[]>([]);
   const [outputDevices, setOutputDevices] = useState<
-    Array<{ id: string; name: string; is_default: boolean }>
+    { id: string; name: string; is_default: boolean }[]
   >([]);
   const [outputDevice, setOutputDevice] = useState("default");
   const [settingsPlayOnSelect, setSettingsPlayOnSelect] = useState(true);
@@ -192,7 +192,7 @@ export function AppShell() {
         relativeKey: typeof s.relative_key === "boolean" ? s.relative_key : prev.relativeKey,
       }));
     });
-    void invoke<Array<{ id: string; name: string; is_default: boolean }>>("list_output_devices")
+    void invoke<{ id: string; name: string; is_default: boolean }[]>("list_output_devices")
       .then(setOutputDevices)
       .catch(console.error);
   }, []);
@@ -211,7 +211,7 @@ export function AppShell() {
     }
     void invoke<PeakData>("get_peaks", { sampleId: focusedId })
       .then(setPeaks)
-      .catch(() => setPeaks(null));
+      .catch(() => void setPeaks(null));
     if (playOnSelect) {
       void invoke("play_sample", { sampleId: focusedId, startSecs: null }).catch(console.error);
     }
@@ -247,13 +247,15 @@ export function AppShell() {
           e.key === "ArrowDown"
             ? Math.min(samples.length - 1, Math.max(0, idx) + 1)
             : Math.max(0, (idx < 0 ? 0 : idx) - 1);
-        const id = samples[next].id;
+        const row = samples[next];
+        if (!row) return;
+        const id = row.id;
         setFocusedId(id);
         setSelectedIds(new Set([id]));
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => void window.removeEventListener("keydown", onKey);
   }, [focusedId, samples, refreshSamples]);
 
   useEffect(() => {
@@ -369,7 +371,10 @@ export function AppShell() {
         const b = samples.findIndex((s) => s.id === id);
         if (a >= 0 && b >= 0) {
           const [lo, hi] = a < b ? [a, b] : [b, a];
-          for (let i = lo; i <= hi; i++) next.add(samples[i].id);
+          for (let i = lo; i <= hi; i++) {
+            const s = samples[i];
+            if (s) next.add(s.id);
+          }
           return next;
         }
       }
@@ -498,10 +503,10 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <TitleBar onSettings={() => setView("settings")} onTags={() => setView("tags")} />
+      <TitleBar onSettings={() => void setView("settings")} onTags={() => void setView("tags")} />
 
       {view === "library" && isEmpty ? (
-        <FirstLaunch onAddFolder={() => void addFolder()} onPreferences={() => setView("settings")} />
+        <FirstLaunch onAddFolder={() => void addFolder()} onPreferences={() => void setView("settings")} />
       ) : null}
 
       {view === "library" && !isEmpty ? (
@@ -562,7 +567,7 @@ export function AppShell() {
                 type="button"
                 className="btn btn-secondary"
                 disabled={selectedIds.size < 1}
-                onClick={() => setCustomOpen(true)}
+                onClick={() => void setCustomOpen(true)}
               >
                 {tl("customAnalysis")}
               </button>
@@ -629,7 +634,7 @@ export function AppShell() {
                         <select
                           value={snap}
                           onChange={(e) =>
-                            setSnap(e.target.value as "None" | "1/4" | "1/8" | "1/16")
+                            void setSnap(e.target.value as "None" | "1/4" | "1/8" | "1/16")
                           }
                         >
                           <option value="None">None</option>
@@ -752,7 +757,7 @@ export function AppShell() {
                       key={p.labelKey}
                       type="button"
                       className={`btn ${active ? "btn-primary" : "btn-secondary"}`}
-                      onClick={() => setBpmPreset(p.min, p.max)}
+                      onClick={() => void setBpmPreset(p.min, p.max)}
                     >
                       {ts(p.labelKey)}
                     </button>
@@ -843,7 +848,7 @@ export function AppShell() {
               >
                 {ts("clearCache")}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setView("library")}>
+              <button type="button" className="btn btn-secondary" onClick={() => void setView("library")}>
                 {t("close")}
               </button>
             </div>
@@ -851,7 +856,7 @@ export function AppShell() {
         </div>
       ) : null}
 
-      {view === "tags" ? <TagManager onClose={() => setView("library")} /> : null}
+      {view === "tags" ? <TagManager onClose={() => void setView("library")} /> : null}
 
       {confirmRemove ? (
         <div className="overlay-panel modal">
@@ -860,7 +865,7 @@ export function AppShell() {
             <p className="muted">{tl("removeRootBody")}</p>
             <p className="muted mono">{confirmRemove.path}</p>
             <div className="dialog-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setConfirmRemove(null)}>
+              <button type="button" className="btn btn-secondary" onClick={() => void setConfirmRemove(null)}>
                 {t("cancel")}
               </button>
               <button type="button" className="btn btn-danger" onClick={() => void removeSelectedRoot()}>
@@ -881,7 +886,7 @@ export function AppShell() {
                 type="checkbox"
                 checked={customOpts.overwrite_tags}
                 onChange={(e) =>
-                  setCustomOpts((o) => ({ ...o, overwrite_tags: e.target.checked }))
+                  void setCustomOpts((o) => ({ ...o, overwrite_tags: e.target.checked }))
                 }
               />
               {ts("overwriteTags")}
@@ -890,7 +895,7 @@ export function AppShell() {
               <input
                 type="checkbox"
                 checked={customOpts.rerun_bpm}
-                onChange={(e) => setCustomOpts((o) => ({ ...o, rerun_bpm: e.target.checked }))}
+                onChange={(e) => void setCustomOpts((o) => ({ ...o, rerun_bpm: e.target.checked }))}
               />
               {ts("rerunBpm")}
             </label>
@@ -898,7 +903,7 @@ export function AppShell() {
               <input
                 type="checkbox"
                 checked={customOpts.rerun_key}
-                onChange={(e) => setCustomOpts((o) => ({ ...o, rerun_key: e.target.checked }))}
+                onChange={(e) => void setCustomOpts((o) => ({ ...o, rerun_key: e.target.checked }))}
               />
               {ts("rerunKey")}
             </label>
@@ -906,7 +911,7 @@ export function AppShell() {
               <input
                 type="checkbox"
                 checked={customOpts.rerun_type}
-                onChange={(e) => setCustomOpts((o) => ({ ...o, rerun_type: e.target.checked }))}
+                onChange={(e) => void setCustomOpts((o) => ({ ...o, rerun_type: e.target.checked }))}
               />
               {ts("rerunType")}
             </label>
@@ -920,7 +925,7 @@ export function AppShell() {
                       key={p.labelKey}
                       type="button"
                       className={`btn ${active ? "btn-primary" : "btn-secondary"}`}
-                      onClick={() => setBpmPreset(p.min, p.max)}
+                      onClick={() => void setBpmPreset(p.min, p.max)}
                     >
                       {ts(p.labelKey)}
                     </button>
@@ -929,7 +934,7 @@ export function AppShell() {
               </div>
             </div>
             <div className="dialog-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setCustomOpen(false)}>
+              <button type="button" className="btn btn-secondary" onClick={() => void setCustomOpen(false)}>
                 {t("cancel")}
               </button>
               <button

@@ -5,14 +5,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use notify::{EventKind, RecursiveMode};
 use notify::event::{ModifyKind, RenameMode};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
+use notify::{EventKind, RecursiveMode};
+use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::db::settings;
 use crate::db::Db;
+use crate::db::settings;
 use crate::error::AppResult;
 use crate::indexer::{self, is_audio_file};
 use crate::samples;
@@ -53,23 +53,21 @@ pub fn start(
     shared: Arc<WatchShared>,
     roots: Vec<PathBuf>,
 ) -> AppResult<WatchGuard> {
-    let app_cb = app.clone();
+    let app_cb = app;
     let shared_cb = Arc::clone(&shared);
 
     let mut debouncer = new_debouncer(
         Duration::from_millis(DEBOUNCE_MS),
         None,
-        move |result: DebounceEventResult| {
-            match result {
-                Ok(events) => {
-                    if let Err(e) = handle_events(&app_cb, &shared_cb, &events) {
-                        eprintln!("watch handler error: {e}");
-                    }
+        move |result: DebounceEventResult| match result {
+            Ok(events) => {
+                if let Err(e) = handle_events(&app_cb, &shared_cb, &events) {
+                    eprintln!("watch handler error: {e}");
                 }
-                Err(errors) => {
-                    for err in errors {
-                        eprintln!("watch error: {err}");
-                    }
+            }
+            Err(errors) => {
+                for err in errors {
+                    eprintln!("watch error: {err}");
                 }
             }
         },
@@ -77,10 +75,10 @@ pub fn start(
     .map_err(|e| crate::error::AppError::msg(e.to_string()))?;
 
     for root in &roots {
-        if root.is_dir() {
-            if let Err(e) = debouncer.watch(root.as_path(), RecursiveMode::Recursive) {
-                eprintln!("failed to watch {}: {e}", root.display());
-            }
+        if root.is_dir()
+            && let Err(e) = debouncer.watch(root.as_path(), RecursiveMode::Recursive)
+        {
+            eprintln!("failed to watch {}: {e}", root.display());
         }
     }
 
@@ -102,7 +100,7 @@ fn handle_events(
 
     for ev in events {
         match ev.kind {
-            EventKind::Create(_) => {
+            EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
                 for p in &ev.paths {
                     if p.is_file() && is_audio_file(p) {
                         created.push(p.clone());
@@ -117,12 +115,10 @@ fn handle_events(
                 }
             }
             EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
-                if ev.paths.len() >= 2 {
-                    let from = ev.paths[0].clone();
-                    let to = ev.paths[1].clone();
-                    if looks_like_audio_path(&from) || looks_like_audio_path(&to) {
-                        renames.push((from, to));
-                    }
+                if let [from, to, ..] = ev.paths.as_slice()
+                    && (looks_like_audio_path(from) || looks_like_audio_path(to))
+                {
+                    renames.push((from.clone(), to.clone()));
                 }
             }
             EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
@@ -132,16 +128,7 @@ fn handle_events(
                     }
                 }
             }
-            EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
-                for p in &ev.paths {
-                    if p.is_file() && is_audio_file(p) {
-                        created.push(p.clone());
-                    }
-                }
-            }
-            EventKind::Modify(ModifyKind::Data(_))
-            | EventKind::Modify(ModifyKind::Metadata(_))
-            | EventKind::Modify(ModifyKind::Any) => {
+            EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Metadata(_) | ModifyKind::Any) => {
                 for p in &ev.paths {
                     if p.is_file() && is_audio_file(p) {
                         modified.push(p.clone());
@@ -200,7 +187,10 @@ fn handle_events(
     }
 
     let new_files: Vec<PathBuf> = {
-        let skip = shared.skip_paths.lock().expect("skip lock");
+        let skip = shared
+            .skip_paths
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         created
             .into_iter()
             .filter(|p| {
@@ -223,7 +213,7 @@ fn handle_events(
             .db
             .with_conn(|conn| {
                 Ok(settings::get(conn, "new_file_mode")?
-                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .and_then(|v| v.as_str().map(ToString::to_string))
                     .unwrap_or_else(|| "auto".into()))
             })
             .unwrap_or_else(|_| "auto".into());
@@ -240,10 +230,7 @@ fn handle_events(
                 .with_conn(|conn| indexer::index_paths(conn, &new_files))?;
             if indexed > 0 {
                 changed = true;
-                crate::analyze::enqueue_unanalyzed(
-                    app.clone(),
-                    shared.db.clone(),
-                );
+                crate::analyze::enqueue_unanalyzed(app.clone(), shared.db.clone());
                 let notify = shared
                     .db
                     .with_conn(|conn| {
@@ -257,10 +244,7 @@ fn handle_events(
                         .iter()
                         .map(|p| p.to_string_lossy().into_owned())
                         .collect();
-                    let _ = app.emit(
-                        "auto-indexed",
-                        AskIndexPayload { paths },
-                    );
+                    let _ = app.emit("auto-indexed", AskIndexPayload { paths });
                 }
             }
         }
@@ -286,14 +270,16 @@ pub fn restart(app: &AppHandle, shared: &Arc<WatchShared>, guard_slot: &Mutex<Op
     let roots: Vec<PathBuf> = shared
         .db
         .with_conn(|conn| {
-            use diesel::prelude::*;
             use crate::db::schema::roots::dsl as roots_dsl;
+            use diesel::prelude::*;
             let paths: Vec<String> = roots_dsl::roots.select(roots_dsl::path).load(conn)?;
             Ok(paths.into_iter().map(PathBuf::from).collect::<Vec<_>>())
         })
         .unwrap_or_default();
 
-    let mut slot = guard_slot.lock().expect("watch guard lock");
+    let mut slot = guard_slot
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Drop old first
     *slot = None;
     match start(app.clone(), Arc::clone(shared), roots) {

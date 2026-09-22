@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-export type TagNode = {
+export interface TagNode {
   id: number;
   path: string;
   name: string;
@@ -10,11 +10,11 @@ export type TagNode = {
   color: string | null;
   sample_count: number;
   children: TagNode[];
-};
+}
 
-type Props = {
+interface Props {
   onClose: () => void;
-};
+}
 
 function flatten(nodes: TagNode[], depth = 0): { node: TagNode; depth: number }[] {
   const out: { node: TagNode; depth: number }[] = [];
@@ -61,7 +61,9 @@ export function TagManager({ onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    void refresh().catch((e) => setError(String(e)));
+    void refresh().catch((e: unknown) => {
+      setError(String(e));
+    });
   }, [refresh]);
 
   const flat = useMemo(() => flatten(tree), [tree]);
@@ -113,7 +115,7 @@ export function TagManager({ onClose }: Props) {
                     key={node.id}
                     type="button"
                     className={`tag-tree-row${on ? " selected" : ""}`}
-                    onClick={() => setSelectedId(node.id)}
+                    onClick={() => void setSelectedId(node.id)}
                   >
                     <span style={{ width: 8 + depth * 14, flex: "none" }} />
                     <span
@@ -131,7 +133,7 @@ export function TagManager({ onClose }: Props) {
                 className="input"
                 value={newPath}
                 placeholder={t("addPathPlaceholder")}
-                onChange={(e) => setNewPath(e.target.value)}
+                onChange={(e) => void setNewPath(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void onAdd();
                 }}
@@ -163,7 +165,7 @@ export function TagManager({ onClose }: Props) {
                 <button
                   type="button"
                   className="btn btn-danger"
-                  onClick={() => setConfirmDelete(selected)}
+                  onClick={() => void setConfirmDelete(selected)}
                 >
                   {t("delete")}…
                 </button>
@@ -194,7 +196,7 @@ export function TagManager({ onClose }: Props) {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setConfirmDelete(null)}
+                  onClick={() => void setConfirmDelete(null)}
                 >
                   {tc("cancel")}
                 </button>

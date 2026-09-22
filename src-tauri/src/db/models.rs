@@ -25,6 +25,10 @@ pub struct NewRoot<'a> {
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable, AsChangeset)]
 #[diesel(table_name = samples)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "field names mirror the `samples` table columns"
+)]
 pub struct Sample {
     pub id: i32,
     pub root_id: i32,

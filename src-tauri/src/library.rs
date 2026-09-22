@@ -12,6 +12,7 @@ use crate::db::schema::favorite_folders::dsl as fav_dsl;
 use crate::db::schema::roots::dsl as roots_dsl;
 use crate::db::schema::samples::dsl as samples_dsl;
 use crate::error::{AppError, AppResult};
+use crate::ids::{id_from_i64, id_to_i64};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RootDto {
@@ -40,12 +41,12 @@ pub fn list_roots(conn: &mut SqliteConnection) -> AppResult<Vec<RootDto>> {
     let mut out: Vec<RootDto> = rows
         .into_iter()
         .map(|(id, path, label)| RootDto {
-            id: id as i64,
+            id: id_to_i64(id),
             label: label.unwrap_or_else(|| path.clone()),
             path,
         })
         .collect();
-    out.sort_by(|a, b| a.path.to_lowercase().cmp(&b.path.to_lowercase()));
+    out.sort_by_key(|r| r.path.to_lowercase());
     Ok(out)
 }
 
@@ -78,14 +79,14 @@ pub fn add_root(conn: &mut SqliteConnection, path: &str) -> AppResult<RootDto> {
         .first(conn)?;
 
     Ok(RootDto {
-        id: id as i64,
+        id: id_to_i64(id),
         path: path_str,
         label,
     })
 }
 
 pub fn remove_root(conn: &mut SqliteConnection, root_id: i64) -> AppResult<()> {
-    let n = diesel::delete(roots_dsl::roots.find(root_id as i32)).execute(conn)?;
+    let n = diesel::delete(roots_dsl::roots.find(id_from_i64(root_id)?)).execute(conn)?;
     if n == 0 {
         return Err(AppError::msg("root not found"));
     }
@@ -168,9 +169,8 @@ fn walk_dirs(
     if depth > max_depth {
         return Ok(());
     }
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return Ok(()),
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Ok(());
     };
 
     let mut children: BTreeMap<String, PathBuf> = BTreeMap::new();
@@ -197,7 +197,15 @@ fn walk_dirs(
             favorite: favs.contains(&path_str),
             sample_count: count_under(conn, &path_str)?,
         });
-        walk_dirs(conn, &path, root_id, depth + 1, max_depth, favs, out)?;
+        walk_dirs(
+            conn,
+            &path,
+            root_id,
+            depth.saturating_add(1),
+            max_depth,
+            favs,
+            out,
+        )?;
     }
     Ok(())
 }

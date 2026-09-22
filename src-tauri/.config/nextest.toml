@@ -1,0 +1,4 @@
+# https://nexte.st/docs/configuration/reference/
+[profile.default]
+# Fail the run if any test is slow; keep CI feedback tight.
+slow-timeout = { period = "30s", terminate-after = 2 }

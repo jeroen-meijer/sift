@@ -9,6 +9,7 @@ use crate::error::{AppError, AppResult};
 pub struct AppPaths {
     pub data_dir: PathBuf,
     pub db_path: PathBuf,
+    #[allow(dead_code, reason = "resolved for completeness; not read yet")]
     pub cache_dir: PathBuf,
     pub clips_dir: PathBuf,
     pub peaks_dir: PathBuf,
