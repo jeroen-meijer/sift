@@ -21,6 +21,7 @@ interface Props {
   allTags: TagNode[];
   snap: SnapMode;
   waveformMode: WaveformMode;
+  coloredWaveforms: boolean;
   playheadSecs: number | null;
   selection: Selection | null;
   loopPreview: boolean;
@@ -48,6 +49,7 @@ export function DetailPane({
   allTags,
   snap,
   waveformMode,
+  coloredWaveforms,
   playheadSecs,
   selection,
   loopPreview,
@@ -247,6 +249,7 @@ export function DetailPane({
               bpm={sample.bpm}
               snap={snap}
               mode={waveformMode}
+              colored={coloredWaveforms}
               playheadSecs={playheadSecs}
               selection={selection}
               clipReady={clipReady}

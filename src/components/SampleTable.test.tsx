@@ -44,6 +44,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       playingProgress={null}
       analyzingIds={new Set()}
       showWaveforms
+      coloredWaveforms
       hiddenColumns={new Set()}
       sortColumn="name"
       sortDirection="asc"
@@ -125,6 +126,12 @@ describe("SampleTable", () => {
     expect(screen.getByText(/4,402 files are indexed\./)).toBeVisible();
   });
 
+  it("shows a loading spinner instead of the empty match copy while querying", () => {
+    renderTable({ samples: [], loading: true });
+    expect(screen.getByText("Loading samples…")).toBeVisible();
+    expect(screen.queryByText("No samples match")).toBeNull();
+  });
+
   it("labels the favourite toggle by its current state", () => {
     const { rerender } = renderTable();
     expect(screen.getByRole("button", { name: "Favorite" })).toHaveAttribute(
@@ -140,6 +147,7 @@ describe("SampleTable", () => {
         playingProgress={null}
         analyzingIds={new Set()}
         showWaveforms
+        coloredWaveforms
         hiddenColumns={new Set()}
         sortColumn="name"
         sortDirection="asc"

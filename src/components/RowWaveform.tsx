@@ -1,22 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
 import { cachedRowPeaks, loadRowPeaks } from "../lib/rowPeaks";
+import { readSpectralBands } from "../lib/spectralColor";
+import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
 interface Props {
   sampleId: number;
   missing: boolean;
   analyzing: boolean;
   selected: boolean;
+  /** Bass→red / mid→green / treble→blue from peak colors. */
+  colored: boolean;
   /** Fraction 0-1 of the playhead, or null when this row is not playing. */
   progress: number | null;
   onScrub?: ((fraction: number) => void) | undefined;
 }
 
-/** The compact row waveform: one vertical tick per peak bucket. */
+/** The compact row waveform: filled envelope tinted by spectral weights. */
 export function RowWaveform({
   sampleId,
   missing,
   analyzing,
   selected,
+  colored,
   progress,
   onScrub,
 }: Props) {
@@ -47,38 +53,46 @@ export function RowWaveform({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !peaks || idle) return;
-    const dpr = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth || 120;
-    const height = 18;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
 
-    const styles = getComputedStyle(canvas);
-    ctx.strokeStyle = styles
-      .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
-      .trim();
-    ctx.lineWidth = 1.05;
-    const mid = height / 2;
-    const channels = Math.max(1, peaks.channels);
-    const last = Math.max(1, peaks.bucket_count - 1);
-    ctx.beginPath();
-    for (let i = 0; i < peaks.bucket_count; i++) {
-      const base = i * channels * 2;
-      const amp = Math.max(
-        Math.abs(peaks.peaks[base] ?? 0),
-        Math.abs(peaks.peaks[base + 1] ?? 0),
+    const paint = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth || 120;
+      const height = 18;
+      const ctx = syncCanvasSize(canvas, width, height, dpr);
+      if (!ctx) return;
+      ctx.clearRect(0, 0, width, height);
+
+      const styles = getComputedStyle(canvas);
+      const ink =
+        styles
+          .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
+          .trim() || "#6a6d80";
+      const bands = readSpectralBands(canvas);
+      paintWaveLane(
+        ctx,
+        {
+          peaks: peaks.peaks,
+          colors: peaks.colors,
+          bucketCount: peaks.bucket_count,
+          channels: Math.max(1, peaks.channels),
+        },
+        {
+          width,
+          midY: height / 2,
+          ampScale: height * 0.42,
+          channelIndex: 0,
+          colored,
+          bands,
+          ink,
+          style: "gradient",
+          maxColorStops: 32,
+        },
       );
-      const x = (i / last) * width;
-      const y = amp * (height * 0.42);
-      ctx.moveTo(x, mid - y);
-      ctx.lineTo(x, mid + y);
-    }
-    ctx.stroke();
-  }, [peaks, idle, selected]);
+    };
+
+    paint();
+    return subscribeThemePaint(paint);
+  }, [peaks, idle, selected, colored]);
 
   if (analyzing) {
     return (
@@ -89,6 +103,13 @@ export function RowWaveform({
   }
   if (missing) {
     return <div className="row-wave row-wave-missing" aria-hidden />;
+  }
+  if (!peaks) {
+    return (
+      <div className="row-wave row-wave-analyzing" aria-hidden>
+        <span className="row-wave-shimmer" />
+      </div>
+    );
   }
 
   const fractionAt = (e: React.MouseEvent<HTMLDivElement>) => {

@@ -172,9 +172,23 @@ pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> 
 
 #[tauri::command]
 pub fn list_samples(state: State<'_, AppState>, query: SampleQuery) -> AppResult<Vec<SampleDto>> {
-    state
+    let start = std::time::Instant::now();
+    let rows = state
         .db
-        .with_conn(|conn| samples::list_samples(conn, &query))
+        .with_conn(|conn| samples::list_samples(conn, &query))?;
+    crate::profile_log::event(
+        "ipc.list_samples",
+        start.elapsed(),
+        &format!(
+            "n={} folder={:?} text={:?} tags={} fav={}",
+            rows.len(),
+            query.folder_prefix.as_deref().unwrap_or(""),
+            query.text.as_deref().unwrap_or(""),
+            query.tag_paths.len(),
+            query.favorites_only
+        ),
+    );
+    Ok(rows)
 }
 
 #[tauri::command]
@@ -382,17 +396,19 @@ pub fn redo_meta(state: State<'_, AppState>) -> AppResult<bool> {
 
 #[tauri::command]
 pub fn get_peaks(state: State<'_, AppState>, sample_id: i64) -> AppResult<PeakData> {
-    let sample = state
-        .db
-        .with_conn(|conn| samples::get_sample(conn, sample_id))?
-        .ok_or_else(|| AppError::msg("sample not found"))?;
-    let path = Path::new(&sample.path);
-    if sample.sample_rate.is_none() || sample.duration_ms.is_none() {
-        let _ = state
+    crate::profile_log::time("ipc.get_peaks", &format!("id={sample_id}"), || {
+        let sample = state
             .db
-            .with_conn(|conn| crate::audio::probe_and_update_sample(conn, sample_id, path));
-    }
-    peaks::ensure_peaks(&state.paths, sample_id, path, DEFAULT_BUCKETS)
+            .with_conn(|conn| samples::get_sample(conn, sample_id))?
+            .ok_or_else(|| AppError::msg("sample not found"))?;
+        let path = Path::new(&sample.path);
+        if sample.sample_rate.is_none() || sample.duration_ms.is_none() {
+            let _ = state
+                .db
+                .with_conn(|conn| crate::audio::probe_and_update_sample(conn, sample_id, path));
+        }
+        peaks::ensure_peaks(&state.paths, sample_id, path, DEFAULT_BUCKETS)
+    })
 }
 
 #[tauri::command]
@@ -762,4 +778,19 @@ pub async fn start_drag_files(app: AppHandle, window: Window, paths: Vec<String>
     .map_err(|e| AppError::msg(e.to_string()))?;
 
     rx.recv().map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn profile_enabled() -> bool {
+    crate::profile_log::is_enabled()
+}
+
+#[tauri::command]
+pub fn profile_log_path() -> Option<String> {
+    crate::profile_log::log_path().map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+pub fn profile_mark(name: String, ms: f64, detail: Option<String>) {
+    crate::profile_log::mark(&name, ms, detail.as_deref().unwrap_or(""));
 }

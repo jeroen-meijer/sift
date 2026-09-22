@@ -6,6 +6,7 @@
 const FALLBACKS: Record<string, number> = {
   "--motion-fast": 90,
   "--motion-base": 140,
+  "--motion-theme": 320,
   "--motion-hover-grace": 240,
 };
 

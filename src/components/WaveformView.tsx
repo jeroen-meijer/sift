@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
 import { formatSpan, formatTime } from "../lib/format";
 import type { PeakData, SnapMode, WaveformView as WaveformMode } from "../lib/ipc";
+import { readSpectralBands } from "../lib/spectralColor";
+import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
 export interface Selection {
   start: number;
@@ -18,6 +21,8 @@ interface Props {
   clipReady: boolean;
   /** Apply snap (and Shift free-time) to a pointer position. */
   snapPointer: (secs: number) => number;
+  /** Bass→red / mid→green / treble→blue coloring from peak colors. */
+  colored: boolean;
   onSeek: (secs: number) => void;
   onSelect: (selection: Selection | null) => void;
   onDragClip: () => void;
@@ -54,6 +59,7 @@ export function WaveformView({
   selection,
   clipReady,
   snapPointer,
+  colored,
   onSeek,
   onSelect,
   onDragClip,
@@ -114,44 +120,52 @@ export function WaveformView({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !peaks || size.width === 0 || size.height === 0) return;
-    const dpr = window.devicePixelRatio || 1;
     const { width, height } = size;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
 
-    const styles = getComputedStyle(canvas);
-    const ink = styles.getPropertyValue("--color-wave-ink").trim();
-    const laneHeight = height / lanes;
-    const channels = Math.max(1, peaks.channels);
+    const paint = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const ctx = syncCanvasSize(canvas, width, height, dpr);
+      if (!ctx) return;
+      ctx.clearRect(0, 0, width, height);
 
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 1;
-    for (let lane = 0; lane < lanes; lane++) {
-      const mid = laneHeight * lane + laneHeight / 2;
-      ctx.beginPath();
-      for (let i = 0; i < peaks.bucket_count; i++) {
-        const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
-        const min = peaks.peaks[base] ?? 0;
-        const max = peaks.peaks[base + 1] ?? 0;
-        const x = (i / peaks.bucket_count) * width;
-        ctx.moveTo(x, mid - max * laneHeight * 0.46);
-        ctx.lineTo(x, mid - min * laneHeight * 0.46);
+      const styles = getComputedStyle(canvas);
+      const ink = styles.getPropertyValue("--color-wave-ink").trim() || "#7b71b8";
+      const bands = readSpectralBands(canvas);
+      const laneHeight = height / lanes;
+      const channels = Math.max(1, peaks.channels);
+      const lane = {
+        peaks: peaks.peaks,
+        colors: peaks.colors,
+        bucketCount: peaks.bucket_count,
+        channels,
+      };
+
+      for (let i = 0; i < lanes; i++) {
+        paintWaveLane(ctx, lane, {
+          width,
+          midY: laneHeight * i + laneHeight / 2,
+          ampScale: laneHeight * 0.46,
+          channelIndex: lanes === 2 ? i : 0,
+          colored,
+          bands,
+          ink,
+          /* Columns keep per-bucket winner hues; gradient smooths them away. */
+          style: "columns",
+        });
       }
-      ctx.stroke();
-    }
 
-    if (lanes === 2) {
-      ctx.strokeStyle = "rgba(233,233,237,0.09)";
-      ctx.beginPath();
-      ctx.moveTo(0, laneHeight);
-      ctx.lineTo(width, laneHeight);
-      ctx.stroke();
-    }
-  }, [peaks, size, lanes]);
+      if (lanes === 2) {
+        ctx.strokeStyle = "rgba(233,233,237,0.09)";
+        ctx.beginPath();
+        ctx.moveTo(0, laneHeight);
+        ctx.lineTo(width, laneHeight);
+        ctx.stroke();
+      }
+    };
+
+    paint();
+    return subscribeThemePaint(paint);
+  }, [peaks, size, lanes, colored]);
 
   const gridStyle = useMemo(() => {
     const divisor = snapDivisor(snap);
@@ -303,17 +317,23 @@ export function WaveformView({
 
         {selection ? (
           <>
-            <div className="wave-dim" style={{ left: 0, width: `${pct(selection.start)}%` }} />
+            {/* Anchor both dims and the selection to the same pct edges.
+                `right + width` for the right dim can disagree with `left + width`
+                for the selection by a full snap cell under WKWebView rounding. */}
             <div
               className="wave-dim"
-              style={{ right: 0, width: `${100 - pct(selection.end)}%` }}
+              style={{ left: 0, right: `${100 - pct(selection.start)}%` }}
+            />
+            <div
+              className="wave-dim"
+              style={{ left: `${pct(selection.end)}%`, right: 0 }}
             />
             <div
               className={`wave-selection${clipReady ? " draggable" : ""}`}
               draggable={clipReady}
               style={{
                 left: `${pct(selection.start)}%`,
-                width: `${pct(selection.end) - pct(selection.start)}%`,
+                right: `${100 - pct(selection.end)}%`,
               }}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "copy";
