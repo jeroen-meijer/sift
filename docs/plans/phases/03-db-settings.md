@@ -1,4 +1,4 @@
-# Phase 03 — DB + settings
+# Phase 03: DB + settings
 
 **Status:** complete
 
@@ -19,7 +19,7 @@ Embed SQLite and persist settings; seed default tag taxonomy; expose get/set set
 - `rusqlite` (bundled) DB in app data dir
 - Schema: `roots`, `folders` (optional denorm), `samples`, `tags`, `sample_tags`, `tag_rejects`, `favorites` (samples + folders), `settings` (key/value JSON), `undo_stack` (or equivalent), schema migrations
 - Seed tags from [docs/DEFAULT_TAXONOMY.md](../../DEFAULT_TAXONOMY.md)
-- Default settings: play-on-select on, loop preview on, snap 1/4, BPM range 70–180, auto-index, row waveforms on, dark theme, ignore list defaults
+- Default settings: play-on-select on, loop preview on, snap 1/4, BPM range 70-180, auto-index, row waveforms on, dark theme, ignore list defaults
 - App dirs: data, cache/clips, peakfiles
 - Tauri commands: `get_settings`, `set_setting`, `db_stats` (roots/samples counts)
 

@@ -1,4 +1,4 @@
-# Phase 14 — Watch + polish (v1 complete)
+# Phase 14: Watch + polish (v1 complete)
 
 **Status:** complete
 
@@ -36,7 +36,7 @@ Close remaining SPEC Musts: continuous watch, missing files, ask/auto-index, ful
 - Watch picks up a copied file into a root (auto-index)
 - Missing file flow works when path deleted outside app
 - Context menu and settings cover SPEC lists
-- All phases 01–14 marked complete in index
+- All phases 01-14 marked complete in index
 
 ## Shipped vs deferred
 
@@ -50,4 +50,4 @@ None for v1. Later: collections, saved searches, Windows validation, analysis tu
 
 ## SPEC
 
-§4.12 Watch; §4.2 context menu; §4.8 undo; §4.3 hold-hover; §4.1–4.16 remaining Musts; §5 v1 quality bar.
+§4.12 Watch; §4.2 context menu; §4.8 undo; §4.3 hold-hover; §4.1-4.16 remaining Musts; §5 v1 quality bar.

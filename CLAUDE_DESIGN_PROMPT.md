@@ -1,6 +1,6 @@
 # Design brief - Sift (local sample manager)
 
-Paste this **entire file** into Claude Design as the opening prompt. Attach the screenshot set this brief describes in §2. Those images are inputs; this file is product truth when they disagree.
+Paste this **entire file** into Claude Design as the opening prompt. Attach the screenshot set this brief describes in §2. Those images are inputs; this file wins when they disagree.
 
 **For:** Claude Design
 **Product:** Sift
@@ -21,7 +21,7 @@ It is **not** a DAW, marketplace, cloud locker, account product, or full sample 
 - Shell: single main window. No multi-tab browse in v1. Settings is a separate surface (window or pane; you decide).
 - Reference feel: ADSR Sample Manager's local-library workflows (search chips, list + detail waveform, favorites, drag to DAW). Do not copy ADSR's layout, store, login, live FX dials, or MIDI mode.
 
-Design what information and states the product needs. You own placement, hierarchy, and visual design. Prefer clear hierarchy over decoration. Do not invent out-of-scope product behavior.
+Design what information and states the product needs. You own placement, hierarchy, and visual design. Prioritize hierarchy; skip decoration that does not help scanning. Do not invent out-of-scope product behavior.
 
 ---
 
@@ -48,7 +48,7 @@ These show a real sample manager: folder tree, sample list, tags, omni search wi
 
 ### 2.2 Other app screenshots (visual / structural inspiration)
 
-These are apps the product owner likes. They may be **non-music** tools. They sit in a vague neighborhood of structure (dense tool UIs, good hierarchy, nice craft) or are simply pleasant to look at.
+These are apps the product owner likes. They may be **non-music** tools. Treat them as dense tool UIs you like for craft or layout ideas.
 
 **Take:**
 
@@ -77,7 +77,7 @@ Assume mouse + keyboard. Hover and focus states are in play. Touch targets are n
 
 ## 4. Visual direction (freedom with guardrails)
 
-There is **no shipped design system yet**. Invent a cohesive dark UI that fits a native-class desktop audio tool.
+There is **no shipped design system yet**. Invent a cohesive dark UI that fits a dense desktop audio tool.
 
 Guardrails:
 

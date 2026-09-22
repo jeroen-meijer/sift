@@ -72,4 +72,4 @@ Companion to [SPEC.md](SPEC.md). Answers from requirements gathering (2026-09-21
 | Q72 | Design authority | Provided Claude Design artifacts are visual source of truth for chrome; SPEC wins on behavior |
 | Q73 | Default taxonomy | Ship [docs/DEFAULT_TAXONOMY.md](docs/DEFAULT_TAXONOMY.md); tunable after dogfood |
 | Q74 | Analysis + packages | Auto-tags: filename/path first. BPM/key: existing Rust crate behind trait; imperfect OK. Prefer crates/React libs over custom DSP/OS code |
-| Q75 | v1 delivery | Complete Must + designs; you test once “done”; tune after. Icon mocks OK. macOS host for build; assume stack spikes pass unless they fail |
+| Q75 | v1 delivery | Complete Must + designs; you test once "done"; tune after. Icon mocks OK. macOS host for build; assume stack spikes pass unless they fail |

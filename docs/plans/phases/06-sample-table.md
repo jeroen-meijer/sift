@@ -1,4 +1,4 @@
-# Phase 06 — Sample table
+# Phase 06: Sample table
 
 **Status:** complete
 
@@ -18,7 +18,7 @@ Virtualized sample list/table with sort, multi-select, favorites, and selection 
 
 - TanStack Virtual (or equivalent) table
 - Columns: name, type, BPM, key, waveform placeholder, tags placeholder, favorite
-- Sort: click cycles asc → desc → clear (default Name A–Z); persist
+- Sort: click cycles asc → desc → clear (default Name A-Z); persist
 - Multi-select: Shift range, ⌘/Ctrl toggle
 - Favorite sample toggle
 - Selecting a row updates detail pane header (name + path)

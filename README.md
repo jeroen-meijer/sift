@@ -27,7 +27,7 @@ If you previously ran a pre-Diesel build and the app fails on migrate, delete th
 rm -f ~/Library/Application\ Support/dev.jfk.Sift/library.sqlite3*
 ```
 
-(That only removes Sift’s index; sample files on disk are untouched.)
+(That only removes Sift's index; sample files on disk are untouched.)
 
 ## Lint, test, build
 

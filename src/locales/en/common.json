@@ -23,7 +23,7 @@
   "statusShown": "{{shown}} of {{total}} shown",
   "statusAnalyzing": "Analyzing…",
   "statusAnalyzingProgress": "Analyzing {{done}} of {{total}}",
-  "statusBrowseWhile": "browse and play while this runs",
+  "statusBrowseWhile": "you can keep browsing",
   "undo": "Undo",
   "redo": "Redo",
   "ctxOpen": "Open",

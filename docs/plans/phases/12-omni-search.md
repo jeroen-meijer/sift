@@ -1,4 +1,4 @@
-# Phase 12 — Omni search
+# Phase 12: Omni search
 
 **Status:** complete
 

@@ -1,12 +1,12 @@
-# Sift v1 — master plan index
+# Sift v1: master plan index
 
 **Status:** implementation complete (v1)  
-**SoT:** [SPEC.md](../../SPEC.md) (behavior) → [docs/design/](../design/) (chrome) → [docs/TECH_STACK.md](../TECH_STACK.md) (stack)  
-**Rules:** [RULES.md](RULES.md) — read at the start of every phase
+**Authority:** [SPEC.md](../../SPEC.md) (behavior), [docs/design/](../design/) (chrome), [docs/TECH_STACK.md](../TECH_STACK.md) (stack)  
+**Rules:** [RULES.md](RULES.md). Read at the start of every phase.
 
 ## Goal
 
-Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers SPEC Musts and the Claude Design surfaces, dogfoodable against [example_samples/](../../example_samples/).
+Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers SPEC Musts and the Claude Design surfaces. You should be able to dogfood against [example_samples/](../../example_samples/).
 
 ## Progress
 

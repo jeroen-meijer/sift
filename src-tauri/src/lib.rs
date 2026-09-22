@@ -14,8 +14,8 @@ mod tags;
 mod undo;
 mod watch;
 
-/// Hot-path surface for Criterion benches and perf budget tests.
-/// Not part of the Tauri IPC contract.
+/// Hot-path APIs for Criterion benches and soft perf budget tests.
+/// Not part of the Tauri IPC surface.
 pub mod perf {
     pub use crate::analyze::{Analyzer, HeuristicAnalyzer, PathTokenAnalyzer};
     pub use crate::audio::decode::{DecodedAudio, decode_file};

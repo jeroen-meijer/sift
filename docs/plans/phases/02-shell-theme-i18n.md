@@ -1,4 +1,4 @@
-# Phase 02 — Shell, theme, i18n
+# Phase 02: Shell, theme, i18n
 
 **Status:** complete
 
@@ -16,10 +16,10 @@ Wire dark theme tokens, English locales, and static app chrome that matches the 
 
 ### In scope
 
-- `src/themes/dark-default.css` — Nocturne CSS variables from `docs/design/_ds/nocturne-*/styles.css`
+- `src/themes/dark-default.css` : Nocturne CSS variables from `docs/design/_ds/nocturne-*/styles.css`
 - Components use `var(--…)` only (no hardcoded hex in TSX)
 - `i18next` + `react-i18next`; strings in `src/locales/en/*.json`
-- Layout: macOS-ish chrome, Settings/Tags icon buttons (stubs), first-launch panel (“Point Sift at your samples”), empty sidebar, status bar (`0 roots · 0 files`)
+- Layout: macOS-ish chrome, Settings/Tags icon buttons (stubs), first-launch panel ("Point Sift at your samples"), empty sidebar, status bar (`0 roots · 0 files`)
 - Phosphor icons (or equivalent) as in design
 
 ### Out of scope

@@ -1,4 +1,4 @@
-# Claude Design export — Sift sample manager
+# Claude Design export: Sift sample manager
 
 Visual source of truth for v1 chrome. Behavior conflicts: [SPEC.md](../../SPEC.md) wins.
 
@@ -20,7 +20,7 @@ Needs network (React/fonts from CDN via `support.js`).
 
 ## Screenshots
 
-PNG captures of the design canvas (for quick gap checks without spinning the HTML):
+PNG captures of the design canvas (open these when you do not want to spin up the HTML server):
 
 | File | View |
 |------|------|

@@ -1,4 +1,4 @@
-# Phase 09 — Waveforms + selection
+# Phase 09: Waveforms + selection
 
 **Status:** complete
 

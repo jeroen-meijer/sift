@@ -11,7 +11,7 @@ interface Props {
   showWaveform: boolean;
 }
 
-/** Compact row waveform matching the Claude Design SVG ink stroke. */
+/** Compact row waveform matching the Claude Design ink stroke. */
 export function RowWaveform({ sampleId, missing, analyzing, showWaveform }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [peaks, setPeaks] = useState<PeakData | null>(() => cache.get(sampleId) ?? null);
