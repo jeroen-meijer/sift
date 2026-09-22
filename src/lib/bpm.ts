@@ -25,7 +25,7 @@ export function bpmFromBeats(
   return round ? Math.round(bpm) : Math.round(bpm * 100) / 100;
 }
 
-/** Beats that `bpm` implies over `durationMs` — the inverse of the above. */
+/** Beats that `bpm` implies over `durationMs`. Inverse of the above. */
 export function beatsFromBpm(durationMs: number | null, bpm: number | null): number | null {
   if (durationMs == null || durationMs <= 0 || bpm == null || bpm <= 0) return null;
   return (bpm * durationMs) / 60_000;

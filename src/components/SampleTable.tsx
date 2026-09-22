@@ -294,7 +294,7 @@ export function SampleTable({
   const startResize = (column: ResizableColumn, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    /* Measure the rendered track width — stored values are fr weights, not px. */
+    /* Measure the rendered track width. Stored values are fr weights, not px. */
     const header = headerRef.current?.querySelector<HTMLElement>(`[data-col="${column}"]`);
     const rendered = header?.getBoundingClientRect().width;
     dragRef.current = {

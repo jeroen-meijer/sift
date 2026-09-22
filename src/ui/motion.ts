@@ -16,7 +16,7 @@ export type MotionCurve = readonly [number, number, number, number];
 export const MOTION_CURVES = {
   /** `--motion-ease` */
   ease: [0.2, 0, 0.13, 1] as const satisfies MotionCurve,
-  /** `--motion-ease-fast-in-out` — snappy start, soft landing. */
+  /** `--motion-ease-fast-in-out`: snappy start, soft landing. */
   fastInEaseOut: [0.15, 0.85, 0.2, 1] as const satisfies MotionCurve,
 } as const;
 
