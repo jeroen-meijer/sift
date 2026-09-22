@@ -17,6 +17,8 @@ describe("spectralColor", () => {
     expect(parseCssColor("#ff608c")).toEqual([255, 96, 140]);
     expect(parseCssColor("#f0c")).toEqual([255, 0, 204]);
     expect(parseCssColor("rgb(10, 20, 30)")).toEqual([10, 20, 30]);
+    expect(parseCssColor("rgb(10 20 30)")).toEqual([10, 20, 30]);
+    expect(parseCssColor("color(srgb 1 0.5 0)")).toEqual([255, 128, 0]);
   });
 
   it("maps pure Classic channels onto theme band hues", () => {
