@@ -30,6 +30,7 @@ import { PillSelect } from "../ui/PillSelect";
 import { Segmented } from "../ui/Segmented";
 import { Switch } from "../ui/Switch";
 import { BpmRangePicker } from "./BpmRangePicker";
+import { ThemeWavePreview } from "./ThemeWavePreview";
 
 type SectionId = "appearance" | "playback" | "library" | "analysis" | "shortcuts";
 
@@ -235,19 +236,22 @@ export function SettingsView({
                           onChange("theme", id);
                         }}
                       >
-                        <div className="theme-card-text">
-                          <div className="theme-card-name">{t(THEME_NAME_KEY[id])}</div>
-                          <div className="theme-card-blurb">{t(THEME_BLURB_KEY[id])}</div>
+                        <div className="theme-card-top">
+                          <div className="theme-card-text">
+                            <div className="theme-card-name">{t(THEME_NAME_KEY[id])}</div>
+                            <div className="theme-card-blurb">{t(THEME_BLURB_KEY[id])}</div>
+                          </div>
+                          <div className="theme-card-swatches" aria-hidden>
+                            {info.swatches.map((color) => (
+                              <span
+                                key={color}
+                                className="theme-swatch"
+                                style={{ background: color }}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        <div className="theme-card-swatches" aria-hidden>
-                          {info.swatches.map((color) => (
-                            <span
-                              key={color}
-                              className="theme-swatch"
-                              style={{ background: color }}
-                            />
-                          ))}
-                        </div>
+                        <ThemeWavePreview themeId={id} />
                       </button>
                     );
                   })}

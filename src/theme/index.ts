@@ -9,6 +9,12 @@ export interface ThemeInfo {
   blurb: string;
   /** Four chips: ground, accent, text, danger. */
   swatches: [string, string, string, string];
+  /** Bass / mid / treble hues for the card waveform preview (match tokens.css). */
+  waveBands: {
+    bass: `#${string}`;
+    mid: `#${string}`;
+    treble: `#${string}`;
+  };
 }
 
 /**
@@ -20,21 +26,25 @@ export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
     id: "nocturne",
     blurb: "slate blue, low glare",
     swatches: ["#161826", "#9184d9", "#e9e9ed", "#d4837d"],
+    waveBands: { bass: "#f0608c", mid: "#6ed496", treble: "#82b4ff" },
   },
   ink: {
     id: "ink",
     blurb: "OLED ink, violet accent",
     swatches: ["#0b0f16", "#976fe1", "#d9dfe7", "#f57f6c"],
+    waveBands: { bass: "#ff6b9d", mid: "#7dffb3", treble: "#9ec5ff" },
   },
   graphite: {
     id: "graphite",
     blurb: "neutral warm grey",
     swatches: ["#121212", "#989898", "#e2e2e2", "#f57f6c"],
+    waveBands: { bass: "#ff7070", mid: "#90e090", treble: "#90b8ff" },
   },
   snow: {
     id: "snow",
     blurb: "light chrome",
     swatches: ["#ffffff", "#0366d6", "#24292e", "#cb2431"],
+    waveBands: { bass: "#d73a49", mid: "#22863a", treble: "#0366d6" },
   },
 };
 
