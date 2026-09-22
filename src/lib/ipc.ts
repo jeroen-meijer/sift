@@ -197,6 +197,9 @@ async function run(command: string, args?: Record<string, unknown>): Promise<voi
   await invoke(command, args);
 }
 
+/** Coalesce concurrent identical list_samples (e.g. React StrictMode). */
+const listSamplesInflight = new Map<string, Promise<SampleRow[]>>();
+
 export const ipc = {
   getSettings: () => invoke<Partial<AppSettings>>("get_settings"),
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
@@ -207,10 +210,18 @@ export const ipc = {
   addRoot: (path: string) => invoke<unknown>("add_root", { path }),
   removeRoot: (rootId: number) => run("remove_root", { rootId }),
 
-  listSamples: (query: SampleQuery) =>
-    profiled("fe.list_samples", `limit=${String(query.limit)}`, () =>
+  listSamples: (query: SampleQuery) => {
+    const key = JSON.stringify(query);
+    const existing = listSamplesInflight.get(key);
+    if (existing) return existing;
+    const pending = profiled("fe.list_samples", `limit=${String(query.limit)}`, () =>
       invoke<SampleRow[]>("list_samples", { query }),
-    ),
+    ).finally(() => {
+      listSamplesInflight.delete(key);
+    });
+    listSamplesInflight.set(key, pending);
+    return pending;
+  },
   setFavorite: (id: number, favorite: boolean) =>
     run("set_sample_favorite", { id, favorite }),
   setBpm: (id: number, bpm: number | null) => run("set_sample_bpm", { id, bpm }),
@@ -228,6 +239,11 @@ export const ipc = {
     profiled("fe.get_peaks", `id=${String(sampleId)}`, () =>
       invoke<PeakData>("get_peaks", { sampleId }),
     ),
+  /** Warm decode LRU for upcoming play (focused + neighbors). */
+  prefetchDecode: (sampleIds: number[]) => {
+    if (sampleIds.length === 0) return Promise.resolve();
+    return run("prefetch_decode", { sampleIds });
+  },
   play: (
     sampleId: number,
     startSecs: number | null,
