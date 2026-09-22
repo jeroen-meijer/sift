@@ -1,6 +1,6 @@
 # Agent context: Sift
 
-Local sample manager (Tauri 2 + React). Product SoT: [SPEC.md](SPEC.md). Stack: [docs/TECH_STACK.md](docs/TECH_STACK.md).
+Local sample manager (Tauri 2 + React). Product rules: [SPEC.md](SPEC.md). Stack: [docs/TECH_STACK.md](docs/TECH_STACK.md).
 
 ## Settled tooling (mirror chat-search where applicable)
 

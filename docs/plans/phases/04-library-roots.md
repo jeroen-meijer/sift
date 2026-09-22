@@ -1,4 +1,4 @@
-# Phase 04 — Library roots + first launch
+# Phase 04: Library roots + first launch
 
 **Status:** complete
 
@@ -18,9 +18,9 @@ User can add and remove library roots (index only; disk untouched) and see them 
 
 - `tauri-plugin-dialog` folder picker → insert root
 - Remove root with confirm dialog (design: Remove library root); delete related index rows only
-- Folder tree listing under each root (from filesystem walk of directories, or from indexed folders — prefer lightweight dir walk for tree UI even before full sample index)
+- Folder tree listing under each root (from filesystem walk of directories, or from indexed folders : prefer lightweight dir walk for tree UI even before full sample index)
 - Favorite folders (toggle, persist)
-- Wire first-launch “Add folder…” and sidebar `+`
+- Wire first-launch "Add folder…" and sidebar `+`
 - Remove-root confirm copy from design
 
 ### Out of scope

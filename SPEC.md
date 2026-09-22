@@ -5,7 +5,7 @@
 **Platforms:** macOS, Windows  
 **Users:** Music producers and audio engineers  
 **Reference feel:** ADSR Sample Manager local-library workflows (not the store)  
-**Stack:** Undecided. Assume native-class performance for audio, analysis, and I/O (not a thin Electron/webview shell).
+**Stack:** Undecided. Assume audio, analysis, and I/O stay fast enough for large local libraries.
 
 Shared reference for design and engineering. States behavior and constraints. Does not prescribe layout, chrome, or visual brand beyond §2.
 
@@ -332,7 +332,7 @@ Drag origin decides the payload:
 - Safety: Never modify or delete user audio without an explicit confirmed action. Metadata never writes into source files in v1.
 - Privacy: Local-first; no account for core use.
 - Reliability: Crash/force-quit must not corrupt the library index; analysis can resume.
-- v1 quality bar: A **complete** Must coverage of this SPEC plus the provided Claude Design surfaces, good enough to dogfood. Analysis, fuzzy search, and watch edge cases may be imperfect. Prefer shipping and tuning over polishing one subsystem forever.
+- v1 quality bar: Complete Must coverage of this SPEC plus the Claude Design surfaces, usable for daily dogfood on your library. Analysis, fuzzy search, and watch edge cases may be imperfect. Ship Must coverage, then tune from dogfood.
 - Implementation bias: Prefer maintained Rust crates and existing React packages when they fit (audio I/O, decode, FS watch, SQLite, BPM/key, table virtualization, i18n). Custom code for product glue and UI chrome; avoid reimplementing OS integration or DSP that a crate already does well.
 
 ---
@@ -373,4 +373,4 @@ Add / differ: multi-root folders → search chips; row waveforms; play-from-curs
 | 0.1.x | 2026-09-21 | Requirements gathering |
 | 0.2.x | 2026-09-21 | Design + engineering tidy; continued Q&A |
 | 0.3 | 2026-09-21 | Named Sift; Q49-Q68 folded in; Q&A paused; cleanup + humanize |
-| 0.3.1 | 2026-09-22 | Locale + theme token separation (Q70); column sort cycle (Q71); taxonomy + v1 bar + crate bias (Q72–Q74) |
+| 0.3.1 | 2026-09-22 | Locale + theme token separation (Q70); column sort cycle (Q71); taxonomy + v1 bar + crate bias (Q72-Q74) |

@@ -13,7 +13,7 @@ Read this file at the **start of every phase** before writing code.
 - Implement phases **sequentially** (01 → 14). Do not skip ahead except for tiny shared helpers required by the current phase.
 - After each phase: mark it complete in the phase doc and in [index.plan.md](index.plan.md), then commit and push to `main` with conventional commits.
 - Do **not** stop between phases to ask questions. Circumvent reasonable blockers inside the repo.
-- Stop only for: permission denials you cannot fix, destructive ambiguity outside the repo, or a hazard that needs a human (e.g. deleting user audio on disk — which v1 must never do).
+- Stop only for: permission denials you cannot fix, destructive ambiguity outside the repo, or a hazard that needs a human (e.g. deleting user audio on disk, which v1 must never do).
 
 ## Sandbox
 

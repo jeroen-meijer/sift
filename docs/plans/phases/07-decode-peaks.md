@@ -1,4 +1,4 @@
-# Phase 07 — Decode + peaks
+# Phase 07: Decode + peaks
 
 **Status:** complete
 

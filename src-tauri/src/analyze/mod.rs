@@ -22,7 +22,7 @@ const BPM_CONF_MIN: f64 = 0.08;
 const KEY_CONF_MIN: f64 = 0.25;
 const LOOP_MIN_DURATION_SECS: f64 = 1.5;
 
-/// Creative / tag result from one analyzer pass.
+/// BPM, key, type, and tag suggestions from one analyzer pass.
 #[derive(Debug, Clone, Default)]
 pub struct AnalysisResult {
     pub bpm: Option<f64>,
@@ -681,9 +681,8 @@ pub fn spawn_analysis_batch(app: AppHandle, db: Arc<Db>, sample_ids: Vec<i64>, m
 
 /// After indexing finishes: analyze samples that have never been analyzed.
 ///
-/// Phase 14 hook: on file-modify watch events, call `probe_and_update_sample` only
-/// (keep BPM/key/type/tags overrides). Do not enqueue Normal analysis for already
-/// analyzed rows; that would still skip non-null fields but would re-apply auto tags.
+/// On modify watch events, refresh technical fields only (`probe_and_update_sample`).
+/// Do not re-run Normal analysis on already analyzed samples (that would re-apply auto tags).
 pub fn enqueue_unanalyzed(app: AppHandle, db: Arc<Db>) {
     let ids = db.with_conn(list_unanalyzed_ids).unwrap_or_default();
     spawn_analysis_batch(app, db, ids, AnalyzeMode::Normal);

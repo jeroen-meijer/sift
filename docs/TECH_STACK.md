@@ -2,13 +2,13 @@
 
 Working recommendation for implementing [SPEC.md](../SPEC.md). Not a locked ADR until a spike confirms the three risks below. Last updated: 2026-09-22.
 
-Related: [loudline](https://github.com/jeroen-meijer/loudline) (same author) is Tauri 2 + React with audio in the WebView. Sift reuses that shell shape and deliberately does **not** reuse that audio path.
+Related: [loudline](https://github.com/jeroen-meijer/loudline) (same author) is Tauri 2 + React with audio in the WebView. Sift reuses that shell. Audio stays in Rust.
 
 ---
 
 ## Recommendation
 
-**Tauri 2 + React + TypeScript + Vite + Bun on the outside. A fat Rust core on the inside.**
+**Tauri 2 + React + TypeScript + Vite + Bun for the UI. Heavy work runs in Rust.**
 
 | Layer | Choice | Role |
 |-------|--------|------|
@@ -17,7 +17,7 @@ Related: [loudline](https://github.com/jeroen-meijer/loudline) (same author) is 
 | Tooling | Bun | Same as loudline: install, scripts, `tauri:dev` / `tauri:build` |
 | Audio I/O | Rust `cpal` | Preview playback to a chosen output device |
 | Decode | Rust `symphonia` | WAV, AIFF, FLAC, MP3, AAC/M4A, OGG, Opus |
-| Metadata / index | SQLite via `rusqlite` | App DB only; never write tags into source audio in v1 |
+| Metadata / index | SQLite via Diesel | App DB only; never write tags into source audio in v1 |
 | FS watch | Rust `notify` | Recursive watch per library root; debounce in Rust |
 | JIT clips | Rust WAV writer (e.g. `hound`) | Exact rate / bit depth / channels; files in app cache |
 | Drag → DAW | `tauri-plugin-drag` (`startDrag`) | Drag real paths (full files or JIT clip files already on disk) |
@@ -48,19 +48,19 @@ The WebView owns layout and interaction chrome:
 
 IPC is Tauri commands plus low-rate events (playhead position, analysis progress, index diffs). Do not stream PCM through JSON. Do not put the audio callback on the UI thread.
 
-This is the opposite of loudline, where Tauri is a thin wrapper and EBU R128 + preview run in the WebView. That is correct for one-file metering. It will not meet Sift's select→play, 10k-100k file, and background-analysis requirements.
+Loudline runs metering and preview in the WebView, which fits one-file loudness work. Sift needs fast select→play, large libraries, and background analysis, so decode/play/analysis stay in Rust.
 
 ---
 
 ## Why Tauri (and why not only Rust UI)
 
-**Fit with the mockups.** Claude Design produced a VS Code-like dense desktop UI: chip bar, virtualized table, dual-pane waveform, purple-dark chrome. HTML/CSS/React iterate that shape quickly. Loudline already ships Tauri 2 + React 19 + Vite + Bun, so packaging and project habits transfer.
+Claude Design mockups are dense VS Code-like chrome (chip bar, virtualized table, dual-pane waveform, purple-dark theme). React matches that shape quickly. Loudline already ships Tauri 2 + React 19 + Vite + Bun, so packaging and habits transfer.
 
-**Fit with the SPEC.** Native-class audio, analysis, and I/O live in Rust inside the same process. The WebView is presentation only.
+SPEC needs native-speed audio, analysis, and I/O in the same process. The WebView is UI only.
 
-**Proven pattern.** Audio projects use Tauri for UI and `cpal` (or similar) in Rust for the device graph. Real-time rules still apply: no alloc/lock in the audio callback; lock-free queues between UI and audio.
+Common setup: Tauri for UI and `cpal` (or similar) in Rust for the device graph. Real-time rules still apply: no alloc/lock in the audio callback; lock-free queues between UI and audio.
 
-**Drag-out exists.** `tauri-plugin-drag` / `drag-rs` can start a native drag of file paths to Finder/Explorer and into DAWs. Sift's model is path-based (full file or JIT WAV on disk), which matches that API. Spike it early on both OSes; network/SMB paths have had Windows bugs in drag-rs.
+`tauri-plugin-drag` / `drag-rs` can start a native drag of file paths to Finder/Explorer and into DAWs. Sift is path-based (full file or JIT WAV on disk), which matches that API. Spike it early on both OSes; network/SMB paths have had Windows bugs in drag-rs.
 
 ---
 
@@ -103,8 +103,8 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 - Virtualized table (e.g. TanStack Virtual) for large result sets
 - Canvas (or WebGL) waveform views driven by peak buffers from Rust
 - Bun for scripts
-- **i18n:** `i18next` + `react-i18next` (same as loudline). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
-- **Theming:** CSS variables (or a small token module) owned by `src/themes/<name>.css` (or equivalent). Components reference `var(--…)` / token names only. v1 ships one dark theme file; new themes are new files + a registry entry.
+- i18n: `i18next` + `react-i18next` (same as loudline). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
+- Theming: CSS variables (or a small token module) owned by `src/themes/<name>.css` (or equivalent). Components reference `var(--…)` / token names only. v1 ships one dark theme file; new themes are new files + a registry entry.
 
 **What not to swap casually**
 
@@ -116,7 +116,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 
 ## Locales and themes (editability)
 
-Product rules: [SPEC.md](../SPEC.md) §4.13–4.14. Layout goal: a non-author can add a language or tweak colors without opening React components.
+Product rules: [SPEC.md](../SPEC.md) §4.13-4.14. Layout goal: a non-author can add a language or tweak colors without opening React components.
 
 Suggested tree (names flexible; keep the split):
 
@@ -169,17 +169,17 @@ Rules:
 - Claude Design exports (Project HTML zip + screens) are the visual target. SPEC wins when behavior conflicts.
 - v1 bar: complete Must surfaces you can dogfood; imperfect analysis/search/watch edges are acceptable until you tune.
 - Icons: mock/design assets fine until a real brand pass.
-- Delivery: plan and build toward a testable whole; you validate after, not at every subsystem.
+- Delivery: build until the Must surfaces run end to end; tune after you dogfood.
 
 ## Spike before locking (1-2 days)
 
-Assume pass unless proven otherwise (owner preference). Still run on this Mac before calling audio/drag done:
+Default assumption: spikes pass. Still run the three checks below on this Mac before calling audio/drag done:
 
 1. **Select→play:** Row select → Rust `cpal`; feel instant under Up/Down.
 2. **Row waveforms:** Scroll thousands of peakfile rows without main-thread stalls.
 3. **Drag → DAW:** Local WAV (and JIT path) into a DAW installed on this machine.
 
-Windows: validate before advertising full Windows support; macOS-first is OK for the first dogfood build.
+Windows: validate before calling Windows support done; macOS-first is OK for the first dogfood build.
 
 Pass → continue. Fail on (3) or scrubbing feel → evaluate egui shell with the same Rust core.
 
@@ -220,7 +220,7 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 | 2026-09-22 | Initial recommendation after SPEC v0.3, Claude Design mockups, loudline review, and public Tauri/audio research |
 | 2026-09-22 | Locale + theme file layout (SPEC Q70) |
 | 2026-09-22 | Crate currency pass: keep cpal/symphonia/rusqlite/notify/hound; Opus via libopus adapter; analysis still behind trait (`stratum-dsp` candidate) |
-| 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72–Q75) |
+| 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72-Q75) |
 | 2026-09-22 | Index DB: Diesel + embedded migrations (replace rusqlite hand SQL) |
 | 2026-09-22 | Tooling: chat-search namtao clippy/nextest/bacon; ESLint strictTypeChecked + Vitest |
 | 2026-09-22 | Perf: Criterion `audio_hotpath` benches + soft `perf_*` budget tests; Vitest bench |

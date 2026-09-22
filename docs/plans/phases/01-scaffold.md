@@ -1,4 +1,4 @@
-# Phase 01 — Scaffold
+# Phase 01: Scaffold
 
 **Status:** complete
 

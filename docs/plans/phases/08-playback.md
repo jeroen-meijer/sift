@@ -1,4 +1,4 @@
-# Phase 08 — Playback
+# Phase 08: Playback
 
 **Status:** complete
 

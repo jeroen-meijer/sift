@@ -1,4 +1,4 @@
-# Phase 10 — JIT + drag
+# Phase 10: JIT + drag
 
 **Status:** complete
 

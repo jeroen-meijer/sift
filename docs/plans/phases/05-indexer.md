@@ -1,4 +1,4 @@
-# Phase 05 — Indexer
+# Phase 05: Indexer
 
 **Status:** complete
 
@@ -27,7 +27,7 @@ Recursively index audio files under each root into SQLite with progress events; 
 
 - Continuous watch (Phase 14)
 - BPM/key analysis (Phase 13)
-- Peak generation (Phase 07) — optional stub queue OK but not required
+- Peak generation (Phase 07). optional stub queue OK but not required
 
 ## Acceptance
 
