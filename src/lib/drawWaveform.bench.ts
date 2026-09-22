@@ -1,6 +1,6 @@
 import { bench, describe } from "vitest";
 import { paintWaveLane, syncCanvasSize } from "./drawWaveform";
-import type { SpectralBandColors } from "./spectralColor";
+import { blendSpectralRgb, type SpectralBandColors } from "./spectralColor";
 
 const bands: SpectralBandColors = {
   bass: [255, 45, 123],
@@ -20,6 +20,22 @@ function lane(buckets: number, channels = 1) {
   }
   return { peaks, colors, bucketCount: buckets, channels };
 }
+
+describe("spectral blend (cpu, no canvas)", () => {
+  bench("blendSpectralRgb × 1024", () => {
+    for (let i = 0; i < 1024; i++) {
+      blendSpectralRgb([255 - (i % 255), 64, i % 255], bands);
+    }
+  });
+
+  bench("blendSpectralRgb × 1024 × 40 visible rows", () => {
+    for (let row = 0; row < 40; row++) {
+      for (let i = 0; i < 1024; i++) {
+        blendSpectralRgb([255 - (i % 255), 64, i % 255], bands);
+      }
+    }
+  });
+});
 
 const canvas = document.createElement("canvas");
 const ctx = syncCanvasSize(canvas, 800, 120, 1);
