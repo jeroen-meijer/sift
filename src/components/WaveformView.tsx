@@ -149,8 +149,8 @@ export function WaveformView({
           colored,
           bands,
           ink,
-          style: "gradient",
-          maxColorStops: 96,
+          /* Columns keep per-bucket winner hues; gradient smooths them away. */
+          style: "columns",
         });
       }
 

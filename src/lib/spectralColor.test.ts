@@ -47,13 +47,24 @@ describe("spectralColor", () => {
       mid: [46, 232, 154],
       treble: [139, 124, 255],
     };
-    /* Clear mid-led amen body. */
+    /* Clear mid-led amen body → green, not violet mush. */
     const midLed = blendSpectralRgb([10, 180, 50], nocturne);
-    expect(midLed[1]).toBeGreaterThan(midLed[2] + 20);
-    expect(midLed[1]).toBeGreaterThan(160);
+    expect(midLed[1]).toBeGreaterThan(midLed[2] + 40);
+    expect(midLed[1]).toBeGreaterThan(180);
     /* Treble-led bucket stays violet, not mint. */
     const trebleLed = blendSpectralRgb([10, 50, 180], nocturne);
-    expect(trebleLed[2]).toBeGreaterThan(trebleLed[1] + 20);
+    expect(trebleLed[2]).toBeGreaterThan(trebleLed[1] + 40);
+  });
+
+  it("pulls a slight mid lean hard toward the mid band (winner-take-more)", () => {
+    const nocturne: SpectralBandColors = {
+      bass: [255, 61, 138],
+      mid: [46, 232, 154],
+      treble: [139, 124, 255],
+    };
+    const softLean = blendSpectralRgb([40, 120, 70], nocturne);
+    expect(softLean[1]).toBeGreaterThan(softLean[0]);
+    expect(softLean[1]).toBeGreaterThan(softLean[2]);
   });
 
   it("does not paint equal band energy as pure white", () => {

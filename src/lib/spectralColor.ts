@@ -126,12 +126,11 @@ export function readSpectralBands(el: Element): SpectralBandColors {
 /**
  * Blend Classic weights with theme band colors.
  *
- * Prefer a soft additive mix so neuro-style overlaps stay pink/green/violet
- * (winner-take-most washed amen to a flat violet). Mild emphasis still keeps
- * 808s bass-led. Treble tokens are violet (not sky) so mid+treble does not
- * collapse to cyan.
- *
- * Brightness is not tied to spectral energy (geometry already shows amp).
+ * Raise the dominant band share (winner-take-more) so amen mid stretches read
+ * green and hat hits violet instead of collapsing to a flat purple mix.
+ * Overlaps still blend (not hard argmax). Treble tokens stay violet (not sky)
+ * so mid+treble does not become cyan. Brightness is not tied to spectral
+ * energy (geometry already shows amp).
  */
 export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   const rawB = weights[0] / 255;
@@ -142,7 +141,8 @@ export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
     return [0, 0, 0];
   }
 
-  const emphasis = 1.55;
+  /* Soft mix ≈ 1.5; hard winner ≈ 6+. 3.5 keeps ties blended but swings clear. */
+  const emphasis = 3.5;
   let pB = (rawB / sum) ** emphasis;
   let pM = (rawM / sum) ** emphasis;
   let pT = (rawT / sum) ** emphasis;
@@ -156,7 +156,7 @@ export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   let b = pB * bands.bass[2] + pM * bands.mid[2] + pT * bands.treble[2];
 
   const avg = (r + g + b) / 3;
-  const sat = 1.5;
+  const sat = 1.65;
   r = avg + (r - avg) * sat;
   g = avg + (g - avg) * sat;
   b = avg + (b - avg) * sat;
