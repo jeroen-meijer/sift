@@ -484,3 +484,19 @@
   text-transform: uppercase;
   color: var(--color-text-faint);
 }
+
+/* A flyout holding controls sits left of its trigger when the menu is near
+   the right edge, so the panel never runs off screen. */
+.menu-flyout.left {
+  left: auto;
+  right: 100%;
+}
+
+.menu-item.muted .menu-label,
+.menu-item.muted .menu-hint {
+  opacity: 0.45;
+}
+
+.menu-item:hover:not(:disabled) .menu-hint {
+  opacity: 0.8;
+}

@@ -1,6 +1,7 @@
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { bpmFromBeats } from "../lib/bpm";
 import { matchesHotkey } from "../lib/hotkey";
 import {
   ipc,
@@ -37,7 +38,6 @@ type Dialog =
   | { kind: "removeRoot"; node: FolderNode }
   | { kind: "removeMissing"; sample: SampleRow }
   | { kind: "customAnalysis" }
-  | { kind: "setBpm" }
   | { kind: "setKey" }
   | { kind: "tags" };
 
@@ -326,9 +326,6 @@ export function LibraryView({
             .catch(console.error);
           break;
         }
-        case "bpm":
-          setDialog({ kind: "setBpm" });
-          break;
         case "key":
           setDialog({ kind: "setKey" });
           break;
@@ -359,6 +356,35 @@ export function LibraryView({
       }
     },
     [analyze, reload, targetSamples],
+  );
+
+  const menuTargets = useMemo(
+    () => (menu ? targetSamples(menu.sample) : []),
+    [menu, targetSamples],
+  );
+
+  const setBpmOn = useCallback(
+    (rows: SampleRow[], bpm: number | null) => {
+      if (rows.length === 0) return;
+      void Promise.all(rows.map((row) => ipc.setBpm(row.id, bpm)))
+        .then(reload)
+        .catch(console.error);
+    },
+    [reload],
+  );
+
+  /** Each row gets the BPM its own length implies, so a mixed selection works. */
+  const setBpmFromBeats = useCallback(
+    (rows: SampleRow[], beats: number) => {
+      const edits = rows
+        .map((row) => ({ id: row.id, bpm: bpmFromBeats(row.duration_ms, beats, settings.bpm_round_whole) }))
+        .filter((edit): edit is { id: number; bpm: number } => edit.bpm != null);
+      if (edits.length === 0) return;
+      void Promise.all(edits.map((edit) => ipc.setBpm(edit.id, edit.bpm)))
+        .then(reload)
+        .catch(console.error);
+    },
+    [reload, settings.bpm_round_whole],
   );
 
   /* ── keyboard ──────────────────────────────────────────────────────── */
@@ -670,6 +696,19 @@ export function LibraryView({
           x={menu.x}
           y={menu.y}
           sample={menu.sample}
+          targets={menuTargets}
+          bpmMin={settings.bpm_range_min}
+          bpmMax={settings.bpm_range_max}
+          roundBpm={settings.bpm_round_whole}
+          onRoundBpmChange={(round) => {
+            onSettingChange("bpm_round_whole", round);
+          }}
+          onSetBpm={(bpm) => {
+            setBpmOn(menuTargets, bpm);
+          }}
+          onSetBpmFromBeats={(beats) => {
+            setBpmFromBeats(menuTargets, beats);
+          }}
           onSelect={runAction}
           onClose={() => {
             setMenu(null);
@@ -735,26 +774,6 @@ export function LibraryView({
               selectedSamples.filter((s) => !s.missing).map((s) => s.id),
               customOpts,
             );
-          }}
-        />
-      ) : null}
-
-      {dialog?.kind === "setBpm" ? (
-        <SetValueDialog
-          title={t("setBpmTitle")}
-          body={t("setBpmBody", { count: selectedSamples.length })}
-          initial={focused?.bpm != null ? String(Math.round(focused.bpm)) : ""}
-          placeholder="120"
-          onCancel={() => {
-            setDialog(null);
-          }}
-          onApply={(value) => {
-            setDialog(null);
-            const bpm = value.trim() === "" ? null : Number(value);
-            if (bpm != null && !Number.isFinite(bpm)) return;
-            void Promise.all(selectedSamples.map((s) => ipc.setBpm(s.id, bpm)))
-              .then(reload)
-              .catch(console.error);
           }}
         />
       ) : null}

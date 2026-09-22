@@ -16,6 +16,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { SampleRow } from "../lib/ipc";
 import { Menu, type MenuEntry } from "../ui/Menu";
+import { BPM_PANEL_WIDTH, SetBpmPanel } from "./SetBpmPanel";
 
 export type SampleAction =
   | "open"
@@ -24,7 +25,6 @@ export type SampleAction =
   | "type:loop"
   | "type:one-shot"
   | "type:none"
-  | "bpm"
   | "key"
   | "showParent"
   | "reveal"
@@ -40,11 +40,32 @@ interface Props {
   x: number;
   y: number;
   sample: SampleRow;
+  /** Every row the actions apply to: the selection, or just this row. */
+  targets: SampleRow[];
+  bpmMin: number;
+  bpmMax: number;
+  roundBpm: boolean;
+  onRoundBpmChange: (round: boolean) => void;
+  onSetBpm: (bpm: number | null) => void;
+  onSetBpmFromBeats: (beats: number) => void;
   onSelect: (action: SampleAction, sample: SampleRow) => void;
   onClose: () => void;
 }
 
-export function SampleMenu({ x, y, sample, onSelect, onClose }: Props) {
+export function SampleMenu({
+  x,
+  y,
+  sample,
+  targets,
+  bpmMin,
+  bpmMax,
+  roundBpm,
+  onRoundBpmChange,
+  onSetBpm,
+  onSetBpmFromBeats,
+  onSelect,
+  onClose,
+}: Props) {
   const { t } = useTranslation("common");
   const { t: tl } = useTranslation("library");
   const mod = IS_MAC ? "⌘" : "Ctrl";
@@ -82,7 +103,35 @@ export function SampleMenu({ x, y, sample, onSelect, onClose }: Props) {
         { id: "type:none", label: tl("typeUnset"), checked: sample.sample_type == null },
       ],
     },
-    { kind: "item", id: "bpm", label: t("ctxSetBpm"), icon: <MetronomeIcon size={14} /> },
+    {
+      kind: "panel",
+      id: "bpm",
+      label: t("ctxSetBpm"),
+      icon: <MetronomeIcon size={14} />,
+      width: BPM_PANEL_WIDTH,
+      content: (
+        <SetBpmPanel
+          targets={targets}
+          focused={sample}
+          bpmMin={bpmMin}
+          bpmMax={bpmMax}
+          round={roundBpm}
+          onRoundChange={onRoundBpmChange}
+          onSetBpm={(bpm) => {
+            onSetBpm(bpm);
+            onClose();
+          }}
+          onSetFromBeats={(beats) => {
+            onSetBpmFromBeats(beats);
+            onClose();
+          }}
+          onClear={() => {
+            onSetBpm(null);
+            onClose();
+          }}
+        />
+      ),
+    },
     { kind: "item", id: "key", label: t("ctxSetKey"), icon: <MusicNotesIcon size={14} /> },
     { kind: "rule" },
     {
