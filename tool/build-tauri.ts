@@ -10,10 +10,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+/** Always invoked from the repo root (`bun tool/…` / package scripts). */
+const ROOT = process.cwd();
 
 function run(cmd: string, args: string[], label: string): void {
   console.log(`\n→ ${label}: ${cmd} ${args.join(" ")}`);
