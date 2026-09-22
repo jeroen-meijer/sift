@@ -23,7 +23,9 @@ use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
 
 const MAGIC: &[u8; 4] = b"SFTP";
-const VERSION: u32 = 2;
+/// v3: same layout as v2, but colors are lerped from an adaptive FFT so short
+/// clips no longer stretch a few nearest-neighbour frames into solid blocks.
+const VERSION: u32 = 3;
 
 /// Peak buffer ready for IPC / Canvas drawing.
 #[derive(Debug, Clone, Serialize)]
@@ -34,8 +36,8 @@ pub struct PeakData {
     /// Flat array: for each bucket, for each channel: min, max.
     pub peaks: Vec<f32>,
     pub bucket_count: usize,
-    /// Flat RGB triples, one per bucket (`bucket_count * 3` bytes).
-    /// Classic moodbar mapping: bass → red, mid → green, treble → blue.
+    /// Flat Classic moodbar weights (`bucket_count * 3` bytes): bass→R, mid→G,
+    /// treble→B. The UI remaps these through theme `--color-wave-*` band hues.
     pub colors: Vec<u8>,
 }
 
@@ -155,50 +157,63 @@ fn mix_to_mono(decoded: &DecodedAudio) -> Vec<f32> {
     mono
 }
 
-/// Keep hue ratios, lift brightness so dark spectral frames stay visible on a dark UI.
+/// Pick an FFT size so short clips still produce enough spectral frames to lerp.
+fn adaptive_fft_size(mono_frames: usize) -> usize {
+    // Aim for ~24 hops across the file at hop = fft/2 → fft ≈ frames/12.
+    let target = mono_frames
+        .checked_div(12)
+        .unwrap_or(256)
+        .max(256)
+        .next_power_of_two()
+        .min(2048);
+    target.max(256)
+}
+
+/// Linear interpolate Classic band-weight RGB between moodbar frames onto `buckets`.
 #[allow(
     clippy::as_conversions,
     clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::suboptimal_flops,
-    reason = "RGB bytes from clamped floats; flops precision is irrelevant for display"
+    reason = "display RGB from floats; precision is irrelevant"
 )]
-fn boost_rgb(rgb: [u8; 3]) -> [u8; 3] {
-    let r = f32::from(rgb[0]) / 255.0;
-    let g = f32::from(rgb[1]) / 255.0;
-    let b = f32::from(rgb[2]) / 255.0;
-    let peak = r.max(g).max(b);
-    if peak <= 1e-6 {
-        return [0, 0, 0];
-    }
-    let brightness = (0.32 + 0.68 * peak).clamp(0.0, 1.0);
-    [
-        ((r / peak) * brightness * 255.0).round() as u8,
-        ((g / peak) * brightness * 255.0).round() as u8,
-        ((b / peak) * brightness * 255.0).round() as u8,
-    ]
-}
-
-/// Resample moodbar color frames onto exactly `buckets` RGB triples.
 fn resample_colors(frames: &[[u8; 3]], buckets: usize) -> Vec<u8> {
     let mut out = vec![0u8; buckets.saturating_mul(3)];
-    if buckets == 0 {
+    if buckets == 0 || frames.is_empty() {
         return out;
     }
-    if frames.is_empty() {
+    if frames.len() == 1 {
+        let rgb = frames.first().copied().unwrap_or([0, 0, 0]);
+        for b in 0..buckets {
+            let base = b.saturating_mul(3);
+            if let Some(r) = out.get_mut(base) {
+                *r = rgb[0];
+            }
+            if let Some(g) = out.get_mut(base.saturating_add(1)) {
+                *g = rgb[1];
+            }
+            if let Some(bl) = out.get_mut(base.saturating_add(2)) {
+                *bl = rgb[2];
+            }
+        }
         return out;
     }
+
     let last_src = frames.len().saturating_sub(1);
     let last_dst = buckets.saturating_sub(1).max(1);
     for b in 0..buckets {
-        let src = if last_src == 0 {
-            0
-        } else {
-            b.saturating_mul(last_src)
-                .checked_div(last_dst)
-                .unwrap_or(0)
-        };
-        let rgb = boost_rgb(frames.get(src).copied().unwrap_or([0, 0, 0]));
+        let t = b as f32 / last_dst as f32 * last_src as f32;
+        let i0 = t.floor() as usize;
+        let i1 = i0.saturating_add(1).min(last_src);
+        let frac = t - i0 as f32;
+        let a = frames.get(i0).copied().unwrap_or([0, 0, 0]);
+        let c = frames.get(i1).copied().unwrap_or([0, 0, 0]);
+        let rgb = [
+            (f32::from(a[0]) + (f32::from(c[0]) - f32::from(a[0])) * frac).round() as u8,
+            (f32::from(a[1]) + (f32::from(c[1]) - f32::from(a[1])) * frac).round() as u8,
+            (f32::from(a[2]) + (f32::from(c[2]) - f32::from(a[2])) * frac).round() as u8,
+        ];
         let base = b.saturating_mul(3);
         if let Some(r) = out.get_mut(base) {
             *r = rgb[0];
@@ -210,17 +225,57 @@ fn resample_colors(frames: &[[u8; 3]], buckets: usize) -> Vec<u8> {
             *bl = rgb[2];
         }
     }
+
+    // Light 3-tap smooth so residual steps from few spectral frames soften.
+    smooth_colors_inplace(&mut out, buckets);
     out
 }
 
-/// Bass / mid / treble energy → RGB via moodbar Classic (R/G/B).
+#[allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "averaged u8 RGB"
+)]
+fn smooth_colors_inplace(colors: &mut [u8], buckets: usize) {
+    if buckets < 3 {
+        return;
+    }
+    let snapshot = colors.to_vec();
+    for b in 1..buckets.saturating_sub(1) {
+        for c in 0..3 {
+            let i = b.saturating_mul(3).saturating_add(c);
+            let left = snapshot
+                .get(b.saturating_sub(1).saturating_mul(3).saturating_add(c))
+                .copied()
+                .unwrap_or(0);
+            let mid = snapshot.get(i).copied().unwrap_or(0);
+            let right = snapshot
+                .get(b.saturating_add(1).saturating_mul(3).saturating_add(c))
+                .copied()
+                .unwrap_or(0);
+            let avg = (u16::from(left)
+                .saturating_add(u16::from(mid))
+                .saturating_add(u16::from(mid))
+                .saturating_add(u16::from(right)))
+                / 4;
+            if let Some(slot) = colors.get_mut(i) {
+                *slot = avg as u8;
+            }
+        }
+    }
+}
+
+/// Bass / mid / treble energy → Classic RGB weights (R/G/B) for theme remapping in the UI.
 fn generate_spectral_colors(decoded: &DecodedAudio, buckets: usize) -> Vec<u8> {
     if buckets == 0 || decoded.sample_rate == 0 || decoded.frame_count() == 0 {
         return vec![0u8; buckets.saturating_mul(3)];
     }
     let mono = mix_to_mono(decoded);
+    let fft_size = adaptive_fft_size(mono.len());
     let options = GenerateOptions {
         theme: Theme::Classic,
+        fft_size,
         max_target_frames: Some(buckets.max(1)),
         ..GenerateOptions::default()
     };
@@ -380,6 +435,29 @@ mod tests {
         assert!(low[0] > low[1] && low[0] > low[2], "bass should be red-dominant: {low:?}");
         assert!(mid[1] > mid[0] && mid[1] > mid[2], "mids should be green-dominant: {mid:?}");
         assert!(high[2] > high[0] && high[2] > high[1], "treble should be blue-dominant: {high:?}");
+    }
+
+    #[test]
+    fn short_clip_colors_are_not_huge_solid_blocks() {
+        // ~150 ms snare-like length: without lerp this stretches ~a few frames
+        // into multi-hundred-bucket solid slabs.
+        let audio = sine(44_100, 0.15, 200.0);
+        let peaks = generate_peaks(&audio, 256).expect("peaks");
+        assert_eq!(peaks.colors.len(), 256 * 3);
+        let mut changes = 0u32;
+        for b in 1..peaks.bucket_count {
+            let prev = b.saturating_sub(1).saturating_mul(3);
+            let cur = b.saturating_mul(3);
+            let same = peaks.colors.get(prev..prev.saturating_add(3))
+                == peaks.colors.get(cur..cur.saturating_add(3));
+            if !same {
+                changes = changes.saturating_add(1);
+            }
+        }
+        assert!(
+            changes > 8,
+            "expected lerped variation across a short clip, got {changes} changes"
+        );
     }
 
     #[test]

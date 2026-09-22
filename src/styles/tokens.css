@@ -95,6 +95,9 @@
 @property --color-wave-ink { syntax: "<color>"; inherits: true; initial-value: #7b71b8; }
 @property --color-row-wave { syntax: "<color>"; inherits: true; initial-value: #6a6d80; }
 @property --color-row-wave-sel { syntax: "<color>"; inherits: true; initial-value: #b9b0f0; }
+@property --color-wave-bass { syntax: "<color>"; inherits: true; initial-value: #f0608c; }
+@property --color-wave-mid { syntax: "<color>"; inherits: true; initial-value: #6ed496; }
+@property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #82b4ff; }
 
 /* Smooth lerp when data-theme flips (skipped on first paint and reduced-motion). */
 html.theme-lerp {
@@ -158,7 +161,10 @@ html.theme-lerp {
     --color-hairline var(--motion-theme) var(--motion-ease),
     --color-wave-ink var(--motion-theme) var(--motion-ease),
     --color-row-wave var(--motion-theme) var(--motion-ease),
-    --color-row-wave-sel var(--motion-theme) var(--motion-ease);
+    --color-row-wave-sel var(--motion-theme) var(--motion-ease),
+    --color-wave-bass var(--motion-theme) var(--motion-ease),
+    --color-wave-mid var(--motion-theme) var(--motion-ease),
+    --color-wave-treble var(--motion-theme) var(--motion-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -239,6 +245,10 @@ html.theme-lerp {
   --color-wave-ink: #7b71b8;
   --color-row-wave: #6a6d80;
   --color-row-wave-sel: #b9b0f0;
+  /* Spectral bands: bright enough on slate chrome (avoid sinking treble blues). */
+  --color-wave-bass: #f0608c;
+  --color-wave-mid: #6ed496;
+  --color-wave-treble: #82b4ff;
 }
 
 /* --- Ink (Monospace Ink) --- */
@@ -311,6 +321,9 @@ html.theme-lerp {
   --color-wave-ink: #8a6fd4;
   --color-row-wave: #5d6a7d;
   --color-row-wave-sel: #c9aefd;
+  --color-wave-bass: #ff6b9d;
+  --color-wave-mid: #7dffb3;
+  --color-wave-treble: #9ec5ff;
 }
 
 /* --- Graphite (Monospace Graphite) --- */
@@ -383,6 +396,9 @@ html.theme-lerp {
   --color-wave-ink: #8a8a8a;
   --color-row-wave: #5c5c5c;
   --color-row-wave-sel: #c4c4c4;
+  --color-wave-bass: #ff7070;
+  --color-wave-mid: #90e090;
+  --color-wave-treble: #90b8ff;
 }
 
 /* --- Snow (Monospace Snow, light) --- */
@@ -455,4 +471,8 @@ html.theme-lerp {
   --color-wave-ink: #0366d6;
   --color-row-wave: #959da5;
   --color-row-wave-sel: #2188ff;
+  /* Darker bands so they hold on white chrome. */
+  --color-wave-bass: #d73a49;
+  --color-wave-mid: #22863a;
+  --color-wave-treble: #0366d6;
 }

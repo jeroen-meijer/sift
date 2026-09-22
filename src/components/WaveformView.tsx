@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatSpan, formatTime } from "../lib/format";
 import type { PeakData, SnapMode, WaveformView as WaveformMode } from "../lib/ipc";
+import { bucketWeights, readSpectralBands, spectralCss } from "../lib/spectralColor";
+import { useThemeId } from "../theme/useThemeId";
 
 export interface Selection {
   start: number;
@@ -62,6 +64,7 @@ export function WaveformView({
   onDragClip,
 }: Props) {
   const { t } = useTranslation("library");
+  const themeId = useThemeId();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -128,6 +131,7 @@ export function WaveformView({
 
     const styles = getComputedStyle(canvas);
     const ink = styles.getPropertyValue("--color-wave-ink").trim();
+    const bands = readSpectralBands(canvas);
     const laneHeight = height / lanes;
     const channels = Math.max(1, peaks.channels);
     const hasColors = colored && peaks.colors.length >= peaks.bucket_count * 3;
@@ -140,11 +144,7 @@ export function WaveformView({
           const base = i * channels * 2 + (lanes === 2 ? lane * 2 : 0);
           const min = peaks.peaks[base] ?? 0;
           const max = peaks.peaks[base + 1] ?? 0;
-          const ci = i * 3;
-          const r = peaks.colors[ci] ?? 0;
-          const g = peaks.colors[ci + 1] ?? 0;
-          const b = peaks.colors[ci + 2] ?? 0;
-          ctx.strokeStyle = `rgb(${String(r)},${String(g)},${String(b)})`;
+          ctx.strokeStyle = spectralCss(bucketWeights(peaks.colors, i), bands);
           ctx.beginPath();
           const x = (i / peaks.bucket_count) * width;
           ctx.moveTo(x, mid - max * laneHeight * 0.46);
@@ -173,7 +173,7 @@ export function WaveformView({
       ctx.lineTo(width, laneHeight);
       ctx.stroke();
     }
-  }, [peaks, size, lanes, colored]);
+  }, [peaks, size, lanes, colored, themeId]);
 
   const gridStyle = useMemo(() => {
     const divisor = snapDivisor(snap);

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cachedRowPeaks, loadRowPeaks } from "../lib/rowPeaks";
+import { bucketWeights, readSpectralBands, spectralCss } from "../lib/spectralColor";
+import { useThemeId } from "../theme/useThemeId";
 
 interface Props {
   sampleId: number;
@@ -24,6 +26,7 @@ export function RowWaveform({
   onScrub,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const themeId = useThemeId();
   const [peaks, setPeaks] = useState(() => cachedRowPeaks(sampleId));
   const [hoverFraction, setHoverFraction] = useState<number | null>(null);
 
@@ -64,6 +67,7 @@ export function RowWaveform({
     const ink = styles
       .getPropertyValue(selected ? "--color-row-wave-sel" : "--color-row-wave")
       .trim();
+    const bands = readSpectralBands(canvas);
     ctx.lineWidth = 1.05;
     const mid = height / 2;
     const channels = Math.max(1, peaks.channels);
@@ -78,21 +82,15 @@ export function RowWaveform({
       );
       const x = (i / last) * width;
       const y = amp * (height * 0.42);
-      if (hasColors) {
-        const ci = i * 3;
-        const r = peaks.colors[ci] ?? 0;
-        const g = peaks.colors[ci + 1] ?? 0;
-        const b = peaks.colors[ci + 2] ?? 0;
-        ctx.strokeStyle = `rgb(${String(r)},${String(g)},${String(b)})`;
-      } else {
-        ctx.strokeStyle = ink;
-      }
+      ctx.strokeStyle = hasColors
+        ? spectralCss(bucketWeights(peaks.colors, i), bands)
+        : ink;
       ctx.beginPath();
       ctx.moveTo(x, mid - y);
       ctx.lineTo(x, mid + y);
       ctx.stroke();
     }
-  }, [peaks, idle, selected, colored]);
+  }, [peaks, idle, selected, colored, themeId]);
 
   if (analyzing) {
     return (

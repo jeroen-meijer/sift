@@ -25,7 +25,7 @@
   "waveformStereo": "Stereo L/R",
   "waveformMono": "Summed mono",
   "coloredWaveforms": "Colored waveforms",
-  "coloredWaveformsHint": "Bass red, mids green, treble blue. Overlapping bands mix (bass + treble reads purple).",
+  "coloredWaveformsHint": "Bass, mids, and treble tint the wave. Theme sets the hues; overlapping bands mix.",
   "outputDevice": "Output device",
   "outputDeviceHint": "Preview only. Sift never claims your DAW's device exclusively.",
   "bpmRange": "BPM range preset",
