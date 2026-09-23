@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.2.0
+
 - feat(library): metadata-first browse for cloud libraries (Online only badges, analyze when files hydrate to local)
 - feat(library): show the whole library when no folder is selected; arrow keys keep selection in view; Show parent folder clears filters and reveals the sample
 - feat(sidebar): nested folder tree with caret expand/collapse (animated), folder context menu, and Expand All / Collapse All
