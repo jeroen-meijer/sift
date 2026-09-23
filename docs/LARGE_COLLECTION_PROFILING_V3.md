@@ -157,7 +157,7 @@ What the log shows:
 - Phases: implement every item in a phase, then run the phase check (one profile run as described in [Success bar](#success-bar)) and append a dated results table to the end of this doc. The check says whether the next phase is needed. Stop as soon as the success bar is met.
 - Order inside a phase is the listed order. Items in a phase are small enough to ship as one PR each.
 - Why this order: Phase A removes every cost the log pins down (main-thread blocking, app-wide re-renders, memory peaks, the refetch storm, the 240 ms canvas cost). It has one profile run in the middle to record what the first five items fixed, but no stop there. Phase B and C depend on the numbers after A. Phase D items are larger or riskier and have their own triggers.
-- Changelog: add a `CHANGELOG.md` bullet under `## Upcoming` per item.
+- Changelog: fold user-visible outcomes into `CHANGELOG.md` → `## Upcoming` (merge with related unshipped bullets; no one-line-per-item diary).
 - Code sketches show shape, not final code. The crate denies `as` conversions, indexing, `unwrap` and unchecked arithmetic: use `crate::ids` helpers, `.get()`, `checked_*`/`saturating_*`, and `unwrap_or_else(PoisonError::into_inner)` for locks, like the existing code.
 - Every item must keep `cargo clippy --all-targets --all-features -- -D warnings`, `cargo nextest run`, `bun run lint`, `bun run typecheck`, `bun run test` green.
 

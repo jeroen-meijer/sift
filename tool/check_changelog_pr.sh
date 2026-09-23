@@ -1,5 +1,9 @@
 #!/usr/bin/env sh
-# Verify a PR prepends new bullets under ## Upcoming.
+# Verify a PR updates ## Upcoming in CHANGELOG.md.
+#
+# Upcoming is the draft for the next release: keep it user-facing and
+# consolidate unshipped work (edit/merge existing bullets). Do not append a
+# "fix feature A" line for something that never shipped.
 #
 # Usage:
 #   ./tool/check_changelog_pr.sh [<base-ref>]
@@ -64,45 +68,22 @@ HEAD_LINES="$(extract_upcoming_from_file || true)"
 
 if [ -z "$HEAD_LINES" ] && [ -n "$BASE_LINES" ]; then
   echo "error: $CHANGELOG ## Upcoming has no entries on this branch." >&2
-  echo "Add new bullets at the top of the Upcoming list (below the header)." >&2
+  echo "Keep user-facing bullets for unshipped work, or ship a release first." >&2
   exit 1
 fi
 
 if [ "$HEAD_LINES" = "$BASE_LINES" ]; then
   echo "error: $CHANGELOG ## Upcoming was not updated in this PR." >&2
-  echo "Prepend at least one new bullet under ## Upcoming." >&2
+  echo "Edit Upcoming for the user-visible change (add, merge, or rewrite bullets)." >&2
   exit 1
 fi
 
-if [ -z "$BASE_LINES" ]; then
-  echo "ok: new Upcoming section entries added"
-  exit 0
-fi
-
-BASE_COUNT="$(printf '%s\n' "$BASE_LINES" | wc -l | tr -d ' ')"
-HEAD_COUNT="$(printf '%s\n' "$HEAD_LINES" | wc -l | tr -d ' ')"
-NEW_COUNT=$((HEAD_COUNT - BASE_COUNT))
-
-if [ "$NEW_COUNT" -lt 1 ]; then
-  echo "error: no new lines were added under ## Upcoming." >&2
-  exit 1
-fi
-
-TAIL_START=$((NEW_COUNT + 1))
-HEAD_TAIL="$(printf '%s\n' "$HEAD_LINES" | tail -n +"$TAIL_START")"
-
-if [ "$HEAD_TAIL" != "$BASE_LINES" ]; then
-  echo "error: new changelog entries must be prepended at the top of ## Upcoming." >&2
-  echo "Do not reorder or edit existing Upcoming bullets; add new lines above them." >&2
-  exit 1
-fi
-
-NEW_LINES="$(printf '%s\n' "$HEAD_LINES" | head -n "$NEW_COUNT")"
-BAD="$(printf '%s\n' "$NEW_LINES" | grep -v '^- ' || true)"
+BAD="$(printf '%s\n' "$HEAD_LINES" | grep -v '^- ' || true)"
 if [ -n "$BAD" ]; then
-  echo "error: expected new Upcoming lines to be bullets starting with \"- \"" >&2
+  echo "error: every Upcoming line must be a bullet starting with \"- \"" >&2
   printf '%s\n' "$BAD" | sed 's/^/  /' >&2
   exit 1
 fi
 
-echo "ok: $NEW_COUNT new Upcoming entr$( [ "$NEW_COUNT" = 1 ] && echo y || echo ies ) prepended"
+HEAD_COUNT="$(printf '%s\n' "$HEAD_LINES" | wc -l | tr -d ' ')"
+echo "ok: ## Upcoming updated ($HEAD_COUNT bullet$( [ "$HEAD_COUNT" = 1 ] && echo '' || echo s ))"
