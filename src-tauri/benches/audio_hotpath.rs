@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use sift_lib::perf::{
-    Analyzer, DEFAULT_BUCKETS, HeuristicAnalyzer, PathTokenAnalyzer, decode_file, generate_peaks,
-    render_clip,
+    AnalysisInput, Analyzer, DEFAULT_BUCKETS, HeuristicAnalyzer, PathTokenAnalyzer, decode_file,
+    generate_peaks, render_clip, to_mono,
 };
 use tempfile::tempdir;
 
@@ -109,6 +109,8 @@ fn jit_benches(c: &mut Criterion) {
 fn analyze_benches(c: &mut Criterion) {
     let path = require_fixture("amen_breaks/cw_amen_chopper.wav");
     let decoded = decode_file(&path).expect("decode for analyze bench");
+    let mono = to_mono(&decoded);
+    let input = AnalysisInput::from_full_mono(&mono, decoded.sample_rate);
 
     let mut group = c.benchmark_group("analyze");
     group.warm_up_time(Duration::from_secs(1));
@@ -118,14 +120,14 @@ fn analyze_benches(c: &mut Criterion) {
     group.bench_function("path_tokens", |b| {
         let p = Path::new("/packs/Drums/Kick_Hard_loop_120.wav");
         b.iter(|| {
-            let r = PathTokenAnalyzer.analyze(black_box(p), black_box(&decoded), 70.0, 180.0);
+            let r = PathTokenAnalyzer.analyze(black_box(p), black_box(&input), 70.0, 180.0);
             black_box(r.suggested_tag_paths.len())
         });
     });
 
     group.bench_function("heuristic_bpm_key", |b| {
         b.iter(|| {
-            let r = HeuristicAnalyzer.analyze(black_box(&path), black_box(&decoded), 70.0, 180.0);
+            let r = HeuristicAnalyzer.analyze(black_box(&path), black_box(&input), 70.0, 180.0);
             black_box((r.bpm, r.key_name, r.sample_type))
         });
     });

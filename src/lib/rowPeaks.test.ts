@@ -10,8 +10,11 @@ vi.mock("./ipc", () => ({
 
 import {
   __resetRowPeaksForTests,
-  loadRowPeaks,
-  prefetchRowPeaks,
+  getRowPeaks,
+  invalidateRowPeaks,
+  peaksQueueSnapshot,
+  requestVisible,
+  subscribeRowPeaks,
 } from "./rowPeaks";
 
 function deferred<T>() {
@@ -23,12 +26,21 @@ function deferred<T>() {
 }
 
 async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let i = 0; i < 5; i++) await Promise.resolve();
 }
 
-describe("rowPeaks concurrency", () => {
+function peaks(id: number) {
+  return {
+    channels: 1,
+    sample_rate: 44100,
+    duration_ms: id,
+    bucket_count: 1,
+    peaks: [0, 0],
+    colors: [0, 0, 0],
+  };
+}
+
+describe("rowPeaks", () => {
   beforeEach(() => {
     __resetRowPeaksForTests();
     getPeaks.mockReset();
@@ -38,70 +50,67 @@ describe("rowPeaks concurrency", () => {
     __resetRowPeaksForTests();
   });
 
-  it("never runs more than two getPeaks at once", async () => {
-    const gates = [deferred<unknown>(), deferred<unknown>(), deferred<unknown>()];
+  it("never runs more than six getPeaks at once", async () => {
+    const pending = new Map<number, ReturnType<typeof deferred>>();
     getPeaks.mockImplementation((id: number) => {
-      const gate = gates[id - 1];
-      if (!gate) return Promise.resolve({ id });
-      return gate.promise.then(() => ({ id }));
+      const d = deferred();
+      pending.set(id, d);
+      return d.promise;
     });
-
-    const p1 = loadRowPeaks(1);
-    const p2 = loadRowPeaks(2);
-    const p3 = loadRowPeaks(3);
+    requestVisible([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(getPeaks).toHaveBeenCalledTimes(6);
+    expect(peaksQueueSnapshot().queued).toBe(2);
+    pending.get(1)?.resolve(peaks(1));
     await flush();
-    expect(getPeaks).toHaveBeenCalledTimes(2);
-
-    gates[0]?.resolve({});
-    await p1;
-    await flush();
-    expect(getPeaks).toHaveBeenCalledTimes(3);
-
-    gates[1]?.resolve({});
-    gates[2]?.resolve({});
-    await Promise.all([p2, p3]);
+    expect(getPeaks).toHaveBeenCalledTimes(7);
   });
 
-  it("skips getPeaks for non-local availability", async () => {
-    const result = await loadRowPeaks(99, "cloud");
-    expect(result).toBeNull();
-    expect(getPeaks).not.toHaveBeenCalled();
+  it("drops queued ids that are no longer visible", async () => {
+    const pending: ReturnType<typeof deferred>[] = [];
+    getPeaks.mockImplementation(() => {
+      const d = deferred();
+      pending.push(d);
+      return d.promise;
+    });
+    requestVisible([1, 2, 3, 4, 5, 6, 7, 8]);
+    /* Scrolled on: 7 and 8 left the screen before they started. */
+    requestVisible([9]);
+    for (const d of pending) d.resolve(peaks(0));
+    await flush();
+    const fetched = getPeaks.mock.calls.map(([id]) => id as number);
+    expect(fetched).toEqual([1, 2, 3, 4, 5, 6, 9]);
   });
 
-  it("prefetch skips cloud ids when availability map is set", async () => {
-    getPeaks.mockResolvedValue({ id: 1 });
-    const avail = new Map<number, string>([
-      [1, "local"],
-      [2, "cloud"],
-      [3, "missing"],
-    ]);
-    prefetchRowPeaks([1, 2, 3], { availabilityById: avail });
+  it("notifies subscribers of that id only", async () => {
+    getPeaks.mockImplementation((id: number) => Promise.resolve(peaks(id)));
+    const one = vi.fn();
+    const two = vi.fn();
+    subscribeRowPeaks(1, one);
+    subscribeRowPeaks(2, two);
+    requestVisible([1]);
+    await flush();
+    expect(one).toHaveBeenCalledTimes(1);
+    expect(two).not.toHaveBeenCalled();
+    expect(getRowPeaks(1)?.duration_ms).toBe(1);
+  });
+
+  it("does not refetch cached ids", async () => {
+    getPeaks.mockImplementation((id: number) => Promise.resolve(peaks(id)));
+    requestVisible([1]);
+    await flush();
+    requestVisible([1]);
     await flush();
     expect(getPeaks).toHaveBeenCalledTimes(1);
-    expect(getPeaks).toHaveBeenCalledWith(1);
   });
 
-  it("keeps a third request queued until a slot frees", async () => {
-    const gates = [deferred<unknown>(), deferred<unknown>(), deferred<unknown>()];
-    getPeaks.mockImplementation((id: number) => {
-      const gate = gates[id - 1];
-      if (!gate) return Promise.resolve({ id });
-      return gate.promise.then(() => ({ id }));
-    });
-
-    prefetchRowPeaks([1, 2, 3]);
+  it("keeps showing invalidated peaks and refetches them when visible", async () => {
+    getPeaks.mockImplementation((id: number) => Promise.resolve(peaks(id)));
+    requestVisible([5]);
     await flush();
-    expect(getPeaks.mock.calls.map((c: unknown[]) => c[0] as number).sort()).toEqual([
-      1, 2,
-    ]);
-
-    gates[0]?.resolve({});
+    invalidateRowPeaks([5]);
+    expect(getRowPeaks(5)).toBeDefined();
+    requestVisible([5]);
     await flush();
-    expect(getPeaks).toHaveBeenCalledTimes(3);
-    expect(getPeaks.mock.calls.map((c: unknown[]) => c[0] as number)).toContain(3);
-
-    gates[1]?.resolve({});
-    gates[2]?.resolve({});
-    await flush();
+    expect(getPeaks).toHaveBeenCalledTimes(2);
   });
 });

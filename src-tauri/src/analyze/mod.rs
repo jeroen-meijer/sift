@@ -8,10 +8,12 @@ use std::time::Instant;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::state::AppState;
 
 use crate::audio::peaks::{self, DEFAULT_BUCKETS};
-use crate::audio::{DecodedAudio, decode_file, write_technical_fields};
+use crate::audio::{decode_all, open_audio, to_mono, write_technical_info};
 use crate::db::models::SampleTag;
 use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
 use crate::db::schema::samples::dsl as samples_dsl;
@@ -29,6 +31,13 @@ const LOOP_MIN_DURATION_SECS: f64 = 1.5;
 /// Every Nth sample gets decode/heuristic/db breakdown marks (all samples still
 /// get a single `analyze.sample` total when profiling).
 const ANALYZE_DETAIL_EVERY: u64 = 25;
+
+/// Interleaved sample count (frames × channels) above which an analyze job
+/// takes [`LARGE_JOB`]. ~90 s of stereo 44.1 kHz.
+const LARGE_JOB_SAMPLES: u64 = 8_000_000;
+/// Held while a large (or unknown-length) file is decoded and analyzed, so the
+/// worker pool never holds several long files in memory at once.
+static LARGE_JOB: std::sync::Mutex<()> = std::sync::Mutex::new(());
 static ANALYZE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// BPM, key, type, and tag suggestions from one analyzer pass.
@@ -43,11 +52,69 @@ pub struct AnalysisResult {
     pub suggested_tag_paths: Vec<String>,
 }
 
+/// Longest stretch of audio fed to tempo, key and loop detection. Longer files
+/// are cut to an excerpt so memory does not grow with file length.
+pub const EXCERPT_SECS: f64 = 60.0;
+
+/// What content analyzers see: a mono excerpt plus the full file duration.
+pub struct AnalysisInput<'a> {
+    /// Mono samples, at most [`EXCERPT_SECS`] long.
+    pub mono: &'a [f32],
+    pub sample_rate: u32,
+    /// Duration of the whole file (not the excerpt), for the loop length rule.
+    pub duration_ms: f64,
+}
+
+impl<'a> AnalysisInput<'a> {
+    /// Cut the analysis excerpt out of a full-length mono signal.
+    pub fn from_full_mono(mono: &'a [f32], sample_rate: u32) -> Self {
+        let range = excerpt_range(mono.len(), sample_rate);
+        Self {
+            mono: mono.get(range).unwrap_or(mono),
+            sample_rate,
+            duration_ms: frames_to_ms(mono.len(), sample_rate),
+        }
+    }
+}
+
+#[allow(
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "frame counts stay far below f64 mantissa range"
+)]
+fn frames_to_ms(frames: usize, sample_rate: u32) -> f64 {
+    if sample_rate == 0 {
+        return 0.0;
+    }
+    frames as f64 * 1000.0 / f64::from(sample_rate)
+}
+
+/// Frames to analyze. Files up to [`EXCERPT_SECS`]: all of it. Longer files:
+/// [`EXCERPT_SECS`] starting at 10 % of the file (at most 30 s in), which skips
+/// most intros.
+#[allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "excerpt bounds from positive, bounded float seconds"
+)]
+pub fn excerpt_range(frames: usize, sample_rate: u32) -> std::ops::Range<usize> {
+    let rate = f64::from(sample_rate);
+    let len = (EXCERPT_SECS * rate) as usize;
+    if sample_rate == 0 || frames <= len {
+        return 0..frames;
+    }
+    let start = ((frames as f64 * 0.1).min(30.0 * rate)) as usize;
+    let end = start.saturating_add(len).min(frames);
+    start..end
+}
+
 pub trait Analyzer {
     fn analyze(
         &self,
         path: &Path,
-        pcm: &DecodedAudio,
+        input: &AnalysisInput<'_>,
         bpm_min: f64,
         bpm_max: f64,
     ) -> AnalysisResult;
@@ -60,7 +127,7 @@ impl Analyzer for PathTokenAnalyzer {
     fn analyze(
         &self,
         path: &Path,
-        _pcm: &DecodedAudio,
+        _input: &AnalysisInput<'_>,
         _bpm_min: f64,
         _bpm_max: f64,
     ) -> AnalysisResult {
@@ -193,16 +260,16 @@ impl Analyzer for HeuristicAnalyzer {
     fn analyze(
         &self,
         _path: &Path,
-        pcm: &DecodedAudio,
+        input: &AnalysisInput<'_>,
         bpm_min: f64,
         bpm_max: f64,
     ) -> AnalysisResult {
         let mut result = AnalysisResult {
-            sample_type: Some(detect_loop_or_oneshot(pcm)),
+            sample_type: Some(detect_loop_or_oneshot(input)),
             ..Default::default()
         };
 
-        let mono = to_mono(pcm);
+        let mono = input.mono;
         if mono.len() < 1024 {
             return result;
         }
@@ -218,7 +285,7 @@ impl Analyzer for HeuristicAnalyzer {
             ..stratum_dsp::AnalysisConfig::default()
         };
 
-        match stratum_dsp::analyze_audio(&mono, pcm.sample_rate, config) {
+        match stratum_dsp::analyze_audio(mono, input.sample_rate, config) {
             Ok(r) => {
                 let bpm_conf = f64::from(r.bpm_confidence);
                 if r.bpm > 0.0 && bpm_conf >= BPM_CONF_MIN {
@@ -234,7 +301,7 @@ impl Analyzer for HeuristicAnalyzer {
             }
             Err(_) => {
                 if let Some((bpm, conf)) =
-                    estimate_bpm_envelope(&mono, pcm.sample_rate, bpm_min, bpm_max)
+                    estimate_bpm_envelope(mono, input.sample_rate, bpm_min, bpm_max)
                 {
                     result.bpm = Some(bpm);
                     result.bpm_confidence = Some(conf);
@@ -244,27 +311,6 @@ impl Analyzer for HeuristicAnalyzer {
 
         result
     }
-}
-
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::as_conversions,
-    clippy::cast_precision_loss,
-    reason = "channel downmix: float average over a fixed-size frame"
-)]
-fn frame_mean(frame: &[f32]) -> f32 {
-    if frame.is_empty() {
-        return 0.0;
-    }
-    frame.iter().sum::<f32>() / frame.len() as f32
-}
-
-fn to_mono(pcm: &DecodedAudio) -> Vec<f32> {
-    let ch = usize::from(pcm.channels.max(1));
-    if ch == 1 {
-        return pcm.samples.clone();
-    }
-    pcm.samples.chunks_exact(ch).map(frame_mean).collect()
 }
 
 #[allow(
@@ -284,13 +330,12 @@ fn clamp_bpm_to_range(mut bpm: f64, min: f64, max: f64) -> f64 {
     bpm.clamp(min, max)
 }
 
-fn detect_loop_or_oneshot(pcm: &DecodedAudio) -> String {
-    let duration_secs = pcm.duration_ms() / 1000.0;
+fn detect_loop_or_oneshot(input: &AnalysisInput<'_>) -> String {
+    let duration_secs = input.duration_ms / 1000.0;
     if duration_secs <= LOOP_MIN_DURATION_SECS {
         return "one-shot".into();
     }
-    let mono = to_mono(pcm);
-    if has_repeating_energy(&mono, pcm.sample_rate) {
+    if has_repeating_energy(input.mono, input.sample_rate) {
         "loop".into()
     } else {
         "one-shot".into()
@@ -448,6 +493,8 @@ pub struct AnalysisProgress {
     pub done: u64,
     pub remaining: u64,
     pub total: u64,
+    /// Samples a worker is analyzing right now (not the whole queue).
+    pub active_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -496,7 +543,19 @@ pub fn analyze_sample(
 
     // Decode off the DB lock (Dropbox may hydrate here when the file is local).
     let decode_start = Instant::now();
-    let Ok(pcm) = decode_file(path) else {
+    let Ok(opened) = open_audio(path) else {
+        return Ok(());
+    };
+    // Long files take a shared permit so at most one is in memory at a time.
+    let large = opened
+        .expected_samples()
+        .is_none_or(|n| n > LARGE_JOB_SAMPLES);
+    let _large_permit = large.then(|| {
+        LARGE_JOB
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
+    let Ok(pcm) = decode_all(opened) else {
         return Ok(());
     };
     if detail {
@@ -504,16 +563,25 @@ pub fn analyze_sample(
             "analyze.decode",
             decode_start.elapsed(),
             &format!(
-                "id={sample_id} frames={} ch={}",
+                "id={sample_id} frames={} ch={} large={large}",
                 pcm.frame_count(),
                 pcm.channels
             ),
         );
     }
 
+    // One mono downmix, shared by the peakfile colors and the analyzers.
+    let mono = to_mono(&pcm);
+
     // Peakfile from the same buffer so browse/scroll does not decode again.
     let peaks_start = Instant::now();
-    match peaks::cache_peaks_from_decoded(peaks_dir, sample_id, &pcm, DEFAULT_BUCKETS) {
+    match peaks::cache_peaks_from_decoded_with_mono(
+        peaks_dir,
+        sample_id,
+        &pcm,
+        &mono,
+        DEFAULT_BUCKETS,
+    ) {
         Ok(_) => {
             if detail {
                 crate::profile_log::event(
@@ -532,10 +600,16 @@ pub fn analyze_sample(
         }
     }
 
+    // Interleaved PCM is not needed past this point.
+    let tech = pcm.tech();
+    drop(pcm);
+
     let (bpm_min, bpm_max) = bpm_range;
     let heur_start = Instant::now();
-    let path_result = PathTokenAnalyzer.analyze(path, &pcm, bpm_min, bpm_max);
-    let audio_result = HeuristicAnalyzer.analyze(path, &pcm, bpm_min, bpm_max);
+    let input = AnalysisInput::from_full_mono(&mono, tech.sample_rate);
+    let path_result = PathTokenAnalyzer.analyze(path, &input, bpm_min, bpm_max);
+    let audio_result = HeuristicAnalyzer.analyze(path, &input, bpm_min, bpm_max);
+    drop(mono);
     if detail {
         crate::profile_log::event(
             "analyze.heuristic",
@@ -560,7 +634,7 @@ pub fn analyze_sample(
 
     let db_start = Instant::now();
     db.with_conn(|conn| {
-        write_technical_fields(conn, sample_id, path, &pcm)?;
+        write_technical_info(conn, sample_id, path, &tech)?;
 
         let now = utc_now();
         let id = id_from_i64(sample_id)?;
@@ -780,7 +854,12 @@ struct QueueProgress {
     in_flight: u64,
     /// Pending or running ids (dedupe; released when idle).
     active: std::collections::HashSet<i64>,
+    /// Ids currently inside a worker. Drives the per-row "analyzing" chrome.
+    in_worker: std::collections::HashSet<i64>,
     last_emit: Option<Instant>,
+    /// Jobs waiting for a worker. Priority jobs (rows on screen, the selected
+    /// sample) go to the front.
+    queue: std::collections::VecDeque<AnalysisJob>,
 }
 
 impl QueueProgress {
@@ -798,59 +877,74 @@ impl QueueProgress {
 }
 
 struct AnalysisRuntime {
-    tx: std::sync::mpsc::Sender<AnalysisJob>,
     progress: Arc<std::sync::Mutex<QueueProgress>>,
+    /// Signals workers that `queue` has jobs.
+    work: Arc<std::sync::Condvar>,
+    /// Signals waiters in [`analyze_now`] that a job finished.
+    finished: Arc<std::sync::Condvar>,
 }
 
 fn analysis_runtime(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf) -> &'static AnalysisRuntime {
     use std::sync::OnceLock;
     static RUNTIME: OnceLock<AnalysisRuntime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
-        let (tx, rx) = std::sync::mpsc::channel::<AnalysisJob>();
-        let rx = Arc::new(std::sync::Mutex::new(rx));
         let progress = Arc::new(std::sync::Mutex::new(QueueProgress::default()));
-        for _ in 0..ANALYZE_WORKERS {
-            let rx = Arc::clone(&rx);
+        let work = Arc::new(std::sync::Condvar::new());
+        let finished = Arc::new(std::sync::Condvar::new());
+        for i in 0..ANALYZE_WORKERS {
             let db = Arc::clone(&db);
             let peaks_dir = peaks_dir.clone();
             let app = app.clone();
             let progress = Arc::clone(&progress);
-            std::thread::spawn(move || analysis_worker(app, db, peaks_dir, rx, progress));
+            let work = Arc::clone(&work);
+            let finished = Arc::clone(&finished);
+            let _ = std::thread::Builder::new()
+                .name(format!("sift-analyze-{i}"))
+                .spawn(move || analysis_worker(&app, &db, &peaks_dir, &progress, &work, &finished));
         }
-        AnalysisRuntime { tx, progress }
+        AnalysisRuntime {
+            progress,
+            work,
+            finished,
+        }
     })
 }
 
 fn analysis_worker(
-    app: AppHandle,
-    db: Arc<Db>,
-    peaks_dir: PathBuf,
-    rx: Arc<std::sync::Mutex<std::sync::mpsc::Receiver<AnalysisJob>>>,
-    progress: Arc<std::sync::Mutex<QueueProgress>>,
+    app: &AppHandle,
+    db: &Db,
+    peaks_dir: &Path,
+    progress: &std::sync::Mutex<QueueProgress>,
+    work: &std::sync::Condvar,
+    finished: &std::sync::Condvar,
 ) {
     loop {
         let job = {
-            let guard = rx
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            guard.recv()
-        };
-        let Ok(job) = job else {
-            break;
-        };
-
-        {
             let mut st = progress
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let job = loop {
+                if let Some(job) = st.queue.pop_front() {
+                    break job;
+                }
+                st = work
+                    .wait(st)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+            };
             st.pending = st.pending.saturating_sub(1);
             st.in_flight = st.in_flight.saturating_add(1);
-        }
+            st.in_worker.insert(job.sample_id);
+            job
+        };
 
         let bpm_range = db
             .with_conn(bpm_range_from_settings)
             .unwrap_or((70.0, 180.0));
-        let _ = analyze_sample(&db, &peaks_dir, job.sample_id, &job.mode, bpm_range);
+        let _ = analyze_sample(db, peaks_dir, job.sample_id, &job.mode, bpm_range);
+        // New BPM/key/type/tags and a peakfile: let the UI patch this row.
+        app.state::<AppState>()
+            .changes
+            .push(app, "analyze", false, &[job.sample_id]);
 
         // Emit under the progress lock so a concurrent enqueue cannot race a
         // "remaining=0" clear past newly queued work.
@@ -860,6 +954,7 @@ fn analysis_worker(
         st.in_flight = st.in_flight.saturating_sub(1);
         st.done = st.done.saturating_add(1);
         st.active.remove(&job.sample_id);
+        st.in_worker.remove(&job.sample_id);
         let remaining = st.remaining();
         let total = st.total();
         let done = st.done;
@@ -871,6 +966,7 @@ fn analysis_worker(
                 .is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(250));
         if should_emit {
             st.last_emit = Some(Instant::now());
+            crate::profile_log::count_emit("analysis-progress");
             let _ = app.emit(
                 "analysis-progress",
                 &AnalysisProgress {
@@ -878,6 +974,7 @@ fn analysis_worker(
                     done,
                     remaining,
                     total,
+                    active_ids: st.in_worker.iter().copied().collect(),
                 },
             );
         }
@@ -889,8 +986,11 @@ fn analysis_worker(
             );
             st.done = 0;
             st.active.clear();
+            st.in_worker.clear();
             st.last_emit = None;
         }
+        drop(st);
+        finished.notify_all();
     }
 }
 
@@ -902,6 +1002,59 @@ pub fn spawn_analysis_batch(
     sample_ids: Vec<i64>,
     mode: AnalyzeMode,
 ) {
+    enqueue_jobs(app, db, peaks_dir, sample_ids, mode, false);
+}
+
+/// Insert jobs into the queue state. Returns how many were new. With
+/// `priority`, the ids go to the front in the given order, and ids that were
+/// already waiting move to the front.
+fn push_jobs(
+    st: &mut QueueProgress,
+    sample_ids: Vec<i64>,
+    mode: &AnalyzeMode,
+    priority: bool,
+) -> u64 {
+    let mut added = 0u64;
+    let ordered: Vec<i64> = if priority {
+        sample_ids.into_iter().rev().collect()
+    } else {
+        sample_ids
+    };
+    for sample_id in ordered {
+        if !st.active.insert(sample_id) {
+            if priority
+                && let Some(pos) = st.queue.iter().position(|j| j.sample_id == sample_id)
+                && let Some(job) = st.queue.remove(pos)
+            {
+                st.queue.push_front(job);
+            }
+            continue;
+        }
+        st.pending = st.pending.saturating_add(1);
+        let job = AnalysisJob {
+            sample_id,
+            mode: mode.clone(),
+        };
+        if priority {
+            st.queue.push_front(job);
+        } else {
+            st.queue.push_back(job);
+        }
+        added = added.saturating_add(1);
+    }
+    added
+}
+
+/// Add jobs to the shared queue. `priority` puts them at the front (in the
+/// given order) and moves ids that were already waiting to the front too.
+fn enqueue_jobs(
+    app: AppHandle,
+    db: Arc<Db>,
+    peaks_dir: PathBuf,
+    sample_ids: Vec<i64>,
+    mode: AnalyzeMode,
+    priority: bool,
+) {
     if sample_ids.is_empty() {
         return;
     }
@@ -911,26 +1064,8 @@ pub fn spawn_analysis_batch(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let was_idle = st.is_idle() && st.done == 0;
-    let mut added = 0u64;
-    for sample_id in sample_ids {
-        if !st.active.insert(sample_id) {
-            continue;
-        }
-        st.pending = st.pending.saturating_add(1);
-        if rt
-            .tx
-            .send(AnalysisJob {
-                sample_id,
-                mode: mode.clone(),
-            })
-            .is_err()
-        {
-            st.pending = st.pending.saturating_sub(1);
-            st.active.remove(&sample_id);
-            break;
-        }
-        added = added.saturating_add(1);
-    }
+    let added = push_jobs(&mut st, sample_ids, &mode, priority);
+    rt.work.notify_all();
     if added == 0 {
         return;
     }
@@ -940,12 +1075,14 @@ pub fn spawn_analysis_batch(
             std::time::Duration::ZERO,
             &format!("n={}", st.total()),
         );
+        crate::profile_log::count_emit("analysis-queue");
         let _ = app.emit(
             "analysis-queue",
             &AnalysisQueuePayload { total: st.total() },
         );
     }
     st.last_emit = Some(Instant::now());
+    crate::profile_log::count_emit("analysis-progress");
     let _ = app.emit(
         "analysis-progress",
         &AnalysisProgress {
@@ -953,6 +1090,7 @@ pub fn spawn_analysis_batch(
             done: st.done,
             remaining: st.remaining(),
             total: st.total(),
+            active_ids: st.in_worker.iter().copied().collect(),
         },
     );
 }
@@ -976,6 +1114,53 @@ pub fn enqueue_ids(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf, sample_ids: 
         .with_conn(|conn| filter_analysis_queue_ids(conn, &peaks, &sample_ids))
         .unwrap_or_default();
     spawn_analysis_batch(app, db, peaks_dir, ids, AnalyzeMode::Normal);
+}
+
+/// Like [`enqueue_ids`], at the front of the queue: rows on screen and the
+/// selected sample should not wait behind a large backlog.
+pub fn enqueue_priority(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf, sample_ids: Vec<i64>) {
+    if sample_ids.is_empty() {
+        return;
+    }
+    let peaks = peaks_dir.clone();
+    let ids = db
+        .with_conn(|conn| filter_analysis_queue_ids(conn, &peaks, &sample_ids))
+        .unwrap_or_default();
+    enqueue_jobs(app, db, peaks_dir, ids, AnalyzeMode::Normal, true);
+}
+
+/// Analyze one sample at the front of the shared queue and wait until it is
+/// done (or `timeout` passes). The work still runs in the pool, so the status
+/// bar shows it like any other analysis. Returns `true` when it finished.
+pub fn analyze_now(
+    app: AppHandle,
+    db: Arc<Db>,
+    peaks_dir: PathBuf,
+    sample_id: i64,
+    timeout: std::time::Duration,
+) -> bool {
+    let rt = analysis_runtime(app.clone(), Arc::clone(&db), peaks_dir.clone());
+    enqueue_priority(app, db, peaks_dir, vec![sample_id]);
+    let deadline = Instant::now().checked_add(timeout);
+    let mut st = rt
+        .progress
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    while st.active.contains(&sample_id) {
+        let left = deadline.map_or(std::time::Duration::ZERO, |d| {
+            d.saturating_duration_since(Instant::now())
+        });
+        if left.is_zero() {
+            return false;
+        }
+        st = rt
+            .finished
+            .wait_timeout(st, left)
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .0;
+    }
+    drop(st);
+    true
 }
 
 /// Keep only ids that are local and still need analysis or a peakfile.
@@ -1022,15 +1207,11 @@ mod tests {
 
     #[test]
     fn token_kick_maps() {
-        let pcm = DecodedAudio {
-            sample_rate: 44100,
-            channels: 1,
-            bit_depth_hint: Some(16),
-            samples: vec![0.0; 100],
-        };
+        let mono = vec![0.0; 100];
+        let input = AnalysisInput::from_full_mono(&mono, 44_100);
         let r = PathTokenAnalyzer.analyze(
             Path::new("/packs/Drums/Kick_Hard_01.wav"),
-            &pcm,
+            &input,
             70.0,
             180.0,
         );
@@ -1039,15 +1220,67 @@ mod tests {
 
     #[test]
     fn token_loop_sets_type() {
-        let pcm = DecodedAudio {
-            sample_rate: 44100,
-            channels: 1,
-            bit_depth_hint: Some(16),
-            samples: vec![0.0; 100],
-        };
+        let mono = vec![0.0; 100];
+        let input = AnalysisInput::from_full_mono(&mono, 44_100);
         let r =
-            PathTokenAnalyzer.analyze(Path::new("/loops/melody_loop_120.wav"), &pcm, 70.0, 180.0);
+            PathTokenAnalyzer.analyze(Path::new("/loops/melody_loop_120.wav"), &input, 70.0, 180.0);
         assert_eq!(r.sample_type.as_deref(), Some("loop"));
+    }
+
+    #[test]
+    fn excerpt_is_whole_file_up_to_limit() {
+        assert_eq!(excerpt_range(30 * 44_100, 44_100), 0..30 * 44_100);
+        assert_eq!(excerpt_range(60 * 44_100, 44_100), 0..60 * 44_100);
+    }
+
+    #[test]
+    fn excerpt_skips_intro_on_long_files() {
+        // 90 s: start at 10 % (9 s), 60 s long.
+        assert_eq!(excerpt_range(90 * 1000, 1000), 9_000..69_000);
+        // 10 min: 10 % would be 60 s, capped at 30 s in.
+        assert_eq!(excerpt_range(600 * 1000, 1000), 30_000..90_000);
+    }
+
+    #[test]
+    fn analysis_input_keeps_full_duration() {
+        let mono = vec![0.0f32; 120 * 1000];
+        let input = AnalysisInput::from_full_mono(&mono, 1000);
+        assert_eq!(input.mono.len(), 60 * 1000);
+        assert!((input.duration_ms - 120_000.0).abs() < 1e-6);
+    }
+
+    /// A long click track still reads as ~120 BPM from its excerpt.
+    #[test]
+    fn excerpt_bpm_on_long_click_track() {
+        let rate = 22_050u32;
+        let secs = 180usize;
+        let rate_us = usize::try_from(rate).unwrap();
+        let mut mono = vec![0.0f32; secs * rate_us];
+        let beat = rate_us / 2; // 120 BPM
+        for start in (0..mono.len()).step_by(beat) {
+            for (i, s) in mono.iter_mut().skip(start).take(400).enumerate() {
+                let decay = 1.0 - (f32::from(u16::try_from(i).unwrap()) / 400.0);
+                *s = if i % 2 == 0 { decay } else { -decay };
+            }
+        }
+        let input = AnalysisInput::from_full_mono(&mono, rate);
+        let r = HeuristicAnalyzer.analyze(Path::new("/x/click.wav"), &input, 70.0, 180.0);
+        let bpm = r.bpm.expect("bpm");
+        assert!((bpm - 120.0).abs() <= 1.5, "bpm {bpm}");
+    }
+
+    #[test]
+    fn priority_jobs_jump_the_queue_in_order() {
+        let mut st = QueueProgress::default();
+        let mode = AnalyzeMode::Normal;
+        assert_eq!(push_jobs(&mut st, vec![1, 2, 3, 4], &mode, false), 4);
+        // 3 is already waiting: it moves to the front. 9 is new.
+        assert_eq!(push_jobs(&mut st, vec![9, 3], &mode, true), 1);
+        let order: Vec<i64> = st.queue.iter().map(|j| j.sample_id).collect();
+        assert_eq!(order, vec![9, 3, 1, 2, 4]);
+        assert_eq!(st.pending, 5);
+        // Duplicates are not added twice.
+        assert_eq!(push_jobs(&mut st, vec![1], &mode, false), 0);
     }
 
     #[test]
@@ -1075,6 +1308,7 @@ mod tests {
             done: 3,
             remaining: 9,
             total: 12,
+            active_ids: vec![7],
         };
         let v = serde_json::to_value(&p).expect("serialize");
         assert_eq!(v["sample_id"], 7);

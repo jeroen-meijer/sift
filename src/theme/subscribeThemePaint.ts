@@ -1,3 +1,4 @@
+import { invalidateWaveTheme } from "../lib/waveTheme";
 import { motionMs, prefersReducedMotion } from "../ui/motion";
 
 type PaintFn = () => void;
@@ -12,6 +13,8 @@ function stopRaf() {
 }
 
 function paintAll() {
+  /* Row waves cache theme colors; they change on every lerp tick. */
+  invalidateWaveTheme();
   for (const paint of listeners) {
     paint();
   }

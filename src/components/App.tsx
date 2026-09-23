@@ -10,9 +10,12 @@ import {
   type DbStats,
   type FolderNode,
   type IndexProgress,
+  type LibraryChangedPayload,
   type OutputDevice,
   type TagNode,
 } from "../lib/ipc";
+import { analysisStore, rowChangesStore } from "../lib/liveStores";
+import { invalidateRowPeaks } from "../lib/rowPeaks";
 import { useSettings } from "../lib/useSettings";
 import { warmProfile } from "../lib/profile";
 import { applyTheme } from "../theme";
@@ -21,7 +24,7 @@ import { AskIndexToast } from "./AskIndexToast";
 import { FirstLaunch } from "./FirstLaunch";
 import { LibraryView } from "./LibraryView";
 import { SettingsView } from "./SettingsView";
-import { StatusBar, type AnalysisBar } from "./StatusBar";
+import { StatusBar } from "./StatusBar";
 import { TagManagerView } from "./TagManagerView";
 import { TitleBar } from "./TitleBar";
 import "../styles/base.css";
@@ -32,6 +35,11 @@ import "./detail.css";
 import "./views.css";
 
 type View = "library" | "settings" | "tags";
+
+/** Analyze progress re-renders at most this often. */
+const PROGRESS_THROTTLE_MS = 500;
+/** Row-level library changes refresh the status bar counts at most this often. */
+const STATS_MIN_INTERVAL_MS = 10_000;
 
 const EMPTY_STATS: DbStats = {
   roots: 0,
@@ -65,9 +73,6 @@ export function App() {
   const [refreshToken, setRefreshToken] = useState(0);
 
   const [indexStatus, setIndexStatus] = useState<string | undefined>();
-  const [analysisBar, setAnalysisBar] = useState<AnalysisBar | null>(null);
-  /** Small set of sample ids mid-analyze (row chrome). Not the full queue. */
-  const [analyzingIds, setAnalyzingIds] = useState<Set<number>>(() => new Set());
   const [askPaths, setAskPaths] = useState<string[]>([]);
 
   const refreshLibrary = useCallback(() => {
@@ -102,12 +107,36 @@ export function App() {
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
     let bumpTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Structural change: refetch stats, tree, tags and the list. */
     const bump = () => {
       if (bumpTimer) clearTimeout(bumpTimer);
       bumpTimer = setTimeout(() => {
         refreshLibrary();
         setRefreshToken((n) => n + 1);
       }, 150);
+    };
+
+    /* db_stats only feeds counts in the status bar; refresh it at most every 10 s. */
+    let lastStatsAt = 0;
+    let statsTimer: ReturnType<typeof setTimeout> | undefined;
+    const refreshStatsSoon = () => {
+      if (statsTimer) return;
+      const wait = Math.max(0, lastStatsAt + STATS_MIN_INTERVAL_MS - Date.now());
+      statsTimer = setTimeout(() => {
+        statsTimer = undefined;
+        lastStatsAt = Date.now();
+        void ipc.dbStats().then(setStats).catch(console.error);
+      }, wait);
+    };
+
+    /* Progress arrives several times a second; the bar needs at most 2 updates a second. */
+    let pendingProgress: AnalysisProgress | null = null;
+    let progressTimer: ReturnType<typeof setTimeout> | undefined;
+    const applyProgress = (payload: AnalysisProgress) => {
+      analysisStore.set({
+        bar: payload.remaining === 0 ? null : { done: payload.done, total: payload.total },
+        activeIds: payload.remaining === 0 ? new Set() : new Set(payload.active_ids),
+      });
     };
 
     void listen<IndexProgress>("index-progress", ({ payload }) => {
@@ -120,32 +149,38 @@ export function App() {
     }).then((fn) => unlisteners.push(fn));
 
     void listen<{ total: number }>("analysis-queue", ({ payload }) => {
-      setAnalyzingIds(new Set());
-      setAnalysisBar({ done: 0, total: payload.total });
+      analysisStore.set({ bar: { done: 0, total: payload.total }, activeIds: new Set() });
     }).then((fn) => unlisteners.push(fn));
 
     void listen<AnalysisProgress>("analysis-progress", ({ payload }) => {
-      setAnalyzingIds((prev) => {
-        const next = new Set(prev);
-        if (payload.sample_id > 0) next.add(payload.sample_id);
-        /* Keep only a few active ids for row chrome. */
-        if (next.size > 8) {
-          const trimmed = [...next].slice(-8);
-          return new Set(trimmed);
-        }
-        return next;
-      });
       if (payload.remaining === 0) {
-        setAnalysisBar(null);
-        setAnalyzingIds(new Set());
-        bump();
-      } else {
-        /* Shared queue: total can grow mid-run when more locals hydrate. */
-        setAnalysisBar({ done: payload.done, total: payload.total });
+        if (progressTimer) clearTimeout(progressTimer);
+        progressTimer = undefined;
+        pendingProgress = null;
+        applyProgress(payload);
+        return;
       }
+      pendingProgress = payload;
+      if (progressTimer) return;
+      progressTimer = setTimeout(() => {
+        progressTimer = undefined;
+        if (pendingProgress) applyProgress(pendingProgress);
+        pendingProgress = null;
+      }, PROGRESS_THROTTLE_MS);
     }).then((fn) => unlisteners.push(fn));
 
-    void listen("library-changed", bump).then((fn) => unlisteners.push(fn));
+    void listen<LibraryChangedPayload>("library-changed", ({ payload }) => {
+      if (payload.structural) {
+        bump();
+        return;
+      }
+      if (payload.sample_ids.length === 0) return;
+      /* Analysis results or availability: patch rows in place, keep the tree. */
+      invalidateRowPeaks(payload.sample_ids);
+      const prev = rowChangesStore.get();
+      rowChangesStore.set({ seq: prev.seq + 1, ids: payload.sample_ids });
+      refreshStatsSoon();
+    }).then((fn) => unlisteners.push(fn));
 
     void listen<{ paths: string[] }>("ask-index", ({ payload }) => {
       setAskPaths((prev) => [...new Set([...prev, ...payload.paths])]);
@@ -153,9 +188,16 @@ export function App() {
 
     return () => {
       if (bumpTimer) clearTimeout(bumpTimer);
+      if (statsTimer) clearTimeout(statsTimer);
+      if (progressTimer) clearTimeout(progressTimer);
       for (const off of unlisteners) off();
     };
   }, [refreshLibrary, t]);
+
+  const onAnalysisStart = useCallback(() => {
+    const cur = analysisStore.get();
+    if (!cur.bar) analysisStore.set({ bar: { done: 0, total: 1 }, activeIds: cur.activeIds });
+  }, []);
 
   const addRoot = useCallback(() => {
     void open({ directory: true, multiple: false, title: tl("addFolder") })
@@ -216,8 +258,6 @@ export function App() {
           stats={stats}
           folders={folders}
           tags={tags}
-          analyzingIds={analyzingIds}
-          analysisBar={analysisBar}
           statusText={indexStatus}
           refreshToken={refreshToken}
           onRefreshLibrary={refreshLibrary}
@@ -225,9 +265,7 @@ export function App() {
           onManageTags={() => {
             setView("tags");
           }}
-          onAnalysisStart={() => {
-            setAnalysisBar({ done: 0, total: 1 });
-          }}
+          onAnalysisStart={onAnalysisStart}
         />
       ) : null}
 

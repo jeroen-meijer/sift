@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
 import { formatSpan, formatTime } from "../lib/format";
 import type { PeakData, SnapMode, WaveformView as WaveformMode } from "../lib/ipc";
+import { usePlayheadStyle } from "../lib/liveStores";
 import { isProfileOn, profileMark } from "../lib/profile";
 import { readSpectralBands } from "../lib/spectralColor";
 import { subscribeThemePaint } from "../theme/subscribeThemePaint";
@@ -17,7 +18,8 @@ interface Props {
   bpm: number | null;
   snap: SnapMode;
   mode: WaveformMode;
-  playheadSecs: number | null;
+  /** True while this sample plays; the playhead position comes from `playheadStore`. */
+  playheadActive: boolean;
   selection: Selection | null;
   clipReady: boolean;
   /** Apply snap (and Shift free-time) to a pointer position. */
@@ -56,7 +58,7 @@ export function WaveformView({
   bpm,
   snap,
   mode,
-  playheadSecs,
+  playheadActive,
   selection,
   clipReady,
   snapPointer,
@@ -397,13 +399,20 @@ export function WaveformView({
           <div className="wave-hover-cursor" style={{ left: `${pct(hoverSecs)}%` }} aria-hidden />
         ) : null}
 
-        {playheadSecs != null && duration > 0 ? (
-          <>
-            <div className="wave-playhead" style={{ left: `${pct(playheadSecs)}%` }} />
-            <div className="wave-playhead-cap" style={{ left: `${pct(playheadSecs)}%` }} />
-          </>
-        ) : null}
+        <DetailPlayhead durationSecs={duration} active={playheadActive} />
       </div>
+    </div>
+  );
+}
+
+/** Playhead line + cap, moved by `playheadStore` without React renders. */
+function DetailPlayhead({ durationSecs, active }: { durationSecs: number; active: boolean }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  usePlayheadStyle(trackRef, durationSecs, active);
+  return (
+    <div ref={trackRef} className="wave-playhead-track" aria-hidden>
+      <div className="wave-playhead" />
+      <div className="wave-playhead-cap" />
     </div>
   );
 }

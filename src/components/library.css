@@ -568,12 +568,31 @@ body.col-reordering * {
   overflow: auto;
 }
 
+/* Row lines painted by the list itself, matching each row's bottom hairline.
+ * Shows while rows for a fresh scroll position are still being rendered.
+ * One row-high tile, repeated: a single gradient over the whole list
+ * (140 000 px for 5 000 rows) rendered in uneven tiles in WebKit and left
+ * lighter patches behind the rows. */
+.sample-table-rows {
+  background-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--row-height) - 1px),
+    var(--color-hairline) calc(var(--row-height) - 1px)
+  );
+  background-size: 100% var(--row-height);
+  background-repeat: repeat-y;
+}
+
 .sample-row {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: var(--row-height);
+  /* Each row is self-contained: new content in one row (recycled while
+   * scrolling) does not make the browser re-lay-out or repaint anything
+   * outside it. Popovers and menus are not children of rows. */
+  contain: layout paint;
   display: grid;
   align-items: center;
   gap: 6px;
@@ -775,11 +794,18 @@ body.col-reordering * {
   display: block;
 }
 
+/* Overlay on top of the (always mounted) canvas while a worker analyzes the row. */
 .row-wave-analyzing {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   height: 4px;
+  margin-top: -2px;
   border-radius: 3px;
   background: var(--color-elevated);
   overflow: hidden;
+  pointer-events: none;
 }
 
 .row-wave-shimmer {
@@ -796,21 +822,16 @@ body.col-reordering * {
   animation: sift-shimmer 1.4s linear infinite;
 }
 
-.row-wave-missing {
-  width: 100%;
-  height: 1px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--color-neutral-800) 0 4px,
-    transparent 4px 8px
-  );
-}
-
+/* Full-width fill scaled by the played fraction (see usePlayheadStyle). */
 .row-wave-played {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
+  width: 100%;
+  transform-origin: left center;
+  visibility: hidden;
+  will-change: transform;
   background: linear-gradient(
     to right,
     color-mix(in srgb, var(--color-accent) 3%, transparent),
@@ -819,15 +840,24 @@ body.col-reordering * {
   pointer-events: none;
 }
 
+/* Full-width layer shifted by the played fraction; the line sits at its left edge. */
+.row-wave-playhead-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform;
+}
+
 .row-wave-playhead {
   position: absolute;
   top: -3px;
   bottom: -3px;
+  left: 0;
   width: 1.5px;
   background: var(--color-accent-soft);
   box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent-soft) 80%, transparent);
   pointer-events: none;
-  will-change: left;
 }
 
 .row-wave-cursor {

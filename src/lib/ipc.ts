@@ -135,6 +135,17 @@ export interface AnalysisProgress {
   done: number;
   remaining: number;
   total: number;
+  /** Samples a worker is analyzing right now (not the whole queue). */
+  active_ids: number[];
+}
+
+/** Coalesced by the backend: at most one every ~1.5 s. */
+export interface LibraryChangedPayload {
+  reason: string;
+  /** Samples added/removed/renamed or a root changed: refetch tree and list. */
+  structural: boolean;
+  /** Rows whose fields changed; patch them in place. */
+  sample_ids: number[];
 }
 
 /* ── settings ────────────────────────────────────────────────────────── */
@@ -204,6 +215,17 @@ async function run(command: string, args?: Record<string, unknown>): Promise<voi
   await invoke(command, args);
 }
 
+/**
+ * Play, stop and pause carry an increasing number. The backend drops a play
+ * whose decode finishes after a newer request, so the last row you pick is
+ * the one that sounds.
+ */
+let playSeq = 0;
+function nextPlaySeq(): number {
+  playSeq += 1;
+  return playSeq;
+}
+
 /** Coalesce concurrent identical list_samples (e.g. React StrictMode). */
 const listSamplesInflight = new Map<string, Promise<SampleRow[]>>();
 
@@ -229,6 +251,11 @@ export const ipc = {
     listSamplesInflight.set(key, pending);
     return pending;
   },
+  /** Fresh rows for these ids (any order), to patch the list after a change. */
+  getSamples: (ids: number[]) =>
+    ids.length === 0
+      ? Promise.resolve<SampleRow[]>([])
+      : invoke<SampleRow[]>("get_samples", { ids }),
   refreshSampleAvailability: (paths: string[]) =>
     invoke<number>("refresh_sample_availability", { paths }),
   setFavorite: (id: number, favorite: boolean) =>
@@ -244,9 +271,14 @@ export const ipc = {
   undo: () => invoke<boolean>("undo_meta"),
   redo: () => invoke<boolean>("redo_meta"),
 
-  getPeaks: (sampleId: number) =>
-    profiled("fe.get_peaks", `id=${String(sampleId)}`, () =>
-      invoke<PeakData>("get_peaks", { sampleId }),
+  /**
+   * Cached peaks for a sample. The backend never decodes for this call: with no
+   * peakfile yet it queues the sample for analysis (front of the queue) and
+   * returns `bucket_count: 0`. `wait` (detail pane) waits for that analysis.
+   */
+  getPeaks: (sampleId: number, wait = false) =>
+    profiled("fe.get_peaks", `id=${String(sampleId)} wait=${String(wait)}`, () =>
+      invoke<PeakData>("get_peaks", { sampleId, wait }),
     ),
   /** Warm decode LRU for upcoming play (focused + neighbors). */
   prefetchDecode: (sampleIds: number[]) => {
@@ -261,6 +293,7 @@ export const ipc = {
     profiled("fe.play_sample", `id=${String(sampleId)}`, () =>
       run("play_sample", {
         sampleId,
+        seq: nextPlaySeq(),
         startSecs,
         regionStartSecs: region?.start ?? null,
         regionEndSecs: region?.end ?? null,
@@ -269,9 +302,9 @@ export const ipc = {
   /** Retune the loop window of a running preview without restarting it. */
   setPlayRegion: (region: { start: number; end: number } | null) =>
     run("set_play_region", { startSecs: region?.start ?? null, endSecs: region?.end ?? null }),
-  pause: () => run("pause_playback"),
+  pause: () => run("pause_playback", { seq: nextPlaySeq() }),
   resume: () => run("resume_playback"),
-  stop: () => run("stop_playback"),
+  stop: () => run("stop_playback", { seq: nextPlaySeq() }),
   playbackState: () => invoke<PlaybackState>("playback_state"),
   listOutputDevices: () => invoke<OutputDevice[]>("list_output_devices"),
   setOutputDevice: (id: string) => run("set_output_device", { id }),

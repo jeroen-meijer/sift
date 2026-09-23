@@ -194,6 +194,27 @@ fn load_tags_for(conn: &mut SqliteConnection, samples: &mut [SampleDto]) -> AppR
     Ok(())
 }
 
+/// Split a search string into words. Spaces and the separators common in
+/// sample names (`_`, `-`, `.`) all count as word breaks.
+fn search_tokens(text: &str) -> Vec<String> {
+    text.split(|c: char| c.is_whitespace() || matches!(c, '_' | '-' | '.'))
+        .filter(|t| !t.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Escape `LIKE` wildcards so `%` and `_` in a search word match literally.
+fn escape_like(token: &str) -> String {
+    let mut out = String::with_capacity(token.len());
+    for c in token.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec<SampleDto>> {
     let mut q = samples_dsl::samples
         .select(Sample::as_select())
@@ -208,8 +229,16 @@ pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec
         );
     }
 
-    if let Some(text) = query.text.as_deref().filter(|s| !s.is_empty()) {
-        q = q.filter(samples_dsl::filename.like(format!("%{text}%")));
+    // Every word must appear somewhere in the filename, in any order:
+    // "cw amen", "amen cw" and "cw am" all match "cw_amen_chopper.wav".
+    if let Some(text) = query.text.as_deref() {
+        for token in search_tokens(text) {
+            q = q.filter(
+                samples_dsl::filename
+                    .like(format!("%{}%", escape_like(&token)))
+                    .escape('\\'),
+            );
+        }
     }
 
     let mut tag_filters: Vec<String> = query
@@ -439,6 +468,25 @@ pub fn set_sample_favorite(conn: &mut SqliteConnection, id: i64, favorite: bool)
     Ok(())
 }
 
+/// Rows (with tags) for the given ids, in no particular order. Missing ids are skipped.
+/// The UI uses this to patch rows in place instead of refetching the list.
+pub fn get_samples(conn: &mut SqliteConnection, ids: &[i64]) -> AppResult<Vec<SampleDto>> {
+    let mut out: Vec<SampleDto> = Vec::with_capacity(ids.len());
+    for chunk in ids.chunks(500) {
+        let ids_i32: Vec<i32> = chunk
+            .iter()
+            .filter_map(|&id| id_from_i64(id).ok())
+            .collect();
+        let rows: Vec<Sample> = samples_dsl::samples
+            .filter(samples_dsl::id.eq_any(&ids_i32))
+            .select(Sample::as_select())
+            .load(conn)?;
+        out.extend(rows.into_iter().map(sample_to_dto));
+    }
+    load_tags_for(conn, &mut out)?;
+    Ok(out)
+}
+
 pub fn get_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleDto>> {
     let row: Option<Sample> = samples_dsl::samples
         .find(id_from_i64(id)?)
@@ -499,6 +547,9 @@ pub struct TechnicalRefresh {
     pub changed: bool,
     /// Flipped to on-disk local bytes (hydrate or first classify).
     pub became_local: bool,
+    /// Local file whose size or mtime changed: its peakfile and technical
+    /// fields are stale and it needs a trip through the analyze queue.
+    pub content_changed: bool,
 }
 
 #[must_use]
@@ -532,68 +583,83 @@ fn apply_availability_update(
 }
 
 /// Re-stat paths (no decode) and update `availability`.
+///
+/// The `stat` calls run without the DB lock: on Dropbox File Provider paths
+/// they can take hundreds of ms in total, and the UI and analyze workers share
+/// that lock.
 pub fn refresh_availability_for_paths(
-    conn: &mut SqliteConnection,
+    db: &crate::db::Db,
     paths: &[String],
 ) -> AppResult<AvailabilityRefresh> {
-    let mut out = AvailabilityRefresh::default();
-    for path in paths {
-        let existing: Option<(i32, String, i32)> = samples_dsl::samples
-            .filter(samples_dsl::path.eq(path))
-            .select((
-                samples_dsl::id,
-                samples_dsl::availability,
-                samples_dsl::missing,
-            ))
-            .first(conn)
-            .optional()?;
-        let Some((id, old_avail, old_missing)) = existing else {
-            continue;
-        };
-        let avail = fs_ready::classify_path(std::path::Path::new(path));
-        if let Some((changed, became_local)) =
-            apply_availability_update(conn, id, &old_avail, old_missing, avail)?
-        {
-            if changed {
-                out.updated = out.updated.saturating_add(1);
-            }
-            if became_local {
-                out.became_local_ids.push(id_to_i64(id));
-            }
+    let mut rows: Vec<(i32, String, String, i32)> = Vec::with_capacity(paths.len());
+    db.with_conn(|conn| {
+        for chunk in paths.chunks(500) {
+            let found: Vec<(i32, String, String, i32)> = samples_dsl::samples
+                .filter(samples_dsl::path.eq_any(chunk))
+                .select((
+                    samples_dsl::id,
+                    samples_dsl::path,
+                    samples_dsl::availability,
+                    samples_dsl::missing,
+                ))
+                .load(conn)?;
+            rows.extend(found);
         }
-    }
+        Ok(())
+    })?;
+    apply_classified(db, classify_rows(rows))
+}
+
+/// `stat` each row's path. No DB access.
+fn classify_rows(rows: Vec<(i32, String, String, i32)>) -> Vec<(i32, String, i32, Availability)> {
+    rows.into_iter()
+        .map(|(id, path, old_avail, old_missing)| {
+            let avail = fs_ready::classify_path(std::path::Path::new(&path));
+            (id, old_avail, old_missing, avail)
+        })
+        .collect()
+}
+
+/// Write changed availability rows in one short transaction.
+fn apply_classified(
+    db: &crate::db::Db,
+    classified: Vec<(i32, String, i32, Availability)>,
+) -> AppResult<AvailabilityRefresh> {
+    let mut out = AvailabilityRefresh::default();
+    db.with_conn(|conn| {
+        conn.transaction::<_, AppError, _>(|conn| {
+            for (id, old_avail, old_missing, avail) in &classified {
+                if let Some((changed, became_local)) =
+                    apply_availability_update(conn, *id, old_avail, *old_missing, *avail)?
+                {
+                    if changed {
+                        out.updated = out.updated.saturating_add(1);
+                    }
+                    if became_local {
+                        out.became_local_ids.push(id_to_i64(*id));
+                    }
+                }
+            }
+            Ok(())
+        })
+    })?;
     Ok(out)
 }
 
 /// Re-stat every sample path (metadata only). For launch backfill after schema add
 /// or while a cloud provider is still hydrating.
-pub fn refresh_availability_all(conn: &mut SqliteConnection) -> AppResult<AvailabilityRefresh> {
-    let rows: Vec<(i32, String, String, i32)> = samples_dsl::samples
-        .select((
-            samples_dsl::id,
-            samples_dsl::path,
-            samples_dsl::availability,
-            samples_dsl::missing,
-        ))
-        .load(conn)?;
-    let mut out = AvailabilityRefresh::default();
-    conn.transaction::<_, AppError, _>(|conn| {
-        for (id, path, old_avail, old_missing) in rows {
-            let avail = fs_ready::classify_path(std::path::Path::new(&path));
-            if let Some((changed, became_local)) =
-                apply_availability_update(conn, id, &old_avail, old_missing, avail)?
-            {
-                if changed {
-                    out.updated = out.updated.saturating_add(1);
-                }
-                if became_local {
-                    out.became_local_ids.push(id_to_i64(id));
-                }
-            }
-        }
-        Ok(())
+pub fn refresh_availability_all(db: &crate::db::Db) -> AppResult<AvailabilityRefresh> {
+    let rows: Vec<(i32, String, String, i32)> = db.with_conn(|conn| {
+        Ok(samples_dsl::samples
+            .select((
+                samples_dsl::id,
+                samples_dsl::path,
+                samples_dsl::availability,
+                samples_dsl::missing,
+            ))
+            .load(conn)?)
     })?;
-    Ok(out)
+    apply_classified(db, classify_rows(rows))
 }
 
 pub fn remove_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<()> {
@@ -640,27 +706,30 @@ pub fn update_path(conn: &mut SqliteConnection, from: &str, to: &str) -> AppResu
     Ok(n > 0)
 }
 
-/// Refresh size/mtime/inode. Probe technical audio fields when local. Keeps bpm/key/tags/type.
-pub fn refresh_technical(
-    conn: &mut SqliteConnection,
-    path: &str,
-) -> AppResult<Option<TechnicalRefresh>> {
+/// Refresh size/mtime/inode and availability. Keeps bpm/key/tags/type.
+///
+/// Holds the DB lock only for the reads and writes; `stat` runs without it.
+/// Local files whose content changed come back with `content_changed` so the
+/// caller can queue them for analysis.
+pub fn refresh_technical(db: &crate::db::Db, path: &str) -> AppResult<Option<TechnicalRefresh>> {
     use std::fs;
     use std::path::Path;
     use std::time::SystemTime;
 
     type ExistingRow = (i32, Option<i64>, Option<i64>, String, i32);
-    let existing: Option<ExistingRow> = samples_dsl::samples
-        .filter(samples_dsl::path.eq(path))
-        .select((
-            samples_dsl::id,
-            samples_dsl::size_bytes,
-            samples_dsl::mtime_ms,
-            samples_dsl::availability,
-            samples_dsl::missing,
-        ))
-        .first(conn)
-        .optional()?;
+    let existing: Option<ExistingRow> = db.with_conn(|conn| {
+        Ok(samples_dsl::samples
+            .filter(samples_dsl::path.eq(path))
+            .select((
+                samples_dsl::id,
+                samples_dsl::size_bytes,
+                samples_dsl::mtime_ms,
+                samples_dsl::availability,
+                samples_dsl::missing,
+            ))
+            .first(conn)
+            .optional()?)
+    })?;
     let Some((id, old_size, old_mtime, old_avail, old_missing)) = existing else {
         return Ok(None);
     };
@@ -668,11 +737,12 @@ pub fn refresh_technical(
 
     let path_buf = Path::new(path);
     let Ok(meta) = fs::metadata(path_buf) else {
-        let marked = mark_missing(conn, path)?;
+        let marked = db.with_conn(|conn| mark_missing(conn, path))?;
         return Ok(Some(TechnicalRefresh {
             sample_id,
             changed: marked,
             became_local: false,
+            content_changed: false,
         }));
     };
     let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
@@ -695,39 +765,45 @@ pub fn refresh_technical(
     let avail_changed = old_avail != avail.as_str() || old_missing != missing_flag;
 
     if old_size == Some(size) && old_mtime == mtime {
-        diesel::update(samples_dsl::samples.find(id))
-            .set((
-                samples_dsl::missing.eq(missing_flag),
-                samples_dsl::availability.eq(avail.as_str()),
-                samples_dsl::availability_checked_at.eq(Some(now.as_str())),
-            ))
-            .execute(conn)?;
+        db.with_conn(|conn| {
+            diesel::update(samples_dsl::samples.find(id))
+                .set((
+                    samples_dsl::missing.eq(missing_flag),
+                    samples_dsl::availability.eq(avail.as_str()),
+                    samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+                ))
+                .execute(conn)?;
+            Ok(())
+        })?;
         return Ok(Some(TechnicalRefresh {
             sample_id,
             changed: avail_changed,
             became_local,
+            content_changed: false,
         }));
     }
 
-    diesel::update(samples_dsl::samples.find(id))
-        .set((
-            samples_dsl::size_bytes.eq(Some(size)),
-            samples_dsl::mtime_ms.eq(mtime),
-            samples_dsl::inode.eq(inode),
-            samples_dsl::missing.eq(missing_flag),
-            samples_dsl::availability.eq(avail.as_str()),
-            samples_dsl::availability_checked_at.eq(Some(now.as_str())),
-            samples_dsl::updated_at.eq(now.as_str()),
-        ))
-        .execute(conn)?;
-    // Never decode cloud placeholders here (would hydrate and block).
-    if avail == Availability::Local {
-        let _ = crate::audio::probe_and_update_sample(conn, sample_id, path_buf);
-    }
+    db.with_conn(|conn| {
+        diesel::update(samples_dsl::samples.find(id))
+            .set((
+                samples_dsl::size_bytes.eq(Some(size)),
+                samples_dsl::mtime_ms.eq(mtime),
+                samples_dsl::inode.eq(inode),
+                samples_dsl::missing.eq(missing_flag),
+                samples_dsl::availability.eq(avail.as_str()),
+                samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+                samples_dsl::updated_at.eq(now.as_str()),
+            ))
+            .execute(conn)?;
+        Ok(())
+    })?;
+    // No decode here: the caller sends changed local files through the
+    // analyze queue (status bar shows it). Cloud placeholders are never decoded.
     Ok(Some(TechnicalRefresh {
         sample_id,
         changed: true,
         became_local,
+        content_changed: avail == Availability::Local,
     }))
 }
 
@@ -789,4 +865,126 @@ pub fn sample_meta_snapshot(conn: &mut SqliteConnection, id: i64) -> AppResult<S
         .first::<(i32, Option<f64>, Option<String>, Option<String>)>(conn)
         .map(|(fav, bpm, key, ty)| (fav != 0, bpm, key, ty))
         .map_err(|_| crate::error::AppError::msg("sample not found"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::schema::roots::dsl as roots_dsl;
+
+    fn seed(conn: &mut SqliteConnection) -> Vec<i64> {
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots.select(roots_dsl::id).first(conn).unwrap();
+        for name in ["a.wav", "b.wav", "c.wav"] {
+            diesel::insert_into(samples_dsl::samples)
+                .values((
+                    samples_dsl::root_id.eq(root_id),
+                    samples_dsl::path.eq(format!("/lib/{name}")),
+                    samples_dsl::filename.eq(name),
+                    samples_dsl::parent_path.eq("/lib"),
+                    samples_dsl::extension.eq("wav"),
+                ))
+                .execute(conn)
+                .unwrap();
+        }
+        samples_dsl::samples
+            .select(samples_dsl::id)
+            .order(samples_dsl::id.asc())
+            .load::<i32>(conn)
+            .unwrap()
+            .into_iter()
+            .map(id_to_i64)
+            .collect()
+    }
+
+    #[test]
+    fn get_samples_returns_requested_rows() {
+        let mut conn = crate::db::test_conn();
+        let ids = seed(&mut conn);
+        let want = [ids[0], ids[2], 9_999];
+        let mut got: Vec<i64> = get_samples(&mut conn, &want)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        got.sort_unstable();
+        assert_eq!(got, vec![ids[0], ids[2]]);
+    }
+
+    fn search(conn: &mut SqliteConnection, text: &str) -> Vec<String> {
+        let query: Query = serde_json::from_value(serde_json::json!({
+            "folder_prefix": null,
+            "text": text,
+            "tag_path": null,
+            "bpm_min": null,
+            "bpm_max": null,
+            "key": null,
+            "sample_type": null,
+            "limit": null,
+            "offset": null,
+        }))
+        .unwrap();
+        let mut names: Vec<String> = list_samples(conn, &query)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.filename)
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn search_matches_words_in_any_order() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        for name in [
+            "cw_amen_chopper.wav",
+            "Amen-Break 170.wav",
+            "cwkick.wav",
+            "50%_snare.wav",
+        ] {
+            diesel::insert_into(samples_dsl::samples)
+                .values((
+                    samples_dsl::root_id.eq(root_id),
+                    samples_dsl::path.eq(format!("/lib/{name}")),
+                    samples_dsl::filename.eq(name),
+                    samples_dsl::parent_path.eq("/lib"),
+                    samples_dsl::extension.eq("wav"),
+                ))
+                .execute(&mut conn)
+                .unwrap();
+        }
+        let chopper = vec!["cw_amen_chopper.wav".to_string()];
+        assert_eq!(search(&mut conn, "cw amen"), chopper);
+        assert_eq!(search(&mut conn, "amen cw"), chopper);
+        assert_eq!(search(&mut conn, "cw am"), chopper);
+        assert_eq!(search(&mut conn, "CW_AMEN"), chopper);
+        assert_eq!(
+            search(&mut conn, "amen"),
+            vec![
+                "Amen-Break 170.wav".to_string(),
+                "cw_amen_chopper.wav".to_string()
+            ]
+        );
+        // `%` is literal, not a wildcard.
+        assert_eq!(search(&mut conn, "50%"), vec!["50%_snare.wav".to_string()]);
+        // Blank input does not filter.
+        assert_eq!(search(&mut conn, "  ").len(), 4);
+    }
+
+    #[test]
+    fn get_samples_empty_input() {
+        let mut conn = crate::db::test_conn();
+        assert!(get_samples(&mut conn, &[]).unwrap().is_empty());
+    }
 }

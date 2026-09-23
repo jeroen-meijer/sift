@@ -18,9 +18,8 @@ use std::path::{Path, PathBuf};
 use moodbar_analysis::{GenerateOptions, NormalizeMode, Theme, analyze_pcm_mono};
 use serde::Serialize;
 
-use crate::audio::decode::{DecodedAudio, decode_file};
+use crate::audio::decode::DecodedAudio;
 use crate::error::{AppError, AppResult};
-use crate::paths::AppPaths;
 
 const MAGIC: &[u8; 4] = b"SFTP";
 /// v6: mid/treble cut at 6 kHz so amen/snare body stays mid instead of a flat
@@ -130,31 +129,6 @@ fn read_peakfile(path: &Path, expected_buckets: Option<usize>) -> AppResult<Opti
 
 fn peak_index_overflow() -> AppError {
     AppError::msg("peak index overflow")
-}
-
-/// Downmix interleaved PCM to mono for spectral analysis.
-fn mix_to_mono(decoded: &DecodedAudio) -> Vec<f32> {
-    let ch = usize::from(decoded.channels.max(1));
-    if ch == 1 {
-        return decoded.samples.clone();
-    }
-    let frames = decoded.frame_count();
-    let mut mono = Vec::with_capacity(frames);
-    #[allow(
-        clippy::as_conversions,
-        clippy::cast_precision_loss,
-        reason = "channel count is a tiny u16"
-    )]
-    let inv = 1.0f32 / ch as f32;
-    for frame in 0..frames {
-        let mut sum = 0.0f32;
-        for c in 0..ch {
-            let idx = frame.saturating_mul(ch).saturating_add(c);
-            sum += decoded.samples.get(idx).copied().unwrap_or(0.0);
-        }
-        mono.push(sum * inv);
-    }
-    mono
 }
 
 /// Pick an FFT size so short clips still produce enough spectral frames to lerp.
@@ -267,11 +241,10 @@ fn smooth_colors_inplace(colors: &mut [u8], buckets: usize) {
 }
 
 /// Bass / mid / treble energy → Classic RGB weights (R/G/B) for theme remapping in the UI.
-fn generate_spectral_colors(decoded: &DecodedAudio, buckets: usize) -> Vec<u8> {
-    if buckets == 0 || decoded.sample_rate == 0 || decoded.frame_count() == 0 {
+fn generate_spectral_colors(mono: &[f32], sample_rate: u32, buckets: usize) -> Vec<u8> {
+    if buckets == 0 || sample_rate == 0 || mono.is_empty() {
         return vec![0u8; buckets.saturating_mul(3)];
     }
-    let mono = mix_to_mono(decoded);
     let fft_size = adaptive_fft_size(mono.len());
     let options = GenerateOptions {
         theme: Theme::Classic,
@@ -288,12 +261,22 @@ fn generate_spectral_colors(decoded: &DecodedAudio, buckets: usize) -> Vec<u8> {
         max_target_frames: Some(buckets.max(1)),
         ..GenerateOptions::default()
     };
-    let analysis = analyze_pcm_mono(decoded.sample_rate, &mono, &options);
+    let analysis = analyze_pcm_mono(sample_rate, mono, &options);
     resample_colors(&analysis.colors, buckets)
 }
 
 /// Build min/max peaks from decoded PCM, with per-bucket spectral RGB.
 pub fn generate_peaks(decoded: &DecodedAudio, buckets: usize) -> AppResult<PeakData> {
+    let mono = crate::audio::to_mono(decoded);
+    generate_peaks_with_mono(decoded, &mono, buckets)
+}
+
+/// Same as [`generate_peaks`], reusing a mono downmix the caller already has.
+pub fn generate_peaks_with_mono(
+    decoded: &DecodedAudio,
+    mono: &[f32],
+    buckets: usize,
+) -> AppResult<PeakData> {
     let channels = decoded.channels.max(1);
     let frames = decoded.frame_count();
     if frames == 0 || buckets == 0 {
@@ -349,7 +332,7 @@ pub fn generate_peaks(decoded: &DecodedAudio, buckets: usize) -> AppResult<PeakD
         }
     }
 
-    let colors = generate_spectral_colors(decoded, buckets);
+    let colors = generate_spectral_colors(mono, decoded.sample_rate, buckets);
 
     Ok(PeakData {
         channels,
@@ -361,44 +344,13 @@ pub fn generate_peaks(decoded: &DecodedAudio, buckets: usize) -> AppResult<PeakD
     })
 }
 
-/// Return cached peaks or decode + generate + write `{sample_id}.peaks`.
-pub fn ensure_peaks(
-    paths: &AppPaths,
-    sample_id: i64,
-    path: &Path,
-    buckets_row: usize,
-) -> AppResult<PeakData> {
-    let cache = peak_path(&paths.peaks_dir, sample_id);
-    let start = std::time::Instant::now();
-    if let Some(cached) = read_peakfile(&cache, Some(buckets_row))? {
-        crate::profile_log::event(
-            "peaks.cache_hit",
-            start.elapsed(),
-            &format!("id={sample_id} buckets={buckets_row}"),
-        );
-        return Ok(cached);
-    }
-
-    let decode_start = std::time::Instant::now();
-    let decoded = decode_file(path)?;
-    crate::profile_log::event(
-        "peaks.decode",
-        decode_start.elapsed(),
-        &format!(
-            "id={sample_id} frames={} ch={}",
-            decoded.frame_count(),
-            decoded.channels
-        ),
-    );
-
-    cache_peaks_from_decoded(&paths.peaks_dir, sample_id, &decoded, buckets_row)
-}
-
-/// Write a row peakfile from PCM already in memory (analysis path; no second decode).
-pub fn cache_peaks_from_decoded(
+/// Write a row peakfile from PCM already in memory (analysis path; no second
+/// decode), reusing the caller's mono downmix for the spectral colors.
+pub fn cache_peaks_from_decoded_with_mono(
     peaks_dir: &Path,
     sample_id: i64,
     decoded: &DecodedAudio,
+    mono: &[f32],
     buckets_row: usize,
 ) -> AppResult<PeakData> {
     let cache = peak_path(peaks_dir, sample_id);
@@ -413,7 +365,7 @@ pub fn cache_peaks_from_decoded(
     }
 
     let gen_start = std::time::Instant::now();
-    let data = generate_peaks(decoded, buckets_row)?;
+    let data = generate_peaks_with_mono(decoded, mono, buckets_row)?;
     crate::profile_log::event(
         "peaks.generate",
         gen_start.elapsed(),
@@ -438,6 +390,25 @@ pub fn cache_peaks_from_decoded(
 /// Default bucket count for row / generic peaks IPC.
 pub const DEFAULT_BUCKETS: usize = 1024;
 
+/// Read the cached row peakfile only. Never decodes. `None` when the sample
+/// has not been analyzed yet (or the file is from an older format).
+pub fn read_cached_peaks(peaks_dir: &Path, sample_id: i64) -> AppResult<Option<PeakData>> {
+    read_peakfile(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
+}
+
+/// Placeholder for a local sample whose peakfile does not exist yet
+/// (`bucket_count == 0`). The UI shows a flat line and refetches later.
+pub const fn not_ready_peaks() -> PeakData {
+    PeakData {
+        channels: 1,
+        sample_rate: 0,
+        duration_ms: 0.0,
+        peaks: Vec::new(),
+        bucket_count: 0,
+        colors: Vec::new(),
+    }
+}
+
 /// Silent placeholder when bytes are not local (cloud or missing).
 #[must_use]
 pub fn empty_peaks(buckets: usize) -> PeakData {
@@ -454,6 +425,7 @@ pub fn empty_peaks(buckets: usize) -> PeakData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audio::decode::decode_file;
     use std::path::{Path, PathBuf};
 
     #[test]

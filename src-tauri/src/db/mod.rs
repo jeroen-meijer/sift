@@ -88,3 +88,11 @@ impl Db {
         f(&mut conn)
     }
 }
+
+/// In-memory database with all migrations, for unit tests.
+#[cfg(test)]
+pub fn test_conn() -> SqliteConnection {
+    let mut conn = SqliteConnection::establish(":memory:").expect("in-memory db");
+    conn.run_pending_migrations(MIGRATIONS).expect("migrations");
+    conn
+}

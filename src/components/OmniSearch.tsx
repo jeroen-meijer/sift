@@ -6,7 +6,7 @@ import {
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { useState, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { tagPalette } from "../lib/tagColors";
 import { keys, matchesBinding } from "../lib/bindings";
@@ -73,7 +73,7 @@ interface Props {
   columnLabels: Record<OptionalColumn, string>;
 }
 
-export function OmniSearch({
+export const OmniSearch = memo(function OmniSearch({
   value,
   onChange,
   folders,
@@ -256,4 +256,4 @@ export function OmniSearch({
       </div>
     </div>
   );
-}
+});

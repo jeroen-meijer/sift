@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use crate::audio::decode::{DecodedAudio, decode_file};
@@ -42,33 +42,26 @@ impl DecodeCache {
         }
     }
 
-    /// Return cached PCM or decode and insert. Second value is `true` on hit.
-    pub fn get_or_decode(&mut self, path: &Path) -> AppResult<(Arc<DecodedAudio>, bool)> {
-        let key = path.to_path_buf();
+    /// Cached PCM for `path` if present and the file's mtime still matches.
+    pub fn get_fresh(&mut self, path: &Path) -> Option<Arc<DecodedAudio>> {
         let mtime = file_mtime(path);
-
-        if let Some(entry) = self.entries.get(&key)
-            && entry.mtime == mtime
-        {
-            let audio = Arc::clone(&entry.audio);
-            self.touch(&key);
-            return Ok((audio, true));
+        let entry = self.entries.get(path)?;
+        if entry.mtime != mtime {
+            return None;
         }
-
-        let audio = Arc::new(decode_file(path)?);
-        self.insert(
-            key,
-            Entry {
-                audio: Arc::clone(&audio),
-                mtime,
-            },
-        );
-        Ok((audio, false))
+        let audio = Arc::clone(&entry.audio);
+        self.touch(path);
+        Some(audio)
     }
 
-    /// Warm the cache without returning PCM. Ignores decode errors.
-    pub fn prefetch(&mut self, path: &Path) {
-        let _ = self.get_or_decode(path);
+    /// Insert decoded PCM, evicting the oldest entries past capacity.
+    pub fn insert_decoded(
+        &mut self,
+        path: PathBuf,
+        audio: Arc<DecodedAudio>,
+        mtime: Option<SystemTime>,
+    ) {
+        self.insert(path, Entry { audio, mtime });
     }
 
     #[cfg(test)]
@@ -102,6 +95,36 @@ impl DecodeCache {
     }
 }
 
+/// Return cached PCM or decode and insert. Second value is `true` on hit.
+///
+/// The cache lock is held only to look up and to insert, never during the
+/// decode, so a slow decode (prefetch, long file) cannot block play.
+/// Two concurrent misses on one path may both decode; the second insert wins.
+pub fn get_or_decode(
+    cache: &Mutex<DecodeCache>,
+    path: &Path,
+) -> AppResult<(Arc<DecodedAudio>, bool)> {
+    let hit = lock(cache).get_fresh(path);
+    if let Some(hit) = hit {
+        return Ok((hit, true));
+    }
+    let mtime = file_mtime(path);
+    let audio = Arc::new(decode_file(path)?);
+    lock(cache).insert_decoded(path.to_path_buf(), Arc::clone(&audio), mtime);
+    Ok((audio, false))
+}
+
+/// Warm the cache without returning PCM. Ignores decode errors.
+pub fn prefetch(cache: &Mutex<DecodeCache>, path: &Path) {
+    let _ = get_or_decode(cache, path);
+}
+
+fn lock(cache: &Mutex<DecodeCache>) -> std::sync::MutexGuard<'_, DecodeCache> {
+    cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn file_mtime(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
@@ -124,13 +147,13 @@ mod tests {
             eprintln!("skip: missing amen chopper fixture");
             return;
         };
-        let mut cache = DecodeCache::new(4);
-        let (a, hit1) = cache.get_or_decode(&path).expect("decode");
-        let (b, hit2) = cache.get_or_decode(&path).expect("decode");
+        let cache = Mutex::new(DecodeCache::new(4));
+        let (a, hit1) = get_or_decode(&cache, &path).expect("decode");
+        let (b, hit2) = get_or_decode(&cache, &path).expect("decode");
         assert!(!hit1);
         assert!(hit2);
         assert!(Arc::ptr_eq(&a, &b));
-        assert_eq!(cache.len(), 1);
+        assert_eq!(lock(&cache).len(), 1);
     }
 
     #[test]
@@ -144,15 +167,44 @@ mod tests {
         let Some(c) = fixture("amen_breaks/cw_amen_distorted.mp3") else {
             return;
         };
-        let mut cache = DecodeCache::new(2);
-        cache.get_or_decode(&a).expect("a");
-        cache.get_or_decode(&b).expect("b");
+        let cache = Mutex::new(DecodeCache::new(2));
+        get_or_decode(&cache, &a).expect("a");
+        get_or_decode(&cache, &b).expect("b");
         // Touch a so b is oldest.
-        let _ = cache.get_or_decode(&a).expect("a hit");
-        cache.get_or_decode(&c).expect("c");
-        assert_eq!(cache.len(), 2);
-        assert!(cache.entries.contains_key(&a));
-        assert!(cache.entries.contains_key(&c));
-        assert!(!cache.entries.contains_key(&b));
+        let _ = get_or_decode(&cache, &a).expect("a hit");
+        get_or_decode(&cache, &c).expect("c");
+        let (len, has_a, has_b, has_c) = {
+            let guard = lock(&cache);
+            (
+                guard.len(),
+                guard.entries.contains_key(&a),
+                guard.entries.contains_key(&b),
+                guard.entries.contains_key(&c),
+            )
+        };
+        assert_eq!(len, 2);
+        assert!(has_a && has_c && !has_b);
+    }
+
+    #[test]
+    fn lock_is_free_while_decoding() {
+        let Some(path) = fixture("heatwave/Moods/mood-hopeful.wav") else {
+            return;
+        };
+        let cache = std::sync::Arc::new(Mutex::new(DecodeCache::new(4)));
+        let worker = {
+            let cache = std::sync::Arc::clone(&cache);
+            std::thread::spawn(move || get_or_decode(&cache, &path).map(|(_, hit)| hit))
+        };
+        // While the other thread decodes, the lock must be available.
+        let mut free_seen = false;
+        while !worker.is_finished() {
+            if cache.try_lock().is_ok() {
+                free_seen = true;
+            }
+            std::thread::yield_now();
+        }
+        assert!(!worker.join().expect("join").expect("decode"));
+        assert!(free_seen);
     }
 }

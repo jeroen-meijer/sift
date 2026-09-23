@@ -4,11 +4,8 @@ import {
   CaretUpIcon,
   CircleNotchIcon,
   MagnifyingGlassIcon,
-  PlayIcon,
-  StarIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   clampColumnWidth,
@@ -29,43 +26,28 @@ import {
 } from "../lib/flipColumns";
 import { formatCount } from "../lib/format";
 import type { SampleRow, SortColumn, SortDirection } from "../lib/ipc";
-import { tagPalette } from "../lib/tagColors";
 import type { OptionalColumn } from "../lib/omni";
-import { isProfileOn, profileMark } from "../lib/profile";
-import { peaksQueueSnapshot, prefetchRowPeaks } from "../lib/rowPeaks";
-import { RowWaveform } from "./RowWaveform";
+import { isProfileOn, profileMark, useRenderTiming } from "../lib/profile";
+import { peaksQueueSnapshot, requestVisible } from "../lib/rowPeaks";
+import { assignSlots, emptySlots, type SlotState } from "../lib/rowSlots";
+import { useStableCallback } from "../lib/useStableCallback";
+import { SampleRowView, type SampleRowHandlers } from "./SampleRowView";
 
 const ROW_HEIGHT = 28;
-/** Extra rows above/below the viewport so scroll rarely paints an empty slot. */
+/**
+ * Extra rows above/below the viewport so a normal flick does not outrun the
+ * rendered rows. Paints are ~1 ms now, so a larger window is cheap.
+ */
 const ROW_OVERSCAN = 40;
-/** Prefetch peaks this far past the overscan window (first-pass scroll). */
-const PEAK_PREFETCH_PAD = 24;
-const EM_DASH = "—";
+/** Fetch peaks this many rows past the mounted window. */
+const PEAK_PREFETCH_PAD = 12;
+/** Matches `.sample-row .col.wave { padding: 0 14px 0 2px }`. */
+const WAVE_PAD_X = 16;
+const DEFAULT_WAVE_WIDTH = 120;
 /** Movement past this (css px) turns a header press into a column reorder. */
 const REORDER_THRESHOLD_PX = 5;
 
 const SORTABLE = new Set<ResizableColumn>(["name", "type", "bpm", "key"]);
-
-function highlight(name: string, query: string): ReactNode {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return name;
-  const at = name.toLowerCase().indexOf(needle);
-  if (at < 0) return name;
-  return (
-    <>
-      {name.slice(0, at)}
-      <mark>{name.slice(at, at + needle.length)}</mark>
-      {name.slice(at + needle.length)}
-    </>
-  );
-}
-
-/** Split `kick.wav` so the extension can sit in a quieter span. */
-function splitFilename(filename: string): { base: string; ext: string } {
-  const at = filename.lastIndexOf(".");
-  if (at <= 0 || at === filename.length - 1) return { base: filename, ext: "" };
-  return { base: filename.slice(0, at), ext: filename.slice(at) };
-}
 
 function ordersEqual(a: readonly ResizableColumn[], b: readonly ResizableColumn[]): boolean {
   if (a.length !== b.length) return false;
@@ -82,9 +64,6 @@ interface Props {
   loading?: boolean;
   selectedIds: Set<number>;
   playingId: number | null;
-  /** 0-1 position of the playhead in the playing row. */
-  playingProgress: number | null;
-  analyzingIds: Set<number>;
   showWaveforms: boolean;
   coloredWaveforms: boolean;
   hiddenColumns: Set<OptionalColumn>;
@@ -107,14 +86,12 @@ interface Props {
   onScrubRow: (sample: SampleRow, fraction: number) => void;
 }
 
-export function SampleTable({
+export const SampleTable = memo(function SampleTable({
   samples,
   indexedCount,
   loading = false,
   selectedIds,
   playingId,
-  playingProgress,
-  analyzingIds,
   showWaveforms,
   coloredWaveforms,
   hiddenColumns,
@@ -136,7 +113,7 @@ export function SampleTable({
   onScrubRow,
 }: Props) {
   const { t } = useTranslation("library");
-  const { t: tc } = useTranslation("common");
+  useRenderTiming("SampleTable");
   const tableRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -180,30 +157,55 @@ export function SampleTable({
   const rangeStart = virtualItems[0]?.index ?? 0;
   const rangeEnd = virtualItems.at(-1)?.index ?? -1;
 
-  /* Scroll + virtualizer marks (profile builds only). */
+  /* Pixel span covered by the rows of the last render (for fe.void_scroll). */
+  const renderedSpan = useRef({ start: 0, end: 0 });
+  useLayoutEffect(() => {
+    renderedSpan.current = {
+      start: virtualItems[0]?.start ?? 0,
+      end: virtualItems.at(-1)?.end ?? 0,
+    };
+  });
+
+  /* Profile scroll / void marks. Full rows always (lite mode delayed tags and
+   * felt like pop-in). */
+  const profileDetail = useRef("");
+  profileDetail.current = `n=${String(samples.length)} waves=${String(showWaveforms)}`;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let lastTop = el.scrollTop;
+    let lastAt = performance.now();
     const onScroll = () => {
       if (!isProfileOn()) return;
-      const top = el.scrollTop;
       const now = performance.now();
-      const dt = lastScrollAt.current > 0 ? now - lastScrollAt.current : 0;
-      const dy = top - lastScrollTop.current;
+      /* Rubber-band overscroll can be negative; voids use clamped top. */
+      const top = Math.max(0, el.scrollTop);
+      const rawTop = el.scrollTop;
+      const dt = now - lastAt;
+      const dy = rawTop - lastTop;
+      lastAt = now;
+      lastTop = rawTop;
+      const speed = Math.abs(dy) / Math.max(1, dt);
       lastScrollAt.current = now;
       lastScrollTop.current = top;
+      const span = renderedSpan.current;
+      const bottom = top + el.clientHeight;
+      const gap = Math.max(0, span.start - top) + Math.max(0, bottom - span.end);
       const q = peaksQueueSnapshot();
       profileMark(
         "fe.scroll",
         dt,
-        `top=${top.toFixed(0)} dy=${dy.toFixed(0)} range=${String(rangeStart)}-${String(rangeEnd)} mounted=${String(virtualItems.length)} n=${String(samples.length)} waves=${String(showWaveforms)} q_active=${String(q.active)} q_wait=${String(q.queued)}`,
+        `top=${top.toFixed(0)} dy=${dy.toFixed(0)} speed=${speed.toFixed(2)} gap=${gap.toFixed(0)} ${profileDetail.current} q_active=${String(q.active)} q_wait=${String(q.queued)}`,
       );
+      if (gap > 0) {
+        profileMark("fe.void_scroll", gap, `px top=${top.toFixed(0)} speed=${speed.toFixed(2)}`);
+      }
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       el.removeEventListener("scroll", onScroll);
     };
-  }, [rangeStart, rangeEnd, samples.length, showWaveforms, virtualItems.length]);
+  }, []);
 
   useLayoutEffect(() => {
     if (!isProfileOn()) return;
@@ -220,36 +222,106 @@ export function SampleTable({
     );
   }, [rangeStart, rangeEnd, samples.length, virtualItems.length, virtualizer]);
 
-  /* Prefetch peaks for the visible window plus a short lookahead. */
-  useEffect(() => {
-    if (!showWaveforms || samples.length === 0) return;
-    const last = samples.length - 1;
-    const urgentStart = rangeEnd < rangeStart ? 0 : rangeStart;
-    const urgentEnd = rangeEnd < rangeStart ? Math.min(last, 40) : rangeEnd;
-    const availabilityById = new Map(
-      samples.map((s) => [s.id, s.availability] as const),
-    );
-    const urgentIds: number[] = [];
-    for (let index = urgentStart; index <= urgentEnd; index++) {
-      const sample = samples[index];
-      if (sample && !sample.missing && sample.availability === "local") {
-        urgentIds.push(sample.id);
-      }
+  /* fe.void (profile builds): after each render, how many px of the visible
+   * area have no rendered rows. Measures the "void" while scrolling. */
+  useLayoutEffect(() => {
+    if (!isProfileOn()) return;
+    const el = scrollRef.current;
+    const first = virtualItems[0];
+    const last = virtualItems.at(-1);
+    if (!el || !first || !last) return;
+    const top = Math.max(0, el.scrollTop);
+    const bottom = top + el.clientHeight;
+    const gap = Math.max(0, first.start - top) + Math.max(0, bottom - last.end);
+    if (gap > 0) {
+      profileMark(
+        "fe.void",
+        gap,
+        `px top=${top.toFixed(0)} view_h=${String(el.clientHeight)} rows=${String(first.start)}-${String(last.end)} range=${String(first.index)}-${String(last.index)}`,
+      );
     }
-    prefetchRowPeaks(urgentIds, { urgent: true, availabilityById });
+  });
 
-    const padStart = Math.max(0, urgentStart - PEAK_PREFETCH_PAD);
-    const padEnd = Math.min(last, urgentEnd + PEAK_PREFETCH_PAD);
-    const warmIds: number[] = [];
-    for (let index = padStart; index <= padEnd; index++) {
-      if (index >= urgentStart && index <= urgentEnd) continue;
+  /* Fetch peaks for the mounted window, also while scrolling. Each call
+   * replaces the queue, so rows that scrolled past are dropped; a fetch is a
+   * ~4 ms peakfile read off the main thread, so a flick wastes little. */
+  useEffect(() => {
+    if (!showWaveforms || samples.length === 0 || rangeEnd < rangeStart) return;
+    const from = Math.max(0, rangeStart - PEAK_PREFETCH_PAD);
+    const to = Math.min(samples.length - 1, rangeEnd + PEAK_PREFETCH_PAD);
+    const ids: number[] = [];
+    for (let index = from; index <= to; index++) {
       const sample = samples[index];
-      if (sample && !sample.missing && sample.availability === "local") {
-        warmIds.push(sample.id);
-      }
+      if (sample && !sample.missing && sample.availability === "local") ids.push(sample.id);
     }
-    prefetchRowPeaks(warmIds, { availabilityById });
+    requestVisible(ids);
   }, [showWaveforms, samples, rangeStart, rangeEnd]);
+
+  /* One width measurement for every row canvas (rows never read layout). */
+  const [waveWidth, setWaveWidth] = useState(DEFAULT_WAVE_WIDTH);
+  useEffect(() => {
+    const header = headerRef.current?.querySelector<HTMLElement>('[data-col="wave"]');
+    if (!header) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const next = Math.max(40, Math.round(entry.contentRect.width - WAVE_PAD_X));
+      setWaveWidth((prev) => (prev === next ? prev : next));
+    });
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+    };
+  }, [showWaveforms, orderKey]);
+
+  /* Recycle row DOM (and canvases) as rows scroll: see rowSlots.ts. */
+  const slotsRef = useRef<SlotState>(emptySlots());
+  const slots = assignSlots(
+    slotsRef.current,
+    virtualItems.map((v) => v.index),
+  );
+  slotsRef.current = slots;
+
+  /* Stable handlers so memoized rows skip re-rendering. */
+  const handleSelect = useStableCallback((sample: SampleRow, e: React.MouseEvent) => {
+    onSelect(sample.id, e);
+  });
+  const handleToggleFavorite = useStableCallback((id: number, favorite: boolean) => {
+    onToggleFavorite(id, favorite);
+  });
+  const handleOpenMenu = useStableCallback((sample: SampleRow, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!selectedIds.has(sample.id)) onSelect(sample.id, e);
+    onOpenMenu(e.clientX, e.clientY, sample);
+  });
+  const handleDragStart = useStableCallback((sample: SampleRow, e: React.DragEvent) => {
+    if (sample.missing) {
+      e.preventDefault();
+      return;
+    }
+    if (!selectedIds.has(sample.id)) onSelect(sample.id, e);
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", sample.path);
+    onDragSelected();
+  });
+  const handleHover = useStableCallback((sample: SampleRow) => {
+    if (hoverPreviewHeld && !sample.missing && sample.availability === "local") {
+      onHoverPreview(sample.id);
+    }
+  });
+  const handleScrub = useStableCallback((sample: SampleRow, fraction: number) => {
+    onScrubRow(sample, fraction);
+  });
+  const rowHandlers = useMemo<SampleRowHandlers>(
+    () => ({
+      onSelect: handleSelect,
+      onToggleFavorite: handleToggleFavorite,
+      onOpenMenu: handleOpenMenu,
+      onDragStart: handleDragStart,
+      onHover: handleHover,
+      onScrub: handleScrub,
+    }),
+    [handleSelect, handleToggleFavorite, handleOpenMenu, handleDragStart, handleHover, handleScrub],
+  );
 
   useLayoutEffect(() => {
     const root = tableRef.current;
@@ -438,85 +510,6 @@ export function SampleTable({
     );
   };
 
-  const renderCell = (column: ResizableColumn, sample: SampleRow, analyzing: boolean, playing: boolean) => {
-    switch (column) {
-      case "name": {
-        const { base, ext } = splitFilename(sample.filename);
-        return (
-          <div key={column} className="col name" data-col={column} title={sample.path}>
-            {sample.missing ? (
-              <WarningCircleIcon size={11} weight="fill" className="row-missing-icon" />
-            ) : sample.availability === "cloud" ? (
-              <span className="row-cloud-badge" title={tc("statusOnlineOnly")}>
-                {tc("statusOnlineOnly")}
-              </span>
-            ) : null}
-            <span className="name-text">
-              {highlight(base, highlightText)}
-              {ext ? <span className="name-ext">{ext}</span> : null}
-            </span>
-          </div>
-        );
-      }
-      case "type":
-        return (
-          <div key={column} className="col type" data-col={column}>
-            {sample.missing ? "" : (sample.sample_type ?? "")}
-          </div>
-        );
-      case "bpm":
-        return (
-          <div key={column} className="col mono-cell" data-col={column}>
-            {sample.bpm == null ? EM_DASH : Math.round(sample.bpm)}
-          </div>
-        );
-      case "key":
-        return (
-          <div key={column} className="col mono-cell" data-col={column}>
-            {sample.key_name ?? EM_DASH}
-          </div>
-        );
-      case "wave":
-        return (
-          <div key={column} className="col wave" data-col={column}>
-            <RowWaveform
-              sampleId={sample.id}
-              missing={sample.missing}
-              availability={sample.availability}
-              analyzing={analyzing}
-              selected={selectedIds.has(sample.id)}
-              colored={coloredWaveforms}
-              progress={playing ? playingProgress : null}
-              onScrub={(fraction) => {
-                onScrubRow(sample, fraction);
-              }}
-            />
-          </div>
-        );
-      case "tags":
-        return (
-          <div key={column} className="col tags" data-col={column}>
-            {analyzing ? (
-              <span className="analyzing-label">{tc("statusAnalyzing")}</span>
-            ) : (
-              sample.tags.map((tag) => {
-                const palette = tagPalette(tag.path, tag.color);
-                return (
-                  <span
-                    key={tag.id}
-                    className="tag-chip"
-                    style={{ background: palette.bg, color: palette.fg }}
-                  >
-                    {tag.path}
-                  </span>
-                );
-              })
-            )}
-          </div>
-        );
-    }
-  };
-
   return (
     <div className="sample-table" ref={tableRef}>
       <div
@@ -530,74 +523,31 @@ export function SampleTable({
       </div>
 
       <div className="sample-table-body" ref={scrollRef}>
-        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+        {/* Row lines are the container's background, so an area the browser has
+          * scrolled to before React renders its rows (fast flicks, scrollbar
+          * yanks) looks like empty rows for a frame instead of a void. */}
+        <div
+          className={samples.length > 0 ? "sample-table-rows" : undefined}
+          style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+        >
           {virtualItems.map((virtual) => {
             const sample = samples[virtual.index];
             if (!sample) return null;
-            const selected = selectedIds.has(sample.id);
-            const analyzing = analyzingIds.has(sample.id);
-            const playing = playingId === sample.id;
             return (
-              <div
-                key={virtual.key}
-                data-index={virtual.index}
-                data-sample-id={sample.id}
-                className={`sample-row${selected ? " selected" : ""}${sample.missing ? " missing" : ""}`}
-                style={{
-                  gridTemplateColumns: template,
-                  transform: `translateY(${String(virtual.start)}px)`,
-                }}
-                draggable={!sample.missing}
-                onDragStart={(e) => {
-                  if (sample.missing) {
-                    e.preventDefault();
-                    return;
-                  }
-                  if (!selectedIds.has(sample.id)) onSelect(sample.id, e);
-                  e.dataTransfer.effectAllowed = "copy";
-                  e.dataTransfer.setData("text/plain", sample.path);
-                  onDragSelected();
-                }}
-                onClick={(e) => {
-                  onSelect(sample.id, e);
-                }}
-                onMouseEnter={() => {
-                  if (
-                    hoverPreviewHeld &&
-                    !sample.missing &&
-                    sample.availability === "local"
-                  ) {
-                    onHoverPreview(sample.id);
-                  }
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  if (!selectedIds.has(sample.id)) onSelect(sample.id, e);
-                  onOpenMenu(e.clientX, e.clientY, sample);
-                }}
-              >
-                <button
-                  type="button"
-                  className={`col fav${playing ? " playing" : ""}`}
-                  tabIndex={-1}
-                  aria-label={sample.favorite ? tc("ctxUnfavorite") : tc("ctxFavorite")}
-                  aria-pressed={sample.favorite}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(sample.id, !sample.favorite);
-                  }}
-                >
-                  <PlayIcon size={11} weight="fill" className="fav-play" aria-hidden />
-                  <StarIcon
-                    size={11}
-                    weight={sample.favorite ? "fill" : "regular"}
-                    className="fav-star"
-                  />
-                </button>
-
-                {columns.map((column) => renderCell(column, sample, analyzing, playing))}
-                <span aria-hidden />
-              </div>
+              <SampleRowView
+                key={slots.byIndex.get(virtual.index) ?? virtual.index}
+                sample={sample}
+                index={virtual.index}
+                top={virtual.start}
+                template={template}
+                columns={columns}
+                selected={selectedIds.has(sample.id)}
+                playing={playingId === sample.id}
+                colored={coloredWaveforms}
+                highlightText={highlightText}
+                waveWidth={waveWidth}
+                handlers={rowHandlers}
+              />
             );
           })}
 
@@ -632,4 +582,4 @@ export function SampleTable({
       </div>
     </div>
   );
-}
+});

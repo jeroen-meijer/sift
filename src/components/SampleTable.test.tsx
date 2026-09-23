@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../i18n";
 import { DEFAULT_COLUMN_ORDER } from "../lib/columnOrder";
 import type { SampleRow } from "../lib/ipc";
+import { analysisStore } from "../lib/liveStores";
 import { SampleTable } from "./SampleTable";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -52,8 +53,6 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       indexedCount={4402}
       selectedIds={new Set()}
       playingId={null}
-      playingProgress={null}
-      analyzingIds={new Set()}
       showWaveforms
       coloredWaveforms
       hiddenColumns={new Set()}
@@ -78,6 +77,10 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
 }
 
 describe("SampleTable", () => {
+  afterEach(() => {
+    analysisStore.set({ bar: null, activeIds: new Set() });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -174,10 +177,50 @@ describe("SampleTable", () => {
     expect(screen.getByText("Drums/Kick")).toBeVisible();
   });
 
-  it("swaps the tags cell for an analysing label while a row is queued", () => {
-    renderTable({ analyzingIds: new Set([1]) });
+  it("swaps the tags cell for an analysing label while a worker has the row", () => {
+    analysisStore.set({ bar: { done: 0, total: 1 }, activeIds: new Set([1]) });
+    renderTable();
     expect(screen.getByText("Analyzing…")).toBeVisible();
     expect(screen.queryByText("Drums/Kick")).toBeNull();
+    /* The waveform canvas stays mounted under the analyzing overlay. */
+    expect(document.querySelector(".row-wave canvas")).not.toBeNull();
+  });
+
+  it("only re-renders the row whose analyzing flag changed", () => {
+    renderTable({ samples: [sample({ id: 1 }), sample({ id: 2, filename: "snare.wav" })] });
+    const rows = () => [...document.querySelectorAll(".sample-row")];
+    const before = rows().map((r) => r.querySelector(".col.tags")?.textContent);
+    act(() => {
+      analysisStore.set({ bar: { done: 0, total: 2 }, activeIds: new Set([2]) });
+    });
+    const after = rows().map((r) => r.querySelector(".col.tags")?.textContent);
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toBe("Analyzing…");
+  });
+
+  it("reuses row canvases when scrolling instead of creating new ones", () => {
+    const many = Array.from({ length: 300 }, (_, i) =>
+      sample({ id: i + 1, filename: `s${String(i)}.wav`, path: `/x/s${String(i)}.wav` }),
+    );
+    const { container } = renderTable({ samples: many });
+    const body = container.querySelector<HTMLElement>(".sample-table-body");
+    if (!body) throw new Error("no body");
+    const before = new Set(container.querySelectorAll("canvas"));
+    expect(before.size).toBeGreaterThan(0);
+    act(() => {
+      body.scrollTop = 28 * 100;
+      fireEvent.scroll(body);
+    });
+    const indices = [...container.querySelectorAll<HTMLElement>(".sample-row")].map((row) =>
+      Number(row.dataset.index),
+    );
+    /* The window moved well past the first screen... */
+    expect(Math.min(...indices)).toBeGreaterThan(50);
+    /* ...yet every canvas from before is still in use. Only the extra slots
+     * (overscan above, which the top of the list does not have) are new. */
+    const after = [...container.querySelectorAll("canvas")];
+    const reused = after.filter((canvas) => before.has(canvas)).length;
+    expect(reused).toBe(before.size);
   });
 
   it("highlights the search hit inside the filename", () => {
@@ -215,8 +258,6 @@ describe("SampleTable", () => {
         indexedCount={1}
         selectedIds={new Set()}
         playingId={null}
-        playingProgress={null}
-        analyzingIds={new Set()}
         showWaveforms
         coloredWaveforms
         hiddenColumns={new Set()}
@@ -243,8 +284,24 @@ describe("SampleTable", () => {
     );
   });
 
+  it("keeps tags and icons while scrolling", () => {
+    const many = Array.from({ length: 300 }, (_, i) =>
+      sample({ id: i + 1, filename: `s${String(i)}.wav`, path: `/x/s${String(i)}.wav` }),
+    );
+    const { container } = renderTable({ samples: many });
+    const body = container.querySelector<HTMLElement>(".sample-table-body");
+    if (!body) throw new Error("no body");
+    act(() => {
+      body.scrollTop = 28 * 150;
+      fireEvent.scroll(body);
+    });
+    expect(container.querySelector(".tag-chip")).not.toBeNull();
+    expect(container.querySelector(".fav-star")).not.toBeNull();
+    expect(container.querySelector(".row-wave canvas")).not.toBeNull();
+  });
+
   it("marks the playing row", () => {
-    const { container } = renderTable({ playingId: 1, playingProgress: 0.4 });
+    const { container } = renderTable({ playingId: 1 });
     expect(container.querySelector(".sample-row .col.fav.playing")).not.toBeNull();
     expect(container.querySelector(".sample-row .fav-play")).not.toBeNull();
   });
