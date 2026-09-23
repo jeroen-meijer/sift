@@ -410,6 +410,51 @@ pub fn cache_peaks_from_decoded_with_mono(
 /// Default bucket count for row / generic peaks IPC.
 pub const DEFAULT_BUCKETS: usize = 1024;
 
+/// True when a readable peakfile for the current format is on disk.
+/// Only reads the header (magic + version + bucket count), not the body.
+#[must_use]
+pub fn has_current_peakfile(peaks_dir: &Path, sample_id: i64) -> bool {
+    peakfile_header_ok(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
+}
+
+/// Fast header check used by the analyze queue (skip decode + full parse).
+fn peakfile_header_ok(path: &Path, expected_buckets: Option<usize>) -> bool {
+    let Ok(mut f) = File::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 4];
+    if f.read_exact(&mut magic).is_err() || &magic != MAGIC {
+        return false;
+    }
+    let mut buf4 = [0u8; 4];
+    if f.read_exact(&mut buf4).is_err() {
+        return false;
+    }
+    if u32::from_le_bytes(buf4) != VERSION {
+        return false;
+    }
+    // channels, sample_rate
+    if f.read_exact(&mut buf4).is_err() || f.read_exact(&mut buf4).is_err() {
+        return false;
+    }
+    let mut buf8 = [0u8; 8];
+    if f.read_exact(&mut buf8).is_err() {
+        return false;
+    }
+    if f.read_exact(&mut buf4).is_err() {
+        return false;
+    }
+    let Ok(bucket_count) = usize::try_from(u32::from_le_bytes(buf4)) else {
+        return false;
+    };
+    if let Some(expected) = expected_buckets
+        && bucket_count != expected
+    {
+        return false;
+    }
+    true
+}
+
 /// Read the cached row peakfile only. Never decodes. `None` when the sample
 /// has not been analyzed yet (or the file is from an older format).
 pub fn read_cached_peaks(peaks_dir: &Path, sample_id: i64) -> AppResult<Option<PeakData>> {
@@ -705,6 +750,26 @@ mod tests {
             amen_peaks.bucket_count,
             24,
         );
+    }
+
+    #[test]
+    fn has_current_peakfile_rejects_old_version() {
+        let dir = tempfile::tempdir().expect("temp");
+        let path = dir.path().join("9.peaks");
+        let mut f = File::create(&path).expect("create");
+        f.write_all(MAGIC).expect("magic");
+        f.write_all(&6u32.to_le_bytes()).expect("old ver");
+        drop(f);
+        assert!(!has_current_peakfile(dir.path(), 9));
+    }
+
+    #[test]
+    fn has_current_peakfile_accepts_roundtrip() {
+        let dir = tempfile::tempdir().expect("temp");
+        let audio = sine(22_050, 0.1, 440.0);
+        let data = generate_peaks(&audio, DEFAULT_BUCKETS).expect("peaks");
+        write_peakfile(&peak_path(dir.path(), 3), &data).expect("write");
+        assert!(has_current_peakfile(dir.path(), 3));
     }
 
     /// Dogfood pads: low-mid vs high-mid should differ across bright vs dark pads.

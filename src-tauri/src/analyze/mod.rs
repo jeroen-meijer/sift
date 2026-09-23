@@ -915,7 +915,8 @@ pub fn bpm_range_from_settings(conn: &mut SqliteConnection) -> AppResult<(f64, f
     Ok((min, max))
 }
 
-/// Local samples that still need analysis work: never analyzed, or peakfile missing.
+/// Local samples that still need analysis work: never analyzed, peakfile
+/// missing, or peakfile from an older format.
 pub fn list_analysis_queue_ids(
     conn: &mut SqliteConnection,
     peaks_dir: &Path,
@@ -928,13 +929,9 @@ pub fn list_analysis_queue_ids(
         .load(conn)?;
     let mut ids = Vec::new();
     for (id, analyzed_at) in rows {
-        if analyzed_at.is_none() {
-            ids.push(id_to_i64(id));
-            continue;
-        }
-        let peak = peaks_dir.join(format!("{id}.peaks"));
-        if !peak.exists() {
-            ids.push(id_to_i64(id));
+        let sample_id = id_to_i64(id);
+        if analyzed_at.is_none() || !peaks::has_current_peakfile(peaks_dir, sample_id) {
+            ids.push(sample_id);
         }
     }
     Ok(ids)
@@ -1334,7 +1331,7 @@ pub fn analyze_now(
     true
 }
 
-/// Keep only ids that are local and still need analysis or a peakfile.
+/// Keep only ids that are local and still need analysis or a current peakfile.
 fn filter_analysis_queue_ids(
     conn: &mut SqliteConnection,
     peaks_dir: &Path,
@@ -1360,12 +1357,7 @@ fn filter_analysis_queue_ids(
         if missing != 0 || availability != Availability::Local.as_str() {
             continue;
         }
-        if analyzed_at.is_none() {
-            out.push(sample_id);
-            continue;
-        }
-        let peak = peaks_dir.join(format!("{sample_id}.peaks"));
-        if !peak.exists() {
+        if analyzed_at.is_none() || !peaks::has_current_peakfile(peaks_dir, sample_id) {
             out.push(sample_id);
         }
     }
