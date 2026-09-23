@@ -24,7 +24,7 @@ interface Props {
   clipReady: boolean;
   /** Apply snap (and Shift free-time) to a pointer position. */
   snapPointer: (secs: number) => number;
-  /** Bass→red / mid→green / treble→blue coloring from peak colors. */
+  /** Bass / low-mid / high-mid / treble coloring from peak colors. */
   colored: boolean;
   onSeek: (secs: number) => void;
   onSelect: (selection: Selection | null) => void;

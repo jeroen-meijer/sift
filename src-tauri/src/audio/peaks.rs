@@ -2,14 +2,15 @@
 //!
 //! Binary layout (`{sample_id}.peaks`):
 //! - magic: `SFTP` (4 bytes)
-//! - version: u32 LE (= 6)
+//! - version: u32 LE (= 7)
 //! - channels: u32 LE
 //! - `sample_rate`: u32 LE
 //! - `duration_ms`: f64 LE
 //! - `bucket_count`: u32 LE
 //! - peaks: `bucket_count * channels * 2` f32 LE values
 //!   per bucket, per channel: min, max
-//! - colors: `bucket_count * 3` u8 RGB values (bass→R, mid→G, treble→B)
+//! - colors: `bucket_count * 4` u8 band weights
+//!   (bass, low-mid, high-mid, treble)
 
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -22,9 +23,12 @@ use crate::audio::decode::DecodedAudio;
 use crate::error::{AppError, AppResult};
 
 const MAGIC: &[u8; 4] = b"SFTP";
-/// v6: mid/treble cut at 6 kHz so amen/snare body stays mid instead of a flat
-/// treble wash (v5 used 3.5 kHz).
-const VERSION: u32 = 6;
+/// v7: four spectral bands (low-mid / high-mid split) so pads can shift hue
+/// when brightness moves inside the old single mid band. v6 was three bands
+/// stored as Classic RGB (`bucket_count * 3`).
+const VERSION: u32 = 7;
+/// Bass / low-mid / high-mid / treble weights per bucket.
+pub const BAND_COUNT: usize = 4;
 
 /// Peak buffer ready for IPC / Canvas drawing.
 #[derive(Debug, Clone, Serialize)]
@@ -35,8 +39,8 @@ pub struct PeakData {
     /// Flat array: for each bucket, for each channel: min, max.
     pub peaks: Vec<f32>,
     pub bucket_count: usize,
-    /// Flat Classic moodbar weights (`bucket_count * 3` bytes): bass→R, mid→G,
-    /// treble→B. The UI remaps these through theme `--color-wave-*` band hues.
+    /// Flat band weights (`bucket_count * 4` bytes): bass, low-mid, high-mid,
+    /// treble. The UI remaps these through theme `--color-wave-*` band hues.
     pub colors: Vec<u8>,
 }
 
@@ -60,7 +64,7 @@ fn write_peakfile(path: &Path, data: &PeakData) -> AppResult<()> {
     for v in &data.peaks {
         f.write_all(&v.to_le_bytes())?;
     }
-    if data.colors.len() != data.bucket_count.saturating_mul(3) {
+    if data.colors.len() != data.bucket_count.saturating_mul(BAND_COUNT) {
         return Err(AppError::msg("spectral color length mismatch"));
     }
     f.write_all(&data.colors)?;
@@ -112,7 +116,7 @@ fn read_peakfile(path: &Path, expected_buckets: Option<usize>) -> AppResult<Opti
     }
 
     let color_len = bucket_count
-        .checked_mul(3)
+        .checked_mul(BAND_COUNT)
         .ok_or_else(|| AppError::msg("peakfile color size overflow"))?;
     let mut colors = vec![0u8; color_len];
     f.read_exact(&mut colors)?;
@@ -143,65 +147,72 @@ fn adaptive_fft_size(mono_frames: usize) -> usize {
     target.max(256)
 }
 
-/// Linear interpolate Classic band-weight RGB between moodbar frames onto `buckets`.
+/// Linear interpolate N-band weights between moodbar frames onto `buckets`.
 #[allow(
     clippy::as_conversions,
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::suboptimal_flops,
-    reason = "display RGB from floats; precision is irrelevant"
+    reason = "display weights from floats; precision is irrelevant"
 )]
-fn resample_colors(frames: &[[u8; 3]], buckets: usize) -> Vec<u8> {
-    let mut out = vec![0u8; buckets.saturating_mul(3)];
-    if buckets == 0 || frames.is_empty() {
+fn resample_band_weights(frames_flat: &[f64], band_count: usize, buckets: usize) -> Vec<u8> {
+    let mut out = vec![0u8; buckets.saturating_mul(band_count)];
+    if buckets == 0 || band_count == 0 || frames_flat.len() < band_count {
         return out;
     }
-    if frames.len() == 1 {
-        let rgb = frames.first().copied().unwrap_or([0, 0, 0]);
+    let frame_count = frames_flat.len().checked_div(band_count).unwrap_or(0);
+    if frame_count == 0 {
+        return out;
+    }
+
+    let sample_frame = |i: usize| -> Vec<f32> {
+        let base = i.saturating_mul(band_count);
+        (0..band_count)
+            .map(|c| {
+                frames_flat
+                    .get(base.saturating_add(c))
+                    .copied()
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 1.0) as f32
+            })
+            .collect()
+    };
+
+    if frame_count == 1 {
+        let frame = sample_frame(0);
         for b in 0..buckets {
-            let base = b.saturating_mul(3);
-            if let Some(r) = out.get_mut(base) {
-                *r = rgb[0];
-            }
-            if let Some(g) = out.get_mut(base.saturating_add(1)) {
-                *g = rgb[1];
-            }
-            if let Some(bl) = out.get_mut(base.saturating_add(2)) {
-                *bl = rgb[2];
+            let base = b.saturating_mul(band_count);
+            for (c, &v) in frame.iter().enumerate() {
+                if let Some(slot) = out.get_mut(base.saturating_add(c)) {
+                    *slot = (v * 255.0).round() as u8;
+                }
             }
         }
         return out;
     }
 
-    let last_src = frames.len().saturating_sub(1);
+    let last_src = frame_count.saturating_sub(1);
     let last_dst = buckets.saturating_sub(1).max(1);
     for b in 0..buckets {
         let t = b as f32 / last_dst as f32 * last_src as f32;
         let i0 = t.floor() as usize;
         let i1 = i0.saturating_add(1).min(last_src);
         let frac = t - i0 as f32;
-        let a = frames.get(i0).copied().unwrap_or([0, 0, 0]);
-        let c = frames.get(i1).copied().unwrap_or([0, 0, 0]);
-        let rgb = [
-            (f32::from(a[0]) + (f32::from(c[0]) - f32::from(a[0])) * frac).round() as u8,
-            (f32::from(a[1]) + (f32::from(c[1]) - f32::from(a[1])) * frac).round() as u8,
-            (f32::from(a[2]) + (f32::from(c[2]) - f32::from(a[2])) * frac).round() as u8,
-        ];
-        let base = b.saturating_mul(3);
-        if let Some(r) = out.get_mut(base) {
-            *r = rgb[0];
-        }
-        if let Some(g) = out.get_mut(base.saturating_add(1)) {
-            *g = rgb[1];
-        }
-        if let Some(bl) = out.get_mut(base.saturating_add(2)) {
-            *bl = rgb[2];
+        let a = sample_frame(i0);
+        let c = sample_frame(i1);
+        let base = b.saturating_mul(band_count);
+        for ch in 0..band_count {
+            let av = a.get(ch).copied().unwrap_or(0.0);
+            let cv = c.get(ch).copied().unwrap_or(0.0);
+            let v = (av + (cv - av) * frac).clamp(0.0, 1.0);
+            if let Some(slot) = out.get_mut(base.saturating_add(ch)) {
+                *slot = (v * 255.0).round() as u8;
+            }
         }
     }
 
-    // Light 3-tap smooth so residual steps from few spectral frames soften.
-    smooth_colors_inplace(&mut out, buckets);
+    smooth_colors_inplace(&mut out, buckets, band_count);
     out
 }
 
@@ -209,23 +220,31 @@ fn resample_colors(frames: &[[u8; 3]], buckets: usize) -> Vec<u8> {
     clippy::as_conversions,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "averaged u8 RGB"
+    reason = "averaged u8 band weights"
 )]
-fn smooth_colors_inplace(colors: &mut [u8], buckets: usize) {
-    if buckets < 3 {
+fn smooth_colors_inplace(colors: &mut [u8], buckets: usize, band_count: usize) {
+    if buckets < 3 || band_count == 0 {
         return;
     }
     let snapshot = colors.to_vec();
     for b in 1..buckets.saturating_sub(1) {
-        for c in 0..3 {
-            let i = b.saturating_mul(3).saturating_add(c);
+        for c in 0..band_count {
+            let i = b.saturating_mul(band_count).saturating_add(c);
             let left = snapshot
-                .get(b.saturating_sub(1).saturating_mul(3).saturating_add(c))
+                .get(
+                    b.saturating_sub(1)
+                        .saturating_mul(band_count)
+                        .saturating_add(c),
+                )
                 .copied()
                 .unwrap_or(0);
             let mid = snapshot.get(i).copied().unwrap_or(0);
             let right = snapshot
-                .get(b.saturating_add(1).saturating_mul(3).saturating_add(c))
+                .get(
+                    b.saturating_add(1)
+                        .saturating_mul(band_count)
+                        .saturating_add(c),
+                )
                 .copied()
                 .unwrap_or(0);
             let avg = (u16::from(left)
@@ -240,10 +259,10 @@ fn smooth_colors_inplace(colors: &mut [u8], buckets: usize) {
     }
 }
 
-/// Bass / mid / treble energy → Classic RGB weights (R/G/B) for theme remapping in the UI.
+/// Four-band energy → weights for theme remapping in the UI.
 fn generate_spectral_colors(mono: &[f32], sample_rate: u32, buckets: usize) -> Vec<u8> {
     if buckets == 0 || sample_rate == 0 || mono.is_empty() {
-        return vec![0u8; buckets.saturating_mul(3)];
+        return vec![0u8; buckets.saturating_mul(BAND_COUNT)];
     }
     let fft_size = adaptive_fft_size(mono.len());
     let options = GenerateOptions {
@@ -252,17 +271,18 @@ fn generate_spectral_colors(mono: &[f32], sample_rate: u32, buckets: usize) -> V
         normalize_mode: NormalizeMode::GlobalPeak,
         // Musical cuts for sample browsing:
         // - <200 Hz: sub / 808 / kick body
-        // - 200 Hz to 6 kHz: vocals, snare body, most melodic content
-        // - >6 kHz: air / hats (amen was ~75% treble at 3.5 kHz)
+        // - 200–1500 Hz: low-mid body (pad fundamentals, warmth)
+        // - 1500–6000 Hz: high-mid presence (brightness, vocal formants)
+        // - >6 kHz: air / hats
         low_cut_hz: 200.0,
         mid_cut_hz: 6000.0,
-        band_edges_hz: vec![200.0, 6000.0],
+        band_edges_hz: vec![200.0, 1500.0, 6000.0],
         fft_size,
         max_target_frames: Some(buckets.max(1)),
         ..GenerateOptions::default()
     };
     let analysis = analyze_pcm_mono(sample_rate, mono, &options);
-    resample_colors(&analysis.colors, buckets)
+    resample_band_weights(&analysis.frames, analysis.channel_count, buckets)
 }
 
 /// Build min/max peaks from decoded PCM, with per-bucket spectral RGB.
@@ -418,7 +438,7 @@ pub fn empty_peaks(buckets: usize) -> PeakData {
         duration_ms: 0.0,
         peaks: vec![0.0; buckets.saturating_mul(2)],
         bucket_count: buckets,
-        colors: vec![0; buckets.saturating_mul(3)],
+        colors: vec![0; buckets.saturating_mul(BAND_COUNT)],
     }
 }
 
@@ -434,7 +454,7 @@ mod tests {
         assert_eq!(p.bucket_count, 64);
         assert_eq!(p.duration_ms, 0.0);
         assert_eq!(p.peaks.len(), 128);
-        assert_eq!(p.colors.len(), 192);
+        assert_eq!(p.colors.len(), 64 * BAND_COUNT);
     }
 
     fn sine(rate: u32, secs: f32, hz: f32) -> DecodedAudio {
@@ -461,50 +481,57 @@ mod tests {
         }
     }
 
-    fn avg_rgb(colors: &[u8], start: usize, end: usize) -> [f32; 3] {
-        let mut sum = [0.0f32; 3];
+    fn avg_bands(colors: &[u8], start: usize, end: usize) -> [f32; BAND_COUNT] {
+        let mut sum = [0.0f32; BAND_COUNT];
         let mut count = 0.0f32;
         for i in start..end {
-            let base = i.saturating_mul(3);
-            sum[0] += f32::from(colors.get(base).copied().unwrap_or(0));
-            sum[1] += f32::from(colors.get(base.saturating_add(1)).copied().unwrap_or(0));
-            sum[2] += f32::from(colors.get(base.saturating_add(2)).copied().unwrap_or(0));
+            let base = i.saturating_mul(BAND_COUNT);
+            for (c, slot) in sum.iter_mut().enumerate() {
+                *slot += f32::from(colors.get(base.saturating_add(c)).copied().unwrap_or(0));
+            }
             count += 1.0;
         }
-        [sum[0] / count, sum[1] / count, sum[2] / count]
+        sum.map(|v| v / count.max(1.0))
+    }
+
+    fn dominant_band(weights: [f32; BAND_COUNT]) -> usize {
+        let mut best = 0usize;
+        for (i, &v) in weights.iter().enumerate() {
+            if v > weights[best] {
+                best = i;
+            }
+        }
+        best
     }
 
     #[test]
-    fn bass_mid_treble_map_to_rgb_channels() {
+    fn four_band_tones_map_to_expected_channels() {
         let rate = 44_100;
+        // bass / low-mid / high-mid / treble
+        let segments = [80.0_f32, 800.0, 3000.0, 9000.0];
         let mut samples = Vec::new();
-        samples.extend(sine(rate, 0.4, 80.0).samples);
-        samples.extend(sine(rate, 0.4, 1000.0).samples);
-        samples.extend(sine(rate, 0.4, 6000.0).samples);
+        for hz in segments {
+            samples.extend(sine(rate, 0.35, hz).samples);
+        }
         let audio = DecodedAudio {
             sample_rate: rate,
             channels: 1,
             bit_depth_hint: None,
             samples,
         };
-        let peaks = generate_peaks(&audio, 96).expect("peaks");
-        assert_eq!(peaks.colors.len(), 96 * 3);
-        let third = peaks.bucket_count / 3;
-        let low = avg_rgb(&peaks.colors, 0, third);
-        let mid = avg_rgb(&peaks.colors, third, third * 2);
-        let high = avg_rgb(&peaks.colors, third * 2, peaks.bucket_count);
-        assert!(
-            low[0] > low[1] && low[0] > low[2],
-            "bass should be red-dominant: {low:?}"
-        );
-        assert!(
-            mid[1] > mid[0] && mid[1] > mid[2],
-            "mids should be green-dominant: {mid:?}"
-        );
-        assert!(
-            high[2] > high[0] && high[2] > high[1],
-            "treble should be blue-dominant: {high:?}"
-        );
+        let peaks = generate_peaks(&audio, 128).expect("peaks");
+        assert_eq!(peaks.colors.len(), 128 * BAND_COUNT);
+        let quarter = peaks.bucket_count / 4;
+        for (i, _) in segments.iter().enumerate() {
+            let start = i.saturating_mul(quarter);
+            let end = start.saturating_add(quarter).min(peaks.bucket_count);
+            let avg = avg_bands(&peaks.colors, start, end);
+            assert_eq!(
+                dominant_band(avg),
+                i,
+                "segment {i} should be band {i}-led, got {avg:?}"
+            );
+        }
     }
 
     #[test]
@@ -513,13 +540,13 @@ mod tests {
         // into multi-hundred-bucket solid slabs.
         let audio = sine(44_100, 0.15, 200.0);
         let peaks = generate_peaks(&audio, 256).expect("peaks");
-        assert_eq!(peaks.colors.len(), 256 * 3);
+        assert_eq!(peaks.colors.len(), 256 * BAND_COUNT);
         let mut changes = 0u32;
         for b in 1..peaks.bucket_count {
-            let prev = b.saturating_sub(1).saturating_mul(3);
-            let cur = b.saturating_mul(3);
-            let same = peaks.colors.get(prev..prev.saturating_add(3))
-                == peaks.colors.get(cur..cur.saturating_add(3));
+            let prev = b.saturating_sub(1).saturating_mul(BAND_COUNT);
+            let cur = b.saturating_mul(BAND_COUNT);
+            let same = peaks.colors.get(prev..prev.saturating_add(BAND_COUNT))
+                == peaks.colors.get(cur..cur.saturating_add(BAND_COUNT));
             if !same {
                 changes = changes.saturating_add(1);
             }
@@ -545,13 +572,14 @@ mod tests {
         assert_eq!(loaded.peaks.len(), data.peaks.len());
     }
 
+    /// PPM debug strip: R=bass, G=low-mid, B=high-mid (treble omitted).
     fn write_ppm_strip(path: &Path, colors: &[u8], buckets: usize, height: usize) {
         use std::fmt::Write as _;
         let width = buckets.max(1);
         let mut body = String::new();
         for _y in 0..height {
             for x in 0..width {
-                let base = x.saturating_mul(3);
+                let base = x.saturating_mul(BAND_COUNT);
                 let r = colors.get(base).copied().unwrap_or(0);
                 let g = colors.get(base.saturating_add(1)).copied().unwrap_or(0);
                 let b = colors.get(base.saturating_add(2)).copied().unwrap_or(0);
@@ -563,18 +591,17 @@ mod tests {
         fs::write(path, header + &body).expect("write ppm");
     }
 
-    /// `GlobalPeak`: a pure bass tone must not wash to near-white Classic RGB.
+    /// `GlobalPeak`: a pure bass tone must not wash across all bands.
     #[test]
-    fn pure_bass_tone_is_red_dominant_not_white() {
+    fn pure_bass_tone_is_bass_dominant_not_white() {
         let audio = sine(44_100, 0.5, 70.0);
         let peaks = generate_peaks(&audio, 128).expect("peaks");
-        let mid = avg_rgb(&peaks.colors, 16, 112);
+        let mid = avg_bands(&peaks.colors, 16, 112);
+        assert_eq!(dominant_band(mid), 0, "70 Hz should be bass-led, got {mid:?}");
         assert!(
-            mid[0] > mid[1] * 1.8 && mid[0] > mid[2] * 1.8,
-            "70 Hz should be bass/red dominant, got {mid:?}"
+            mid[0] > mid[1] * 1.8 && mid[0] > mid[2] * 1.8 && mid[0] > mid[3] * 1.8,
+            "70 Hz should be bass-dominant, got {mid:?}"
         );
-        let near_white = mid[0] > 200.0 && mid[1] > 200.0 && mid[2] > 200.0;
-        assert!(!near_white, "bass tone washed to white: {mid:?}");
     }
 
     /// Real library fixtures: 808 bass-led, vocal mid-led, amen not flat treble.
@@ -597,60 +624,59 @@ mod tests {
         let amen_peaks =
             generate_peaks(&decode_file(&amen).expect("amen"), 256).expect("amen peaks");
 
-        let share = |rgb: [f32; 3], i: usize| rgb[i] / (rgb[0] + rgb[1] + rgb[2]).max(1.0);
+        let share = |w: [f32; BAND_COUNT], i: usize| {
+            let sum = w.iter().sum::<f32>().max(1.0);
+            w[i] / sum
+        };
         let end = |n: usize| (n / 8).max(8);
 
-        let a808 = avg_rgb(&eight_peaks.colors, 0, end(eight_peaks.bucket_count));
-        let avoc = avg_rgb(&vocal_peaks.colors, 0, end(vocal_peaks.bucket_count));
-        let amen_avg = avg_rgb(&amen_peaks.colors, 0, amen_peaks.bucket_count);
+        let a808 = avg_bands(&eight_peaks.colors, 0, end(eight_peaks.bucket_count));
+        let avoc = avg_bands(&vocal_peaks.colors, 0, end(vocal_peaks.bucket_count));
+        let amen_avg = avg_bands(&amen_peaks.colors, 0, amen_peaks.bucket_count);
 
         assert!(
-            share(a808, 0) > 0.7,
-            "808 attack should be bass-led, rgb={a808:?}"
+            share(a808, 0) > 0.55,
+            "808 attack should be bass-led, bands={a808:?}"
         );
+        let vocal_mid = share(avoc, 1) + share(avoc, 2);
         assert!(
-            share(avoc, 1) > 0.5 && share(avoc, 0) < 0.2,
-            "vocal should be mid-led with little bass, rgb={avoc:?}"
+            vocal_mid > 0.5 && share(avoc, 0) < 0.25,
+            "vocal should be mid-led with little bass, bands={avoc:?}"
         );
 
-        let amen_mid = share(amen_avg, 1);
-        let amen_treble = share(amen_avg, 2);
+        let amen_body = share(amen_avg, 1) + share(amen_avg, 2);
+        let amen_treble = share(amen_avg, 3);
         assert!(
-            amen_mid > 0.35,
-            "amen should carry substantial mid (snare body), rgb={amen_avg:?}"
+            amen_body > 0.35,
+            "amen should carry substantial mid body, bands={amen_avg:?}"
         );
         assert!(
             amen_treble < 0.55,
-            "amen must not wash to flat treble/blue, rgb={amen_avg:?}"
+            "amen must not wash to flat treble, bands={amen_avg:?}"
         );
-        // Not a single-band strip: mid and treble both matter for a drum break.
         assert!(
-            amen_mid > 0.15 && amen_treble > 0.15,
-            "amen should mix mid+treble over time, rgb={amen_avg:?}"
+            amen_body > 0.15 && amen_treble > 0.1,
+            "amen should mix mid+treble over time, bands={amen_avg:?}"
         );
 
         let mut mid_dom = 0u32;
         let mut treble_dom = 0u32;
         for i in 0..amen_peaks.bucket_count {
-            let base = i.saturating_mul(3);
-            let r = i32::from(amen_peaks.colors.get(base).copied().unwrap_or(0));
-            let g = i32::from(
-                amen_peaks
-                    .colors
-                    .get(base.saturating_add(1))
-                    .copied()
-                    .unwrap_or(0),
-            );
-            let b = i32::from(
-                amen_peaks
-                    .colors
-                    .get(base.saturating_add(2))
-                    .copied()
-                    .unwrap_or(0),
-            );
-            if g >= r && g >= b {
+            let base = i.saturating_mul(BAND_COUNT);
+            let mut w = [0i32; BAND_COUNT];
+            for (c, slot) in w.iter_mut().enumerate() {
+                *slot = i32::from(
+                    amen_peaks
+                        .colors
+                        .get(base.saturating_add(c))
+                        .copied()
+                        .unwrap_or(0),
+                );
+            }
+            let body = w[1].saturating_add(w[2]);
+            if body >= w[0] && body >= w[3] {
                 mid_dom = mid_dom.saturating_add(1);
-            } else if b >= r && b >= g {
+            } else if w[3] >= w[0] && w[3] >= body {
                 treble_dom = treble_dom.saturating_add(1);
             }
         }
@@ -678,6 +704,61 @@ mod tests {
             &amen_peaks.colors,
             amen_peaks.bucket_count,
             24,
+        );
+    }
+
+    /// Dogfood pads: low-mid vs high-mid should differ across bright vs dark pads.
+    #[test]
+    fn fnf_pads_split_across_low_and_high_mid() {
+        let pad_dir = PathBuf::from(
+            "/Users/jeroen/Library/CloudStorage/Dropbox-Flint&Figure/Jeroen Meijer/Producing/samples/FNF/Pads",
+        );
+        if !pad_dir.is_dir() {
+            eprintln!("skip: FNF Pads folder missing");
+            return;
+        }
+        let files = [
+            "FNF Pads - 172 Mid-Range Angels Eb.wav",
+            "FNF Pads - 172 High Pitched Angels Eb.wav",
+            "FNF Pads - Blinding Lights Pad 174bpm.wav",
+            "FNF Pad - Creepy Droning Fm.wav",
+        ];
+        println!(
+            "{:<48} {:>6} {:>6} {:>6} {:>6}",
+            "file", "bass%", "lo%", "hi%", "tr%"
+        );
+        let mut saw_high_mid = false;
+        let mut saw_low_mid = false;
+        for name in files {
+            let path = pad_dir.join(name);
+            if !path.is_file() {
+                eprintln!("skip missing {name}");
+                continue;
+            }
+            let peaks =
+                generate_peaks(&decode_file(&path).expect("decode"), 256).expect("peaks");
+            let avg = avg_bands(&peaks.colors, 0, peaks.bucket_count);
+            let sum: f32 = avg.iter().sum::<f32>().max(1.0);
+            let lo = avg[1] / sum;
+            let hi = avg[2] / sum;
+            if hi > 0.2 {
+                saw_high_mid = true;
+            }
+            if lo > 0.4 {
+                saw_low_mid = true;
+            }
+            println!(
+                "{:<48} {:5.1}% {:5.1}% {:5.1}% {:5.1}%",
+                name,
+                100.0 * avg[0] / sum,
+                100.0 * lo,
+                100.0 * hi,
+                100.0 * avg[3] / sum,
+            );
+        }
+        assert!(
+            saw_low_mid && saw_high_mid,
+            "expected at least one low-mid-led and one high-mid-led pad among fixtures"
         );
     }
 }

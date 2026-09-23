@@ -4,7 +4,8 @@ import type { SpectralBandColors } from "./spectralColor";
 
 const bands: SpectralBandColors = {
   bass: [255, 0, 0],
-  mid: [0, 255, 0],
+  lowMid: [0, 255, 0],
+  highMid: [0, 200, 200],
   treble: [0, 0, 255],
 };
 
@@ -19,7 +20,12 @@ function fakePeaks(buckets: number): {
   for (let i = 0; i < buckets; i++) {
     const t = i / Math.max(1, buckets - 1);
     peaks.push(-0.4 - 0.2 * t, 0.4 + 0.2 * t);
-    colors.push(Math.round((1 - t) * 255), 80, Math.round(t * 255));
+    colors.push(
+      Math.round((1 - t) * 255),
+      80,
+      Math.round(t * 120),
+      Math.round(t * 255),
+    );
   }
   return { peaks, colors, bucketCount: buckets, channels: 1 };
 }

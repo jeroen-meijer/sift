@@ -4,7 +4,8 @@ import { blendSpectralRgb, type SpectralBandColors } from "./spectralColor";
 
 const bands: SpectralBandColors = {
   bass: [255, 45, 123],
-  mid: [30, 232, 154],
+  lowMid: [30, 232, 154],
+  highMid: [64, 200, 232],
   treble: [62, 184, 255],
 };
 
@@ -16,7 +17,12 @@ function lane(buckets: number, channels = 1) {
     for (let c = 0; c < channels; c++) {
       peaks.push(-0.5, 0.5);
     }
-    colors.push(Math.round((1 - t) * 255), 64, Math.round(t * 255));
+    colors.push(
+      Math.round((1 - t) * 255),
+      64,
+      Math.round(t * 120),
+      Math.round(t * 255),
+    );
   }
   return { peaks, colors, bucketCount: buckets, channels };
 }
@@ -24,14 +30,14 @@ function lane(buckets: number, channels = 1) {
 describe("spectral blend (cpu, no canvas)", () => {
   bench("blendSpectralRgb × 1024", () => {
     for (let i = 0; i < 1024; i++) {
-      blendSpectralRgb([255 - (i % 255), 64, i % 255], bands);
+      blendSpectralRgb([255 - (i % 255), 64, i % 120, i % 255], bands);
     }
   });
 
   bench("blendSpectralRgb × 1024 × 40 visible rows", () => {
     for (let row = 0; row < 40; row++) {
       for (let i = 0; i < 1024; i++) {
-        blendSpectralRgb([255 - (i % 255), 64, i % 255], bands);
+        blendSpectralRgb([255 - (i % 255), 64, i % 120, i % 255], bands);
       }
     }
   });
