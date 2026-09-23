@@ -45,6 +45,7 @@
 }
 
 .detail-identity {
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -52,16 +53,70 @@
   display: flex;
   align-items: baseline;
   gap: 9px;
+  min-width: 0;
 }
 
 .detail-name {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 500;
   color: var(--color-text);
+}
+
+.detail-name-clip {
+  display: block;
+  overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   user-select: text;
   -webkit-user-select: text;
+}
+
+.detail-name-flyout {
+  position: absolute;
+  /* Nudge left by the horizontal padding so the glyph start matches the clip. */
+  left: -10px;
+  top: 50%;
+  z-index: 6;
+  width: max-content;
+  max-width: none;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: var(--color-bg-deep);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-text) 10%, transparent),
+    0 8px 24px color-mix(in srgb, #000 45%, transparent);
+  color: var(--color-text);
+  white-space: nowrap;
+  line-height: 1.2;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateY(2px);
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease),
+    visibility var(--motion-base);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.detail-name.is-truncated:hover .detail-name-flyout,
+.detail-name.is-truncated:focus-within .detail-name-flyout {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-name-flyout {
+    transition: none;
+    transform: translateY(-50%);
+  }
 }
 
 .detail-badge {
@@ -78,14 +133,106 @@
 
 .detail-path {
   margin-top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.detail-path:hover .detail-path-text,
+.detail-path:focus-visible .detail-path-text {
+  color: var(--color-text-muted);
+}
+
+/* RTL + LTR span: ellipsis on the left, end of path stays visible. */
+.detail-path-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--color-text-dim-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: text;
-  -webkit-user-select: text;
+  pointer-events: none;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.detail-path-text-inner {
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+.detail-path-copy {
+  position: relative;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-faint);
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.detail-path:hover .detail-path-copy,
+.detail-path:focus-visible .detail-path-copy {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.detail-path.copied .detail-path-copy {
+  color: var(--color-ok);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.detail-path-copy-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease);
+}
+
+.detail-path-copy-icon.is-hidden {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+.detail-path-copy-icon.is-shown {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-path-text,
+  .detail-path-copy,
+  .detail-path-copy-icon {
+    transition: none;
+  }
+
+  .detail-path-copy {
+    transform: none;
+  }
 }
 
 .detail-meta {

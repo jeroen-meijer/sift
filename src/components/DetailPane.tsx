@@ -1,15 +1,18 @@
 import {
   ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
+  CheckIcon,
+  CopySimpleIcon,
   PlugChargingIcon,
   PlusIcon,
   StarIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { flattenTags, type SampleRow, type SnapMode, type TagNode } from "../lib/ipc";
 import type { PeakData, WaveformView as WaveformMode } from "../lib/ipc";
+import { folderChipLabel } from "../lib/omni";
 import { tagPalette } from "../lib/tagColors";
 import { Popover } from "../ui/Popover";
 import { TransportBar } from "./TransportBar";
@@ -20,6 +23,8 @@ interface Props {
   sample: SampleRow | null;
   peaks: PeakData | null;
   allTags: TagNode[];
+  /** Library roots: used to show `rootName/…` instead of the absolute path. */
+  roots: readonly { path: string; name: string }[];
   snap: SnapMode;
   waveformMode: WaveformMode;
   coloredWaveforms: boolean;
@@ -45,10 +50,103 @@ interface Props {
   onRemoveMissing: () => void;
 }
 
+/** Truncated filename; when clipped, hover shows the full name in a dark chip. */
+function DetailName({ name }: { name: string }) {
+  const clipRef = useRef<HTMLSpanElement>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = clipRef.current;
+    if (!el) return;
+    const measure = () => {
+      setTruncated(el.scrollWidth > el.clientWidth + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, [name]);
+
+  return (
+    <span className={`detail-name${truncated ? " is-truncated" : ""}`}>
+      <span className="detail-name-clip" ref={clipRef}>
+        {name}
+      </span>
+      {truncated ? (
+        <span className="detail-name-flyout" role="tooltip">
+          {name}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Root-relative path with start truncation and a hover-to-copy control. */
+function DetailPath({ absolutePath, displayPath }: { absolutePath: string; displayPath: string }) {
+  const { t } = useTranslation("common");
+  const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setCopied(false);
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+  }, [absolutePath]);
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    },
+    [],
+  );
+
+  const onCopy = () => {
+    void navigator.clipboard.writeText(absolutePath).then(() => {
+      setCopied(true);
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => {
+        setCopied(false);
+      }, 1400);
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      className={`detail-path${copied ? " copied" : ""}`}
+      aria-label={copied ? t("ctxCopyPathDone") : t("ctxCopyPath")}
+      title={copied ? t("ctxCopyPathDone") : absolutePath}
+      onClick={onCopy}
+      onMouseLeave={() => {
+        if (resetTimer.current) clearTimeout(resetTimer.current);
+        setCopied(false);
+      }}
+      onBlur={() => {
+        if (resetTimer.current) clearTimeout(resetTimer.current);
+        setCopied(false);
+      }}
+    >
+      <span className="detail-path-text">
+        <span className="detail-path-text-inner">{displayPath}</span>
+      </span>
+      <span className="detail-path-copy" aria-hidden>
+        <span className={`detail-path-copy-icon${copied ? " is-hidden" : " is-shown"}`}>
+          <CopySimpleIcon size={11} weight="bold" />
+        </span>
+        <span className={`detail-path-copy-icon${copied ? " is-shown" : " is-hidden"}`}>
+          <CheckIcon size={11} weight="bold" />
+        </span>
+      </span>
+    </button>
+  );
+}
+
 export const DetailPane = memo(function DetailPane({
   sample,
   peaks,
   allTags,
+  roots,
   snap,
   waveformMode,
   coloredWaveforms,
@@ -86,6 +184,11 @@ export const DetailPane = memo(function DetailPane({
       .filter((node) => !needle || node.path.toLowerCase().includes(needle));
   }, [allTags, sample, tagFilter]);
 
+  const displayPath = useMemo(
+    () => (sample ? folderChipLabel(sample.path, roots) : ""),
+    [sample, roots],
+  );
+
   if (!sample) {
     return (
       <div className="detail-pane">
@@ -111,10 +214,10 @@ export const DetailPane = memo(function DetailPane({
 
         <div className="detail-identity">
           <div className="detail-name-row">
-            <span className="detail-name">{sample.filename}</span>
+            <DetailName name={sample.filename} />
             {sample.missing ? <span className="detail-badge">{t("fileMissing")}</span> : null}
           </div>
-          <div className="detail-path">{sample.path}</div>
+          <DetailPath absolutePath={sample.path} displayPath={displayPath} />
         </div>
 
         <div className="detail-meta">
