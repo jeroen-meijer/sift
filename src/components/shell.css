@@ -8,6 +8,8 @@
   background: var(--color-bg);
   color: var(--color-text);
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* title bar */

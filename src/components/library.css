@@ -564,6 +564,7 @@ body.col-reordering * {
 }
 
 .sample-table-body {
+  position: relative;
   flex: 1;
   overflow: auto;
 }
@@ -742,12 +743,15 @@ body.col-reordering * {
 }
 
 .sample-table-empty {
+  /* Center on the scroll viewport (body is position:relative), not the
+   * virtual list inner which is 0 px tall when there are no rows. */
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
   text-align: center;
   color: var(--color-neutral-800);
+  pointer-events: none;
 }
 
 .sample-table-loading {

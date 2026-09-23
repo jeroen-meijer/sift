@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Condvar, Mutex};
 use std::time::Instant;
 
 use diesel::prelude::*;
@@ -12,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::state::AppState;
 
+use crate::audio::decode::OpenedAudio;
 use crate::audio::peaks::{self, DEFAULT_BUCKETS};
 use crate::audio::{decode_all, open_audio, to_mono, write_technical_info};
 use crate::db::models::SampleTag;
@@ -32,12 +34,79 @@ const LOOP_MIN_DURATION_SECS: f64 = 1.5;
 /// get a single `analyze.sample` total when profiling).
 const ANALYZE_DETAIL_EVERY: u64 = 25;
 
-/// Interleaved sample count (frames × channels) above which an analyze job
-/// takes [`LARGE_JOB`]. ~90 s of stereo 44.1 kHz.
-const LARGE_JOB_SAMPLES: u64 = 8_000_000;
-/// Held while a large (or unknown-length) file is decoded and analyzed, so the
-/// worker pool never holds several long files in memory at once.
-static LARGE_JOB: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Shared ceiling for decoded PCM held by analyze workers (~1 GiB). Jobs
+/// reserve their expected interleaved + mono size and wait only when the
+/// budget is full (a ~38 min file runs alone; four ~5 min files fit together).
+const ANALYZE_PCM_BUDGET: u64 = 1 << 30;
+
+struct PcmBudget {
+    used: Mutex<u64>,
+    cv: Condvar,
+}
+
+struct PcmPermit<'a> {
+    budget: &'a PcmBudget,
+    bytes: u64,
+}
+
+impl Drop for PcmPermit<'_> {
+    fn drop(&mut self) {
+        let mut used = self
+            .budget
+            .used
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *used = used.saturating_sub(self.bytes);
+        drop(used);
+        self.budget.cv.notify_all();
+    }
+}
+
+impl PcmBudget {
+    /// Block until `bytes` fit under the ceiling, then hold them until drop.
+    /// Requests larger than the ceiling are clamped so one job can always run.
+    fn reserve(&self, bytes: u64) -> PcmPermit<'_> {
+        let need = bytes.clamp(1, ANALYZE_PCM_BUDGET);
+        let mut used = self
+            .used
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loop {
+            if used.saturating_add(need) <= ANALYZE_PCM_BUDGET {
+                *used = used.saturating_add(need);
+                return PcmPermit {
+                    budget: self,
+                    bytes: need,
+                };
+            }
+            used = self
+                .cv
+                .wait(used)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+}
+
+static ANALYZE_PCM: PcmBudget = PcmBudget {
+    used: Mutex::new(0),
+    cv: Condvar::new(),
+};
+
+/// Interleaved f32 PCM plus a mono downmix, from container frame count when known.
+/// Unknown length reserves the full budget so that job runs alone.
+fn estimate_pcm_bytes(opened: &OpenedAudio) -> u64 {
+    match opened.expected_samples() {
+        Some(n) if n > 0 => {
+            let ch = u64::from(opened.channels.max(1));
+            let frames = n.checked_div(ch).unwrap_or(n);
+            let pcm = n.saturating_mul(4);
+            let mono = frames.saturating_mul(4);
+            pcm.saturating_add(mono).max(1)
+        }
+        _ => ANALYZE_PCM_BUDGET,
+    }
+}
+
 static ANALYZE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// BPM, key, type, and tag suggestions from one analyzer pass.
@@ -546,15 +615,10 @@ pub fn analyze_sample(
     let Ok(opened) = open_audio(path) else {
         return Ok(());
     };
-    // Long files take a shared permit so at most one is in memory at a time.
-    let large = opened
-        .expected_samples()
-        .is_none_or(|n| n > LARGE_JOB_SAMPLES);
-    let _large_permit = large.then(|| {
-        LARGE_JOB
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    });
+    // Reserve expected PCM (+ mono) from the shared budget so several mid-length
+    // files can decode in parallel, but a huge file still runs alone.
+    let reserve_bytes = estimate_pcm_bytes(&opened);
+    let _pcm_permit = ANALYZE_PCM.reserve(reserve_bytes);
     let Ok(pcm) = decode_all(opened) else {
         return Ok(());
     };
@@ -563,9 +627,10 @@ pub fn analyze_sample(
             "analyze.decode",
             decode_start.elapsed(),
             &format!(
-                "id={sample_id} frames={} ch={} large={large}",
+                "id={sample_id} frames={} ch={} reserve_mb={}",
                 pcm.frame_count(),
-                pcm.channels
+                pcm.channels,
+                reserve_bytes / (1024 * 1024)
             ),
         );
     }
@@ -1321,5 +1386,27 @@ mod tests {
     fn cloud_availability_is_not_local() {
         assert_ne!(Availability::parse("cloud"), Availability::Local);
         assert_eq!(Availability::parse("cloud"), Availability::Cloud);
+    }
+
+    #[test]
+    fn pcm_budget_blocks_until_space() {
+        let budget = PcmBudget {
+            used: Mutex::new(0),
+            cv: Condvar::new(),
+        };
+        let half = ANALYZE_PCM_BUDGET / 2;
+        let first = budget.reserve(half);
+        let _second = budget.reserve(half);
+        let done = AtomicU64::new(0);
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let _third = budget.reserve(half);
+                done.store(1, Ordering::SeqCst);
+            });
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            assert_eq!(done.load(Ordering::SeqCst), 0);
+            drop(first);
+        });
+        assert_eq!(done.load(Ordering::SeqCst), 1);
     }
 }

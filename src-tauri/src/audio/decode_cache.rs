@@ -2,7 +2,7 @@
 //!
 //! Select→play and mid-file seeks re-use entries so Symphonia work is not
 //! repeated for the same path. Entries are keyed by path and invalidated when
-//! the file's mtime changes.
+//! the file's mtime changes. Eviction is by decoded byte budget, not entry count.
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -12,11 +12,13 @@ use std::time::SystemTime;
 use crate::audio::decode::{DecodedAudio, decode_file};
 use crate::error::AppResult;
 
-const DEFAULT_CAPACITY: usize = 16;
+/// Default audition cache: ~256 MB of interleaved f32 PCM.
+const DEFAULT_BUDGET_BYTES: u64 = 256 * 1024 * 1024;
 
 struct Entry {
     audio: Arc<DecodedAudio>,
     mtime: Option<SystemTime>,
+    bytes: u64,
 }
 
 /// Bounded decode cache shared by preview play and prefetch.
@@ -24,21 +26,23 @@ pub struct DecodeCache {
     entries: HashMap<PathBuf, Entry>,
     /// Oldest at the front; most recently used at the back.
     order: VecDeque<PathBuf>,
-    capacity: usize,
+    budget_bytes: u64,
+    used_bytes: u64,
 }
 
 impl Default for DecodeCache {
     fn default() -> Self {
-        Self::new(DEFAULT_CAPACITY)
+        Self::new(DEFAULT_BUDGET_BYTES)
     }
 }
 
 impl DecodeCache {
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(budget_bytes: u64) -> Self {
         Self {
             entries: HashMap::new(),
             order: VecDeque::new(),
-            capacity: capacity.max(1),
+            budget_bytes: budget_bytes.max(1),
+            used_bytes: 0,
         }
     }
 
@@ -54,14 +58,23 @@ impl DecodeCache {
         Some(audio)
     }
 
-    /// Insert decoded PCM, evicting the oldest entries past capacity.
+    /// Insert decoded PCM, evicting oldest entries until it fits.
+    /// An entry larger than the whole budget is returned to the caller but not retained.
     pub fn insert_decoded(
         &mut self,
         path: PathBuf,
         audio: Arc<DecodedAudio>,
         mtime: Option<SystemTime>,
     ) {
-        self.insert(path, Entry { audio, mtime });
+        let bytes = pcm_bytes(&audio);
+        self.insert(
+            path,
+            Entry {
+                audio,
+                mtime,
+                bytes,
+            },
+        );
     }
 
     #[cfg(test)]
@@ -69,19 +82,35 @@ impl DecodeCache {
         self.entries.len()
     }
 
+    #[cfg(test)]
+    pub const fn used_bytes(&self) -> u64 {
+        self.used_bytes
+    }
+
     fn insert(&mut self, key: PathBuf, entry: Entry) {
-        if self.entries.contains_key(&key) {
-            self.entries.insert(key.clone(), entry);
-            self.touch(&key);
+        if let Some(old) = self.entries.remove(&key) {
+            self.used_bytes = self.used_bytes.saturating_sub(old.bytes);
+            if let Some(pos) = self.order.iter().position(|p| p == &key) {
+                self.order.remove(pos);
+            }
+        }
+
+        if entry.bytes > self.budget_bytes {
+            // Too big to cache; leave the map clean for this path.
             return;
         }
-        while self.entries.len() >= self.capacity {
-            if let Some(old) = self.order.pop_front() {
-                self.entries.remove(&old);
+
+        while self.used_bytes.saturating_add(entry.bytes) > self.budget_bytes {
+            if let Some(old_key) = self.order.pop_front() {
+                if let Some(old) = self.entries.remove(&old_key) {
+                    self.used_bytes = self.used_bytes.saturating_sub(old.bytes);
+                }
             } else {
                 break;
             }
         }
+
+        self.used_bytes = self.used_bytes.saturating_add(entry.bytes);
         self.order.push_back(key.clone());
         self.entries.insert(key, entry);
     }
@@ -93,6 +122,12 @@ impl DecodeCache {
             self.order.push_back(k);
         }
     }
+}
+
+fn pcm_bytes(audio: &DecodedAudio) -> u64 {
+    u64::try_from(audio.samples.len())
+        .unwrap_or(u64::MAX)
+        .saturating_mul(4)
 }
 
 /// Return cached PCM or decode and insert. Second value is `true` on hit.
@@ -141,13 +176,22 @@ mod tests {
         path.exists().then_some(path)
     }
 
+    fn tiny(samples: usize) -> Arc<DecodedAudio> {
+        Arc::new(DecodedAudio {
+            sample_rate: 44_100,
+            channels: 1,
+            bit_depth_hint: Some(16),
+            samples: vec![0.0; samples],
+        })
+    }
+
     #[test]
     fn cache_hit_skips_second_decode() {
         let Some(path) = fixture("amen_breaks/cw_amen_chopper.wav") else {
             eprintln!("skip: missing amen chopper fixture");
             return;
         };
-        let cache = Mutex::new(DecodeCache::new(4));
+        let cache = Mutex::new(DecodeCache::new(64 * 1024 * 1024));
         let (a, hit1) = get_or_decode(&cache, &path).expect("decode");
         let (b, hit2) = get_or_decode(&cache, &path).expect("decode");
         assert!(!hit1);
@@ -157,33 +201,28 @@ mod tests {
     }
 
     #[test]
-    fn lru_evicts_oldest() {
-        let Some(a) = fixture("amen_breaks/cw_amen_chopper.wav") else {
-            return;
-        };
-        let Some(b) = fixture("heatwave/Moods/mood-hopeful.wav") else {
-            return;
-        };
-        let Some(c) = fixture("amen_breaks/cw_amen_distorted.mp3") else {
-            return;
-        };
-        let cache = Mutex::new(DecodeCache::new(2));
-        get_or_decode(&cache, &a).expect("a");
-        get_or_decode(&cache, &b).expect("b");
+    fn lru_evicts_oldest_by_bytes() {
+        let mut cache = DecodeCache::new(100); // 25 samples * 4 = 100 bytes fits two of 50-byte entries
+        let a = PathBuf::from("/a");
+        let b = PathBuf::from("/b");
+        let c = PathBuf::from("/c");
+        cache.insert_decoded(a.clone(), tiny(12), None); // 48 bytes
+        cache.insert_decoded(b.clone(), tiny(12), None); // 48 bytes → used 96
         // Touch a so b is oldest.
-        let _ = get_or_decode(&cache, &a).expect("a hit");
-        get_or_decode(&cache, &c).expect("c");
-        let (len, has_a, has_b, has_c) = {
-            let guard = lock(&cache);
-            (
-                guard.len(),
-                guard.entries.contains_key(&a),
-                guard.entries.contains_key(&b),
-                guard.entries.contains_key(&c),
-            )
-        };
-        assert_eq!(len, 2);
-        assert!(has_a && has_c && !has_b);
+        let _ = cache.get_fresh(&a);
+        cache.insert_decoded(c.clone(), tiny(12), None);
+        assert_eq!(cache.len(), 2);
+        assert!(cache.entries.contains_key(&a));
+        assert!(!cache.entries.contains_key(&b));
+        assert!(cache.entries.contains_key(&c));
+    }
+
+    #[test]
+    fn entry_larger_than_budget_is_not_retained() {
+        let mut cache = DecodeCache::new(40);
+        cache.insert_decoded(PathBuf::from("/big"), tiny(20), None); // 80 bytes
+        assert_eq!(cache.len(), 0);
+        assert_eq!(cache.used_bytes(), 0);
     }
 
     #[test]
@@ -191,7 +230,7 @@ mod tests {
         let Some(path) = fixture("heatwave/Moods/mood-hopeful.wav") else {
             return;
         };
-        let cache = std::sync::Arc::new(Mutex::new(DecodeCache::new(4)));
+        let cache = std::sync::Arc::new(Mutex::new(DecodeCache::new(64 * 1024 * 1024)));
         let worker = {
             let cache = std::sync::Arc::clone(&cache);
             std::thread::spawn(move || get_or_decode(&cache, &path).map(|(_, hit)| hit))

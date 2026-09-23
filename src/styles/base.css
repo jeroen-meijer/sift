@@ -16,6 +16,16 @@ body,
   font-family: var(--font-body);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
+  /* Native-app feel: chrome is not selectable; opt back in where copy matters. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,
