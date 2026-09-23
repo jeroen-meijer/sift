@@ -1,5 +1,7 @@
 ## Upcoming
 
+- ci: skip empty `APPLE_SIGNING_IDENTITY` so unsigned macOS publish does not fail codesign
+
 ## 0.2.0
 
 - feat(library): metadata-first browse for cloud libraries (Online only badges, analyze when files hydrate to local)
