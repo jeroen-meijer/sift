@@ -9,26 +9,37 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
 jobs:
   rust:
     name: fmt · clippy · nextest
-    runs-on: macos-latest
+    # Ubuntu queues and boots faster than macOS; macOS-only code is cfg-gated.
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src-tauri
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly
-          components: rustfmt, clippy
+      - name: Install Linux Tauri / audio deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev \
+            libssl-dev
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust-tauri
         with:
-          workspaces: src-tauri
+          cache-key: ci-ubuntu
 
       - name: Install nextest
         uses: taiki-e/install-action@v2
@@ -46,16 +57,12 @@ jobs:
 
   frontend:
     name: eslint · tsc · vitest
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install
-        run: bun install --frozen-lockfile
+      - name: Setup Bun dependencies
+        uses: ./.github/actions/setup-bun-deps
 
       - name: Lint
         run: bun run lint

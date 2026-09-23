@@ -3,7 +3,7 @@ description: Nightly Rust (matches src-tauri/rust-toolchain.toml) + rust-cache f
 
 inputs:
   cache-key:
-    description: Suffix for rust-cache shared-key (e.g. macOS or Windows).
+    description: Suffix for rust-cache shared-key (e.g. macOS, Windows, or ci-ubuntu).
     required: true
 
 runs:
@@ -19,6 +19,8 @@ runs:
       uses: swatinem/rust-cache@v2
       with:
         workspaces: src-tauri
-        shared-key: sift-tauri-${{ inputs.cache-key }}
+        # Separate caches per OS/job so macOS publish does not thrash Ubuntu CI.
+        shared-key: sift-${{ inputs.cache-key }}
         cache-workspace-crates: true
+        cache-all-crates: true
         cache-on-failure: true
