@@ -4,8 +4,8 @@
 - fix(library): arrow keys scroll selection into view; showParent clears filters and reveals the sample
 - feat(library): list the whole library when no folder is selected (limit 25k); center empty state
 - fix(ui): default user-select none; keep path/name in the detail pane selectable
-- perf(analyze): shared ~1 GiB PCM budget instead of one-at-a-time large-file lock
-- perf(audio): decode cache evicts by byte budget (~256 MB) instead of entry count
+- perf(analyze): shared ~1 GiB PCM budget (replaces the one-at-a-time large-file lock)
+- perf(audio): decode cache evicts by byte budget (~256 MB), not entry count
 - fix(table): drop lite/fast-scroll mode (tags were delayed); overscan 40; keep cached waves while scrolling
 - fix(table): keep cached row waveforms while scrolling fast (do not clearRect on lite/paint budget); overscan 28; void marks ignore rubber-band scrollTop
 - perf(table): light rows (text only) while scrolling fast, full rows ~140 ms after; static SVG row icons instead of icon components; row lines drawn as a repeating tile behind the list
@@ -13,8 +13,8 @@
 - fix(search): match every word of the query in any order (`cw amen`, `amen cw`, `cw am` all find `cw_amen_…`); `%` and `_` are literal; highlight every matched word
 - perf(table): overscan 20 so fast flicks do not show an empty strip; recycled rows repaint in the same frame; fetch row peaks while scrolling (6 in flight)
 - fix(analyze): browsing never decodes on its own; rows without a peakfile jump the analyze queue and the detail pane waits for its sample, so every decode shows in the status bar; changed files re-analyze through the queue
-- perf(table): reuse row DOM and canvases while scrolling; overscan 40 → 6; paint row waves in one budgeted frame pass with cached theme colors
-- perf(library): coalesce `library-changed` (one per 1.5 s, structural vs row ids); patch changed rows in place instead of refetching list and folder tree; virtualize the folder sidebar
+- perf(table): reuse row DOM and canvases while scrolling; overscan 40 then 6; paint row waves in one budgeted frame pass with cached theme colors
+- perf(library): coalesce `library-changed` (one per 1.5 s, structural vs row ids); patch changed rows in place; skip full list and folder tree refetch; virtualize the folder sidebar
 - perf(ui): analyze progress and playhead live in small stores; memoized sidebar, table rows, detail pane and status bar
 - perf(ipc): run DB, disk and decode commands off the main thread; play/stop carry a sequence so the last selected row is the one that plays
 - perf(analyze): cap memory: pre-sized decode buffer, one long file at a time, one shared mono buffer, 60 s analysis excerpt for long files

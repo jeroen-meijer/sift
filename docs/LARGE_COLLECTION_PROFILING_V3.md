@@ -1,16 +1,16 @@
 # Large collection profiling V3: UI performance implementation spec
 
-Review of [LARGE_COLLECTION_PROFILING_V2.md](LARGE_COLLECTION_PROFILING_V2.md) against the code and `logs/sift-profile.log` (session ~18:47 to 19:00, 2026-09-22), turned into work items an implementer can pick up one by one. V2 stays the record of what shipped. This doc replaces its "Build next" plan.
+This doc turns [LARGE_COLLECTION_PROFILING_V2.md](LARGE_COLLECTION_PROFILING_V2.md) and a profile run (`logs/sift-profile.log`, ~18:47 to 19:00 on 2026-09-22) into ordered work items. V2 records what shipped. This one replaces its "Build next" plan.
 
-Machine: M2 Max, 12 cores, 32 GB. Library: 20 439 samples, 2 817 distinct folders, 13 986 peakfiles (272 MB on disk). 98 % of files are under 60 s; 183 are over 1 min, 3 are over 10 min (longest 38 min).
+Test machine: M2 Max, 12 cores, 32 GB. Library: 20 439 samples, 2 817 distinct folders, 13 986 peakfiles (272 MB on disk). 98 % of files are under 60 s. 183 are over 1 min; 3 are over 10 min (longest 38 min).
 
-Goal, in order: input and scroll never stall; memory has a fixed ceiling; background analyze throughput comes last.
+Priority: input and scroll must not stall; memory needs a fixed ceiling; background analyze throughput is last.
 
 ---
 
 ## Status (handoff, 2026-09-23)
 
-Phase A is on `main` (`06e1107`). Follow-ups in flight: KNOWN_ISSUES UX fixes, analyze PCM budget, decode-cache byte budget. Open bugs and next steps live in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); read that first.
+Phase A is on `main` (`06e1107`). Same-day follow-ups also landed: KNOWN_ISSUES UX fixes, analyze PCM budget (A5), decode-cache byte budget (B2), and C1 QoS. For open bugs and what to profile next, see [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ### Phase A: implemented (A1 to A7) and profiled once
 
@@ -31,7 +31,7 @@ Differences from the spec below:
 - A7 Step 3 uses a slot allocator (`src/lib/rowSlots.ts`), not `index % N` (the modulo version reused nothing; a test caught it).
 - `fe.render` comes from `useRenderTiming` (React's `<Profiler>` reports nothing in release builds).
 - The midpoint profile run was skipped; A1 to A7 landed together.
-- **Analysis rule:** `get_peaks` never decodes. Rows without a peakfile get `bucket_count: 0` and jump the analyze queue (priority lane, `enqueue_priority`); the detail pane waits for its sample via `analyze_now` (up to 15 s). Watcher content changes delete the peakfile and re-queue. Every decode runs in the analyze pool, so an empty status bar means nothing is left to analyze.
+- Analysis rule: `get_peaks` never decodes. Rows without a peakfile get `bucket_count: 0` and jump the analyze queue (priority lane, `enqueue_priority`); the detail pane waits for its sample via `analyze_now` (up to 15 s). Watcher content changes delete the peakfile and re-queue. Every decode runs in the analyze pool, so an empty status bar means nothing is left to analyze.
 - `tool/memwatch.sh` uses `top`, not `vmmap` (vmmap suspends the process ~0.8 s per sample and caused fake hitches).
 
 ### Changes after Phase A (same day, from dogfooding)
@@ -42,9 +42,9 @@ Differences from the spec below:
 
 ### Where it stands
 
-- **Wave disappear / delayed tags (2026-09-23):** lite/fast-scroll mode removed (it delayed tags ~100 ms and cleared waves). Paint budget no longer blanks a correct wave. Overscan 40.
-- **Void / pop-in:** marks `fe.void_scroll`, `fe.void`, `fe.scroll` (`gap=`). Recent stretch had `gap=0` while chrome still popped — that was lite mode. Restart once so HMR is clean, then re-check.
-- Memwatch (`sift-mem` tmux): idle footprint ~290–330 MB.
+- Wave disappear / delayed tags (2026-09-23): lite/fast-scroll mode removed (it delayed tags ~100 ms and cleared waves). Paint budget no longer blanks a correct wave. Overscan 40.
+- Void / pop-in: marks `fe.void_scroll`, `fe.void`, `fe.scroll` (`gap=`). A recent stretch had `gap=0` while chrome still popped. That was lite mode. Restart once so HMR is clean, then re-check.
+- Memwatch (`sift-mem` tmux): idle footprint ~290 to 330 MB.
 
 ---
 
@@ -66,12 +66,12 @@ Differences from the spec below:
 
 ## Verdict
 
-The V2 P0 list helps scrolling a little but misses the four things that cost the most time:
+The V2 P0 list helps scrolling a little. It misses the four biggest costs:
 
 1. Every Tauri command in `src-tauri/src/commands/mod.rs` is a plain sync `fn`. Tauri 2 runs those on the app main thread, which also runs AppKit input and the WebView host.
-2. Every analyze progress event (4 to 5 a second) and every playhead frame (60 a second) re-renders the whole library view, including a 2 817-row sidebar that is not virtualized.
-3. A freshly created row canvas costs ~240 ms to paint; repainting an existing canvas costs ~0 ms. Index-keyed rows plus `ROW_OVERSCAN=40` create canvases nonstop while scrolling.
-4. Memory has no ceiling. Each analyze job holds the whole file as interleaved `f32` PCM, then makes up to 3 more mono copies, and stratum-dsp builds a full-length STFT. That is fine for a 5 s one-shot. The 38-minute file costs several GB, and 4 workers can hit long files at the same time.
+2. Analyze progress events (4 to 5 per second) and playhead frames (60 per second) re-render the whole library view, including a 2 817-row sidebar that is not virtualized.
+3. A new row canvas costs ~240 ms to paint. Repainting an existing canvas costs ~0 ms. Index-keyed rows plus `ROW_OVERSCAN=40` create canvases nonstop while scrolling.
+4. Memory has no ceiling. Each analyze job holds the whole file as interleaved `f32` PCM, then makes up to 3 more mono copies, and stratum-dsp builds a full-length STFT. A 5 s one-shot is fine. The 38-minute file costs several GB, and 4 workers can hit long files at the same time.
 
 ---
 
@@ -93,12 +93,12 @@ Percentiles from `logs/sift-profile.log`, computed numerically (76 678 lines).
 | `fe.frame` (hitches ≥ 25 ms) | 1 552 | 352 ms | 622 ms | 2 453 ms | 373 hitches ≥ 500 ms |
 | `analyze.sample` | 13 821 | 62 ms | 215 ms | 98.6 s | 17 jobs over 5 s |
 
-What these show:
+What the log shows:
 
-- **Low FPS with nothing on screen.** Minutes 0 to 7 have `fe.fps` 3.2 to 11.5 and zero `fe.list_*`, `fe.peaks_*` or `fe.scroll` marks. No folder was open. Only `folder_tree` refreshes and progress events ran.
-- **Bimodal canvas paint.** 209 paints at 0 to 2 ms, 221 paints at 225 to 270 ms (53.6 s total). Painting the same id again: 241 ms first, 0 ms after.
-- **The IPC gap is main-thread time.** `get_peaks` p50 is 6 ms from JS when nothing blocks; p90 is 990 ms when something does. The Rust body never takes more than 6 ms.
-- **`fe.list_apply` is mislabeled.** It measures `await ipc.listSamples()`, not the React commit. `fe.list_apply_commit` runs in a microtask before React commits, so its 0.2 ms means nothing.
+- Low FPS with nothing on screen: minutes 0 to 7 have `fe.fps` 3.2 to 11.5 and zero `fe.list_*`, `fe.peaks_*` or `fe.scroll` marks. No folder was open. Only `folder_tree` refreshes and progress events ran.
+- Bimodal canvas paint: 209 paints at 0 to 2 ms, 221 paints at 225 to 270 ms (53.6 s total). Painting the same id again: 241 ms first, 0 ms after.
+- The IPC gap is main-thread time. `get_peaks` p50 is 6 ms from JS when nothing blocks; p90 is 990 ms when something does. The Rust body never takes more than 6 ms.
+- `fe.list_apply` is mislabeled. It measures `await ipc.listSamples()`, not the React commit. `fe.list_apply_commit` runs in a microtask before React commits, so its 0.2 ms means nothing.
 
 ### Code causes, with locations
 
@@ -112,7 +112,7 @@ What these show:
 | 1e | One `Mutex<SqliteConnection>` for UI reads, 4 workers and the watcher | [db/mod.rs:80](../src-tauri/src/db/mod.rs#L80) |
 | 2 | `analysis-progress` handler sets state in `App` | [App.tsx:127](../src/components/App.tsx#L127) |
 | 2a | `setPlayhead` on every rAF in `LibraryView` | [LibraryView.tsx:297](../src/components/LibraryView.tsx#L297) |
-| 2b | `library-changed` → `bump()` refetches stats, tree, tags, full list | [App.tsx:104](../src/components/App.tsx#L104) |
+| 2b | `library-changed` calls `bump()`, which refetches stats, tree, tags, full list | [App.tsx:104](../src/components/App.tsx#L104) |
 | 2c | Every favorite / BPM / key / tag edit calls `reload`, which refetches list and tree | [LibraryView.tsx](../src/components/LibraryView.tsx) `toggleFavorite`, `runAction`, `setBpmOn` |
 | 2d | `FolderSidebar` renders all 2 817 folders, not memoized | [FolderSidebar.tsx](../src/components/FolderSidebar.tsx) |
 | 3 | Row keyed by index; canvas unmounted whenever peaks are null; `clientWidth` + 2 × `getComputedStyle` per paint | [SampleTable.tsx](../src/components/SampleTable.tsx), [RowWaveform.tsx:61](../src/components/RowWaveform.tsx#L61) |
@@ -138,28 +138,28 @@ What these show:
 - **moodbar-analysis 0.7.1** ([gildesmarais/moodbar.rs](https://github.com/gildesmarais/moodbar.rs)) already streams internally (`FrameAnalyzer::feed_mono_samples`, then `finish`), but only exports `analyze_pcm_mono(rate, &[f32], &opts)`, which needs the whole mono signal.
 - **stratum-dsp 1.0.0** `analyze_audio(&[f32], rate, config)` copies its input (`samples.to_vec()`) and computes an STFT over all of it. Its memory scales with input length, so cap the input.
 - **symphonia 0.6.** `Track::num_frames: Option<u64>` is known after probe for WAV/AIFF/FLAC and most MP3s, before any packet is decoded.
-- **Wave Silo, ADSR and similar.** No public write-up of internals found. Drop the V2 sentence that claims they "do the same shape."
+- Wave Silo, ADSR and similar: no public write-up of internals found. Drop the V2 sentence that claims they "do the same shape."
 
 ---
 
 ## Corrections to V2
 
-- **"P0 memory: check allocator retention."** Replaced by A5 (and D2 if needed): bound the working set by design, and measure with `vmmap --summary`, not `ps`.
-- **"Cap list page size (~200 to 500)" as P0.** The metric behind it is the IPC wait, and scroll also lagged at n=708. Moved to D3 with a trigger condition.
-- **"Pause peaks enqueue while scrolling."** Kept inside B1 but it is not the root cause.
-- **"1 to 2 analyze workers while focused" as a UI fix.** 4 workers use 4 of 12 cores; minutes 0 to 7 were re-renders and main-thread IPC. Kept in C1 as a memory and QoS measure.
-- **Missing from V2:** A3, A4, the sidebar and edit-reload parts of A6, the canvas cause in A7, the memory mechanism in A5 and D2, C2.
+- "P0 memory: check allocator retention." Replaced by A5 (and D2 if needed): bound the working set by design, and measure with `vmmap --summary`, not `ps`.
+- "Cap list page size (~200 to 500)" as P0. The metric behind it is the IPC wait, and scroll also lagged at n=708. Moved to D3 with a trigger condition.
+- "Pause peaks enqueue while scrolling." Kept inside B1. It is not the root cause.
+- "1 to 2 analyze workers while focused" as a UI fix. 4 workers use 4 of 12 cores; minutes 0 to 7 were re-renders and main-thread IPC. Kept in C1 as a memory and QoS measure.
+- Missing from V2: A3, A4, the sidebar and edit-reload parts of A6, the canvas cause in A7, the memory mechanism in A5 and D2, C2.
 
 ---
 
 ## Ground rules for implementing
 
-- **Phases.** Implement every item in a phase, then run the phase check (one profile run as described in [Success bar](#success-bar)) and append a dated results table to the end of this doc. The check says whether the next phase is needed. Stop as soon as the success bar is met.
-- **Order inside a phase** is the listed order. Items in a phase are small enough to ship as one PR each.
-- **Why this order.** Phase A removes every cost the log pins down: main-thread blocking, app-wide re-renders, memory peaks, the refetch storm and the 240 ms canvas cost. It has one profile run in the middle to record what the first five items fixed, but no stop there. Phase B and C are refinements whose need depends on the numbers after A. Phase D items are larger or riskier and have their own triggers.
-- **Changelog.** Add a `CHANGELOG.md` bullet under `## Upcoming` per item.
-- **Code sketches** show shape, not final code. The crate denies `as` conversions, indexing, `unwrap` and unchecked arithmetic: use `crate::ids` helpers, `.get()`, `checked_*`/`saturating_*`, and `unwrap_or_else(PoisonError::into_inner)` for locks, like the existing code.
-- **Every item must keep** `cargo clippy --all-targets --all-features -- -D warnings`, `cargo nextest run`, `bun run lint`, `bun run typecheck`, `bun run test` green.
+- Phases: implement every item in a phase, then run the phase check (one profile run as described in [Success bar](#success-bar)) and append a dated results table to the end of this doc. The check says whether the next phase is needed. Stop as soon as the success bar is met.
+- Order inside a phase is the listed order. Items in a phase are small enough to ship as one PR each.
+- Why this order: Phase A removes every cost the log pins down (main-thread blocking, app-wide re-renders, memory peaks, the refetch storm, the 240 ms canvas cost). It has one profile run in the middle to record what the first five items fixed, but no stop there. Phase B and C depend on the numbers after A. Phase D items are larger or riskier and have their own triggers.
+- Changelog: add a `CHANGELOG.md` bullet under `## Upcoming` per item.
+- Code sketches show shape, not final code. The crate denies `as` conversions, indexing, `unwrap` and unchecked arithmetic: use `crate::ids` helpers, `.get()`, `checked_*`/`saturating_*`, and `unwrap_or_else(PoisonError::into_inner)` for locks, like the existing code.
+- Every item must keep `cargo clippy --all-targets --all-features -- -D warnings`, `cargo nextest run`, `bun run lint`, `bun run typecheck`, `bun run test` green.
 
 Size key: S under half a day, M one to two days, L three days or more.
 
@@ -174,7 +174,7 @@ Size key: S under half a day, M one to two days, L three days or more.
 
 ## Phase A: measure, free the main thread, stop refetching and canvas churn
 
-Goal: every cost the log pins down is gone. Main-thread blocking and app-wide re-renders (A3, A4), multi-GB memory peaks (A5), the library refetch storm (A6) and canvas creation while scrolling (A7). A1 and A2 come first because every later check uses A1's numbers and A2 is five safe one-liners. All items are low risk except A3, A6 and A7; each covers its own edge cases.
+Goal: remove every cost the log pins down. That is main-thread blocking and app-wide re-renders (A3, A4), multi-GB memory peaks (A5), the library refetch storm (A6), and canvas creation while scrolling (A7). A1 and A2 come first because every later check uses A1's numbers and A2 is five safe one-liners. All items are low risk except A3, A6 and A7; each covers its own edge cases.
 
 ---
 
@@ -188,46 +188,46 @@ Do first. Every later item is checked with these numbers.
 
 1. `profile_log`: replace the `Mutex<File>` with a channel to one writer thread.
 
-   ```rust
-   static TX: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+ ```rust
+ static TX: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
 
-   pub fn init(cache_dir: &Path) {
-       // ...open file as today...
-       let (tx, rx) = std::sync::mpsc::channel::<String>();
-       std::thread::Builder::new()
-           .name("sift-profile-log".into())
-           .spawn(move || {
-               let mut w = std::io::BufWriter::with_capacity(64 * 1024, file);
-               let echo = std::env::var_os("SIFT_PROFILE_STDERR").is_some();
-               while let Ok(line) = rx.recv() {
-                   if echo { eprint!("[sift-profile] {line}"); }
-                   let _ = w.write_all(line.as_bytes());
-                   // Drain whatever is already queued, then flush once.
-                   while let Ok(more) = rx.try_recv() {
-                       let _ = w.write_all(more.as_bytes());
-                   }
-                   let _ = w.flush();
-               }
-           })
-           .ok();
-       let _ = TX.set(tx);
-   }
+ pub fn init(cache_dir: &Path) {
+ // ...open file as today...
+ let (tx, rx) = std::sync::mpsc::channel::<String>();
+ std::thread::Builder::new()
+ .name("sift-profile-log".into())
+ .spawn(move || {
+ let mut w = std::io::BufWriter::with_capacity(64 * 1024, file);
+ let echo = std::env::var_os("SIFT_PROFILE_STDERR").is_some();
+ while let Ok(line) = rx.recv() {
+ if echo { eprint!("[sift-profile] {line}"); }
+ let _ = w.write_all(line.as_bytes());
+ // Drain whatever is already queued, then flush once.
+ while let Ok(more) = rx.try_recv() {
+ let _ = w.write_all(more.as_bytes());
+ }
+ let _ = w.flush();
+ }
+ })
+ .ok();
+ let _ = TX.set(tx);
+ }
 
-   fn write_line(msg: &str) {
-       if let Some(tx) = TX.get() {
-           let _ = tx.send(format!("{}\t{}\n", now_ms(), msg));
-       }
-   }
-   ```
+ fn write_line(msg: &str) {
+ if let Some(tx) = TX.get() {
+ let _ = tx.send(format!("{}\t{}\n", now_ms(), msg));
+ }
+ }
+ ```
 
 2. Add a Cargo feature so profile builds get Web Inspector without shipping it:
 
-   ```toml
-   [features]
-   profile = ["tauri/devtools"]
-   ```
+ ```toml
+ [features]
+ profile = ["tauri/devtools"]
+ ```
 
-   In `scripts/tauri-profile.ts` spawn `bunx tauri dev --release --features profile`.
+ In `scripts/tauri-profile.ts` spawn `bunx tauri dev --release --features profile`.
 
 3. Fix the list marks in `refreshSamples`: rename `fe.list_apply` to `fe.list_ipc` (it is the IPC round trip). Add `fe.list_commit`: store `applyAt` in a ref, and in a `useEffect` keyed on `samples`, log `performance.now() - applyAt` once, then clear the ref. Delete `fe.list_apply_commit`.
 
@@ -237,19 +237,19 @@ Do first. Every later item is checked with these numbers.
 
 6. `tool/memwatch.sh`:
 
-   ```bash
-   #!/usr/bin/env bash
-   # Usage: tool/memwatch.sh [interval_s]. Appends sift footprint to logs/sift-mem.log
-   set -euo pipefail
-   pid=$(pgrep -f 'target/release/sift' | head -1)
-   while kill -0 "$pid" 2>/dev/null; do
-     fp=$(vmmap --summary "$pid" 2>/dev/null | grep -E '^Physical footprint' | tr -s ' ' | paste -sd' ' -)
-     echo "$(date +%T) $fp" >> logs/sift-mem.log
-     sleep "${1:-5}"
-   done
-   ```
+ ```bash
+ #!/usr/bin/env bash
+ # Usage: tool/memwatch.sh [interval_s]. Appends sift footprint to logs/sift-mem.log
+ set -euo pipefail
+ pid=$(pgrep -f 'target/release/sift' | head -1)
+ while kill -0 "$pid" 2>/dev/null; do
+ fp=$(vmmap --summary "$pid" 2>/dev/null | grep -E '^Physical footprint' | tr -s ' ' | paste -sd' ' -)
+ echo "$(date +%T) $fp" >> logs/sift-mem.log
+ sleep "${1:-5}"
+ done
+ ```
 
-**Verify:** a profile session writes the same marks as before with no `[sift-profile]` stderr spam. Right-click → Inspect Element works in `tauri:profile`. `logs/sift-mem.log` shows current and peak footprint.
+**Verify:** a profile session writes the same marks as before with no `[sift-profile]` stderr spam. Right-click to Inspect Element works in `tauri:profile`. `logs/sift-mem.log` shows current and peak footprint.
 
 ---
 
@@ -257,31 +257,31 @@ Do first. Every later item is checked with these numbers.
 
 Five small changes with no behavior change, in one PR. Each removes a measured cost.
 
-1. **`ROW_OVERSCAN` 40 → 6** in `src/components/SampleTable.tsx`. Mounted rows drop from ~92 to ~32, so ~60 % fewer canvases and peak fetches per scroll.
+1. **`ROW_OVERSCAN` 40 to 6** in `src/components/SampleTable.tsx`. Mounted rows drop from ~92 to ~32, so ~60 % fewer canvases and peak fetches per scroll.
 2. **Remove the full-list `Map` in the prefetch effect** (`SampleTable.tsx`, `availabilityById = new Map(samples.map(...))`). The loops already check `sample.availability`. Pass no `availabilityById` to `prefetchRowPeaks`.
 3. **`folder_tree` from grouped rows** in `src-tauri/src/library.rs`:
 
-   ```rust
-   let rows: Vec<(i32, String, i64)> = samples_dsl::samples
-       .filter(samples_dsl::missing.eq(0))
-       .group_by((samples_dsl::root_id, samples_dsl::parent_path))
-       .select((samples_dsl::root_id, samples_dsl::parent_path, diesel::dsl::count_star()))
-       .load(conn)?;
-   ```
+ ```rust
+ let rows: Vec<(i32, String, i64)> = samples_dsl::samples
+ .filter(samples_dsl::missing.eq(0))
+ .group_by((samples_dsl::root_id, samples_dsl::parent_path))
+ .select((samples_dsl::root_id, samples_dsl::parent_path, diesel::dsl::count_star()))
+ .load(conn)?;
+ ```
 
-   Walk ancestors once per distinct parent (2 817 instead of 20 439) and add `n` instead of 1 to the inclusive counts. Output stays identical. Test: existing `folder_tree` tests unchanged; new test with two files in one folder asserts `sample_count == 2` on the folder and its ancestors.
+ Walk ancestors once per distinct parent (2 817 instead of 20 439) and add `n` instead of 1 to the inclusive counts. Output stays identical. Test: existing `folder_tree` tests unchanged; new test with two files in one folder asserts `sample_count == 2` on the folder and its ancestors.
 4. **Availability `stat` outside the DB lock** in `src-tauri/src/samples.rs` (`refresh_availability_for_paths`, `refresh_availability_all`) and `refresh_technical` (called from the watcher): one query loads `(id, path, availability, missing)` and releases the lock, then `fs_ready::classify_path` runs with no lock, then one `with_conn` transaction writes the changed rows. Today up to 200 Dropbox `stat` calls hold the lock that the UI and 4 workers need.
 5. **Reserve the PCM buffer** in `src-tauri/src/audio/decode.rs`:
 
-   ```rust
-   let expected = track
-       .num_frames
-       .and_then(|f| usize::try_from(f).ok())
-       .and_then(|f| f.checked_mul(usize::from(channels)));
-   let mut samples: Vec<f32> = Vec::with_capacity(expected.unwrap_or(0));
-   ```
+ ```rust
+ let expected = track
+ .num_frames
+ .and_then(|f| usize::try_from(f).ok())
+ .and_then(|f| f.checked_mul(usize::from(channels)));
+ let mut samples: Vec<f32> = Vec::with_capacity(expected.unwrap_or(0));
+ ```
 
-   No doubling growth and no realloc copies when the frame count is known.
+ No doubling growth and no realloc copies when the frame count is known.
 
 **Verify:** `ipc.folder_tree` p50 drops from 67 ms to under 15 ms. `fe.avail_refresh` no longer lines up with `analyze.sample` spikes. `mounted=` in `fe.scroll` marks is ~32. All existing tests pass.
 
@@ -301,12 +301,12 @@ use tauri::Manager;
 /// Run blocking command work on Tauri's blocking pool, never the main thread.
 async fn off_main<T, F>(app: AppHandle, f: F) -> AppResult<T>
 where
-    T: Send + 'static,
-    F: FnOnce(&AppState) -> AppResult<T> + Send + 'static,
+ T: Send + 'static,
+ F: FnOnce(&AppState) -> AppResult<T> + Send + 'static,
 {
-    tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
-        .await
-        .map_err(|e| AppError::msg(format!("blocking task failed: {e}")))?
+ tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
+ .await
+ .map_err(|e| AppError::msg(format!("blocking task failed: {e}")))?
 }
 ```
 
@@ -315,13 +315,13 @@ where
 ```rust
 #[tauri::command]
 pub async fn folder_tree(app: AppHandle, max_depth: Option<u32>) -> AppResult<Vec<FolderNode>> {
-    off_main(app, move |state| {
-        let depth = max_depth.unwrap_or(6);
-        crate::profile_log::time("ipc.folder_tree", &format!("depth={depth}"), || {
-            state.db.with_conn(|conn| library::folder_tree(conn, depth))
-        })
-    })
-    .await
+ off_main(app, move |state| {
+ let depth = max_depth.unwrap_or(6);
+ crate::profile_log::time("ipc.folder_tree", &format!("depth={depth}"), || {
+ state.db.with_conn(|conn| library::folder_tree(conn, depth))
+ })
+ })
+ .await
 }
 ```
 
@@ -342,24 +342,24 @@ The JS side does not change: argument names and return shapes stay the same.
 ```rust
 // state.rs
 pub struct AppState {
-    // ...
-    /// Highest play/stop request seen. Late decodes with a lower seq are dropped.
-    pub play_seq: std::sync::atomic::AtomicU64,
+ // ...
+ /// Highest play/stop request seen. Late decodes with a lower seq are dropped.
+ pub play_seq: std::sync::atomic::AtomicU64,
 }
 
 // commands/mod.rs: play_sample gains `seq: u64`
 pub async fn play_sample(app: AppHandle, sample_id: i64, seq: u64, /* ...existing args */) -> AppResult<()> {
-    off_main(app, move |state| {
-        use std::sync::atomic::Ordering;
-        state.play_seq.fetch_max(seq, Ordering::SeqCst);
-        // ...load row, decode via decode_cache::get_or_decode (lock NOT held during decode, see c)...
-        if state.play_seq.load(Ordering::SeqCst) != seq {
-            return Ok(()); // superseded while decoding
-        }
-        state.player.lock().unwrap_or_else(PoisonError::into_inner)
-            .play_decoded(path, &decoded, start, play_type, region)
-    })
-    .await
+ off_main(app, move |state| {
+ use std::sync::atomic::Ordering;
+ state.play_seq.fetch_max(seq, Ordering::SeqCst);
+ // ...load row, decode via decode_cache::get_or_decode (lock NOT held during decode, see c)...
+ if state.play_seq.load(Ordering::SeqCst) != seq {
+ return Ok(()); // superseded while decoding
+ }
+ state.player.lock().unwrap_or_else(PoisonError::into_inner)
+ .play_decoded(path, &decoded, start, play_type, region)
+ })
+ .await
 }
 
 // stop_playback / pause_playback also take `seq: u64` and call fetch_max first.
@@ -371,16 +371,16 @@ Frontend: `ipc.ts` keeps `let playSeq = 0;` and `ipc.play`, `ipc.stop`, `ipc.pau
 
 ```rust
 pub async fn set_sample_bpm(app: AppHandle, id: i64, bpm: Option<f64>) -> AppResult<()> {
-    off_main(app, move |state| {
-        let mut undo = state.undo.lock().unwrap_or_else(PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| Ok(samples::sample_meta_snapshot(conn, id)?.1))?;
-        state.db.with_conn(|conn| samples::set_sample_bpm(conn, id, bpm))?;
-        if before != bpm {
-            undo.push(UndoAction::Bpm { id, before, after: bpm });
-        }
-        Ok(())
-    })
-    .await
+ off_main(app, move |state| {
+ let mut undo = state.undo.lock().unwrap_or_else(PoisonError::into_inner);
+ let before = state.db.with_conn(|conn| Ok(samples::sample_meta_snapshot(conn, id)?.1))?;
+ state.db.with_conn(|conn| samples::set_sample_bpm(conn, id, bpm))?;
+ if before != bpm {
+ undo.push(UndoAction::Bpm { id, before, after: bpm });
+ }
+ Ok(())
+ })
+ .await
 }
 ```
 
@@ -390,21 +390,21 @@ Same for favorite, key, type, `add_sample_tag`, `remove_sample_tag`.
 
 ```rust
 impl DecodeCache {
-    /// Cached PCM if the entry exists and the mtime still matches.
-    pub fn get_fresh(&mut self, path: &Path) -> Option<Arc<DecodedAudio>>;
-    pub fn insert(&mut self, path: PathBuf, audio: Arc<DecodedAudio>, mtime: Option<SystemTime>);
+ /// Cached PCM if the entry exists and the mtime still matches.
+ pub fn get_fresh(&mut self, path: &Path) -> Option<Arc<DecodedAudio>>;
+ pub fn insert(&mut self, path: PathBuf, audio: Arc<DecodedAudio>, mtime: Option<SystemTime>);
 }
 
 /// Free function: lock, check, unlock, decode, lock, insert.
 pub fn get_or_decode(cache: &Mutex<DecodeCache>, path: &Path) -> AppResult<(Arc<DecodedAudio>, bool)> {
-    if let Some(hit) = cache.lock().unwrap_or_else(PoisonError::into_inner).get_fresh(path) {
-        return Ok((hit, true));
-    }
-    let mtime = file_mtime(path);
-    let audio = Arc::new(decode_file(path)?);
-    cache.lock().unwrap_or_else(PoisonError::into_inner)
-        .insert(path.to_path_buf(), Arc::clone(&audio), mtime);
-    Ok((audio, false))
+ if let Some(hit) = cache.lock().unwrap_or_else(PoisonError::into_inner).get_fresh(path) {
+ return Ok((hit, true));
+ }
+ let mtime = file_mtime(path);
+ let audio = Arc::new(decode_file(path)?);
+ cache.lock().unwrap_or_else(PoisonError::into_inner)
+ .insert(path.to_path_buf(), Arc::clone(&audio), mtime);
+ Ok((audio, false))
 }
 ```
 
@@ -420,7 +420,7 @@ Two concurrent misses on the same path may both decode. That is acceptable and m
 - `play_seq`: `fetch_max` with a lower seq does not lower the stored value; a play whose seq is no longer current returns without calling the player (test the check as a small pure function).
 - Existing tests keep passing.
 
-**Verify:** Instruments → Time Profiler on `sift` during an analyze wave; the main thread shows no `sift_lib::commands` frames. `fe.get_peaks` p90 drops from 990 ms to under 30 ms. Hold the down arrow in a 700-row folder with play-on-select on: the row you stop on is the one that plays.
+**Verify:** Instruments, Time Profiler on `sift` during an analyze wave; the main thread shows no `sift_lib::commands` frames. `fe.get_peaks` p90 drops from 990 ms to under 30 ms. Hold the down arrow in a 700-row folder with play-on-select on: the row you stop on is the one that plays.
 
 ---
 
@@ -437,35 +437,35 @@ Two concurrent misses on the same path may both decode. That is acceptable and m
 import { useSyncExternalStore } from "react";
 
 export interface Store<T> {
-  get: () => T;
-  set: (next: T) => void;
-  subscribe: (fn: () => void) => () => void;
+ get: () => T;
+ set: (next: T) => void;
+ subscribe: (fn: () => void) => () => void;
 }
 
 export function createStore<T>(initial: T): Store<T> {
-  let value = initial;
-  const listeners = new Set<() => void>();
-  return {
-    get: () => value,
-    set: (next) => {
-      if (Object.is(next, value)) return;
-      value = next;
-      for (const fn of listeners) fn();
-    },
-    subscribe: (fn) => {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-  };
+ let value = initial;
+ const listeners = new Set<() => void>();
+ return {
+ get: () => value,
+ set: (next) => {
+ if (Object.is(next, value)) return;
+ value = next;
+ for (const fn of listeners) fn();
+ },
+ subscribe: (fn) => {
+ listeners.add(fn);
+ return () => listeners.delete(fn);
+ },
+ };
 }
 
 export function useStore<T>(store: Store<T>): T {
-  return useSyncExternalStore(store.subscribe, store.get);
+ return useSyncExternalStore(store.subscribe, store.get);
 }
 
 /** Selector must return a primitive or a stable reference. */
 export function useStoreSelector<T, S>(store: Store<T>, select: (v: T) => S): S {
-  return useSyncExternalStore(store.subscribe, () => select(store.get()));
+ return useSyncExternalStore(store.subscribe, () => select(store.get()));
 }
 ```
 
@@ -474,11 +474,11 @@ export function useStoreSelector<T, S>(store: Store<T>, select: (v: T) => S): S 
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 export function useStableCallback<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
-  const ref = useRef(fn);
-  useLayoutEffect(() => {
-    ref.current = fn;
-  });
-  return useCallback((...args: A) => ref.current(...args), []);
+ const ref = useRef(fn);
+ useLayoutEffect(() => {
+ ref.current = fn;
+ });
+ return useCallback((...args: A) => ref.current(...args), []);
 }
 ```
 
@@ -492,7 +492,7 @@ export const analysisStore = createStore<AnalysisLive>({ bar: null, activeIds: n
 export const playheadStore = createStore<number | null>(null);
 ```
 
-- `App.tsx`: the `analysis-queue` and `analysis-progress` listeners write to `analysisStore` instead of `setAnalysisBar` / `setAnalyzingIds`. Throttle writes to at most one per 500 ms with a trailing write; write immediately when `remaining === 0`. Delete the `analyzingIds` and `analysisBar` props from `App` → `LibraryView` → `SampleTable`.
+- `App.tsx`: the `analysis-queue` and `analysis-progress` listeners write to `analysisStore` instead of `setAnalysisBar` / `setAnalyzingIds`. Throttle writes to at most one per 500 ms with a trailing write; write immediately when `remaining === 0`. Delete the `analyzingIds` and `analysisBar` props from `App`, `LibraryView`, and `SampleTable`.
 - Rust `AnalysisProgress` gains `active_ids: Vec<i64>`: the jobs currently inside a worker, not the whole queue. Track `in_worker: HashSet<i64>` in `QueueProgress` (insert on dequeue, remove on finish). The FE stores it as `activeIds`. This fixes rows that stay "analyzing" until the whole queue ends.
 - `StatusBar` reads `useStore(analysisStore).bar`.
 - A row reads `useStoreSelector(analysisStore, (s) => s.activeIds.has(id))`, a boolean, so only rows whose flag flips re-render.
@@ -502,37 +502,37 @@ export const playheadStore = createStore<number | null>(null);
 - `LibraryView`'s rAF loop calls `playheadStore.set(secs)` instead of `setPlayhead`. Remove the `playhead` state. Places that set it directly (`onScrubRow`, `onSeek`) call `playheadStore.set(...)`.
 - New hook, used by the playing row and by `WaveformView`:
 
-  ```ts
-  /** Moves `el` by writing style directly: no React render per frame. */
-  export function usePlayheadStyle(
-    ref: React.RefObject<HTMLElement | null>,
-    durationSecs: number,
-    active: boolean,
-  ): void {
-    useLayoutEffect(() => {
-      const el = ref.current;
-      if (!el || !active || durationSecs <= 0) return;
-      const apply = () => {
-        const secs = playheadStore.get();
-        const f = secs == null ? 0 : Math.min(1, Math.max(0, secs / durationSecs));
-        el.style.transform = `translateX(${(f * 100).toFixed(3)}%)`;
-      };
-      apply();
-      return playheadStore.subscribe(apply);
-    }, [ref, durationSecs, active]);
-  }
-  ```
+ ```ts
+ /** Moves `el` by writing style directly: no React render per frame. */
+ export function usePlayheadStyle(
+ ref: React.RefObject<HTMLElement | null>,
+ durationSecs: number,
+ active: boolean,
+ ): void {
+ useLayoutEffect(() => {
+ const el = ref.current;
+ if (!el || !active || durationSecs <= 0) return;
+ const apply = () => {
+ const secs = playheadStore.get();
+ const f = secs == null ? 0 : Math.min(1, Math.max(0, secs / durationSecs));
+ el.style.transform = `translateX(${(f * 100).toFixed(3)}%)`;
+ };
+ apply();
+ return playheadStore.subscribe(apply);
+ }, [ref, durationSecs, active]);
+ }
+ ```
 
-  In the row, `.row-wave-playhead` sits inside a full-width wrapper that gets translated; `.row-wave-played` becomes a full-width element scaled with `transform: scaleX(f)` and `transform-origin: left` (a second small hook or a `mode` argument). In `library.css`, replace `will-change: left` with `will-change: transform`.
+ In the row, `.row-wave-playhead` sits inside a full-width wrapper that gets translated; `.row-wave-played` becomes a full-width element scaled with `transform: scaleX(f)` and `transform-origin: left` (a second small hook or a `mode` argument). In `library.css`, replace `will-change: left` with `will-change: transform`.
 - `DetailPane` / `WaveformView`: replace the `playheadSecs` prop with the same subscription. If `WaveformView` draws the playhead on its canvas, move it to a separate absolutely positioned DOM line (or overlay canvas) driven by the hook, so the main wave canvas never repaints per frame.
 
 **Step 4: memoize the big children.**
 
 - `export const FolderSidebar = memo(function FolderSidebar(...) { ... })`. Same for `SampleTable`, `DetailPane`, `StatusBar`, `OmniSearch`.
 - In `LibraryView`, every prop passed to those must be stable:
-  - Inline arrow props become `useStableCallback(...)`: `onSelectFolder`, `onSelectTag`, `onRemoveRoot`, `onHoverPreview`, `onSort`, `onColumnWidthsChange`, `onColumnOrderChange`, `onOpenMenu`, `onScrubRow`, and every `DetailPane` and `OmniSearch` callback.
-  - `columnWidths={mergeColumnWidths(settings.column_widths)}` and `columnOrder={mergeColumnOrder(...)}` become `useMemo` on the settings value.
-  - `columnLabels={{...}}` for `OmniSearch` becomes `useMemo` on `t`.
+ - Inline arrow props become `useStableCallback(...)`: `onSelectFolder`, `onSelectTag`, `onRemoveRoot`, `onHoverPreview`, `onSort`, `onColumnWidthsChange`, `onColumnOrderChange`, `onOpenMenu`, `onScrubRow`, and every `DetailPane` and `OmniSearch` callback.
+ - `columnWidths={mergeColumnWidths(settings.column_widths)}` and `columnOrder={mergeColumnOrder(...)}` become `useMemo` on the settings value.
+ - `columnLabels={{...}}` for `OmniSearch` becomes `useMemo` on `t`.
 - New `SampleRowView = memo(...)` in `SampleRowView.tsx`, extracted from the row JSX in `SampleTable`. Props: `sample`, `index`, `top` (the `virtual.start`), `template`, `columns`, `selected`, `playing`, `showWaveforms`, `colored`, `highlightText`, `waveWidth` (A7), plus stable callbacks that take the sample (`onSelect(sample, e)`, `onOpenMenu`, `onToggleFavorite`, `onScrub`, `onHoverPreview`, `onDragStart`). `SampleTable` passes `selectedIds.has(sample.id)` as the boolean `selected`, never the Set.
 
 **Tests:**
@@ -553,75 +553,75 @@ export const playheadStore = createStore<number | null>(null);
 
 1. **Reserve the PCM buffer.** Done in the quick fixes. For reference: in `decode_file`, after picking the track:
 
-   ```rust
-   let expected = track
-       .num_frames
-       .and_then(|f| usize::try_from(f).ok())
-       .and_then(|f| f.checked_mul(usize::from(channels)));
-   let mut samples: Vec<f32> = Vec::with_capacity(expected.unwrap_or(0));
-   ```
+ ```rust
+ let expected = track
+ .num_frames
+ .and_then(|f| usize::try_from(f).ok())
+ .and_then(|f| f.checked_mul(usize::from(channels)));
+ let mut samples: Vec<f32> = Vec::with_capacity(expected.unwrap_or(0));
+ ```
 
-   No doubling growth and no realloc copies when the count is known.
+ No doubling growth and no realloc copies when the count is known.
 
 2. **Split open from decode** so callers see the size before allocating:
 
-   ```rust
-   pub struct OpenedAudio {
-       // format reader, decoder, track_id, sample_rate, channels, bit_depth_hint
-       pub num_frames: Option<u64>,
-   }
-   pub fn open_audio(path: &Path) -> AppResult<OpenedAudio>;
-   pub fn decode_all(opened: OpenedAudio) -> AppResult<DecodedAudio>;
-   pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
-       decode_all(open_audio(path)?)
-   }
-   ```
+ ```rust
+ pub struct OpenedAudio {
+ // format reader, decoder, track_id, sample_rate, channels, bit_depth_hint
+ pub num_frames: Option<u64>,
+ }
+ pub fn open_audio(path: &Path) -> AppResult<OpenedAudio>;
+ pub fn decode_all(opened: OpenedAudio) -> AppResult<DecodedAudio>;
+ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
+ decode_all(open_audio(path)?)
+ }
+ ```
 
 3. **One large file at a time.** In `analyze_sample`:
 
-   ```rust
-   /// Frames × channels above which a job takes the large-file permit (~90 s stereo 44.1 kHz).
-   const LARGE_JOB_SAMPLES: u64 = 8_000_000;
-   static LARGE_JOB: Mutex<()> = Mutex::new(());
+ ```rust
+ /// Frames × channels above which a job takes the large-file permit (~90 s stereo 44.1 kHz).
+ const LARGE_JOB_SAMPLES: u64 = 8_000_000;
+ static LARGE_JOB: Mutex<()> = Mutex::new(());
 
-   let opened = open_audio(path)?;
-   let big = opened
-       .num_frames
-       .is_none_or(|f| f.saturating_mul(u64::from(opened.channels)) > LARGE_JOB_SAMPLES);
-   let _permit = big.then(|| LARGE_JOB.lock().unwrap_or_else(PoisonError::into_inner));
-   let pcm = decode_all(opened)?;
-   ```
+ let opened = open_audio(path)?;
+ let big = opened
+ .num_frames
+ .is_none_or(|f| f.saturating_mul(u64::from(opened.channels)) > LARGE_JOB_SAMPLES);
+ let _permit = big.then(|| LARGE_JOB.lock().unwrap_or_else(PoisonError::into_inner));
+ let pcm = decode_all(opened)?;
+ ```
 
-   Unknown length counts as large.
+ Unknown length counts as large.
 
 4. **One mono buffer, shared.** Move `to_mono` to `audio/mod.rs` as `pub fn to_mono(pcm: &DecodedAudio) -> Vec<f32>`. In `analyze_sample`: compute `mono` once; call a new `peaks::cache_peaks_from_decoded_with_mono(peaks_dir, id, &pcm, &mono, buckets)` that uses it for colors instead of `mix_to_mono`; build `TechInfo { sample_rate, channels, duration_ms, bit_depth_hint }`; then `drop(pcm)` before heuristics. `write_technical_fields` takes `&TechInfo`.
 
 5. **Analyze an excerpt.** Change the `Analyzer` trait input:
 
-   ```rust
-   pub struct AnalysisInput<'a> {
-       /// Mono excerpt for tempo, key and loop detection. At most EXCERPT_SECS long.
-       pub mono: &'a [f32],
-       pub sample_rate: u32,
-       /// Full file duration, for the one-shot vs loop length rule.
-       pub duration_ms: f64,
-   }
+ ```rust
+ pub struct AnalysisInput<'a> {
+ /// Mono excerpt for tempo, key and loop detection. At most EXCERPT_SECS long.
+ pub mono: &'a [f32],
+ pub sample_rate: u32,
+ /// Full file duration, for the one-shot vs loop length rule.
+ pub duration_ms: f64,
+ }
 
-   pub trait Analyzer {
-       fn analyze(&self, path: &Path, input: &AnalysisInput<'_>, bpm_min: f64, bpm_max: f64) -> AnalysisResult;
-   }
+ pub trait Analyzer {
+ fn analyze(&self, path: &Path, input: &AnalysisInput<'_>, bpm_min: f64, bpm_max: f64) -> AnalysisResult;
+ }
 
-   const EXCERPT_SECS: f64 = 60.0;
+ const EXCERPT_SECS: f64 = 60.0;
 
-   /// Up to EXCERPT_SECS: the whole file. Longer: start at 10 % (at most 30 s in) to skip intros.
-   pub fn excerpt_range(frames: usize, sample_rate: u32) -> std::ops::Range<usize>;
-   ```
+ /// Up to EXCERPT_SECS: the whole file. Longer: start at 10 % (at most 30 s in) to skip intros.
+ pub fn excerpt_range(frames: usize, sample_rate: u32) -> std::ops::Range<usize>;
+ ```
 
-   `HeuristicAnalyzer` and `detect_loop_or_oneshot` use `input.mono` and `input.duration_ms` and stop calling `to_mono`. `PathTokenAnalyzer` ignores the input. Update the bench and `perf_budgets.rs` to build an `AnalysisInput` from a decoded fixture.
+ `HeuristicAnalyzer` and `detect_loop_or_oneshot` use `input.mono` and `input.duration_ms` and stop calling `to_mono`. `PathTokenAnalyzer` ignores the input. Update the bench and `perf_budgets.rs` to build an `AnalysisInput` from a decoded fixture.
 
 **Tests:**
 
-- `excerpt_range`: 30 s file → whole range; 90 s file → starts at 9 s, 60 s long; 10 min file → starts at 30 s, 60 s long.
+- `excerpt_range`: 30 s file covers the whole range; 90 s file starts at 9 s and is 60 s long; 10 min file starts at 30 s and is 60 s long.
 - Synthetic click track, 3 minutes at 120 BPM, 44.1 kHz, generated in the test: excerpt BPM within ±1 of 120.
 - Existing heuristic tests on `example_samples` unchanged. All fixtures are under 60 s, so results must be identical.
 
@@ -631,7 +631,7 @@ export const playheadStore = createStore<number | null>(null);
 
 ### Midpoint profile run
 
-Not a decision point: the rest of Phase A goes ahead either way. Run the profile protocol once so the log shows what A1 to A5 fixed on their own. Record `fe.get_peaks` p90, `fe.fps` median during analyze with no folder open, `ipc.folder_tree` per minute, `fe.row_wave_paint` p95 and max, and `Physical footprint (peak)`.
+Not a decision point. The rest of Phase A goes ahead either way. Run the profile protocol once so the log shows what A1 to A5 fixed on their own. Record `fe.get_peaks` p90, `fe.fps` median during analyze with no folder open, `ipc.folder_tree` per minute, `fe.row_wave_paint` p95 and max, and `Physical footprint (peak)`.
 
 ---
 
@@ -647,54 +647,54 @@ Not a decision point: the rest of Phase A goes ahead either way. Run the profile
 // watch.rs
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct LibraryChangedPayload {
-    pub reason: String,
-    /// Samples added, removed, renamed or a root changed: tree and list must refetch.
-    pub structural: bool,
-    /// Rows whose fields changed (availability, technical, analysis). Patch in place.
-    pub sample_ids: Vec<i64>,
+ pub reason: String,
+ /// Samples added, removed, renamed or a root changed: tree and list must refetch.
+ pub structural: bool,
+ /// Rows whose fields changed (availability, technical, analysis). Patch in place.
+ pub sample_ids: Vec<i64>,
 }
 
 /// Merges change notices and emits at most one `library-changed` per window.
 #[derive(Default)]
 pub struct ChangeCoalescer {
-    pending: Mutex<Option<LibraryChangedPayload>>,
-    scheduled: AtomicBool,
+ pending: Mutex<Option<LibraryChangedPayload>>,
+ scheduled: AtomicBool,
 }
 
 impl ChangeCoalescer {
-    const WINDOW: Duration = Duration::from_millis(1500);
+ const WINDOW: Duration = Duration::from_millis(1500);
 
-    pub fn push(self: &Arc<Self>, app: &AppHandle, reason: &str, structural: bool, ids: &[i64]) {
-        {
-            let mut p = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
-            let cur = p.get_or_insert_with(Default::default);
-            merge(cur, reason, structural, ids);
-        }
-        if self.scheduled.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        let me = Arc::clone(self);
-        let app = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Self::WINDOW);
-            me.scheduled.store(false, Ordering::Release);
-            let payload = me.pending.lock().unwrap_or_else(PoisonError::into_inner).take();
-            if let Some(mut payload) = payload {
-                payload.sample_ids.sort_unstable();
-                payload.sample_ids.dedup();
-                let _ = app.emit("library-changed", payload);
-            }
-        });
-    }
+ pub fn push(self: &Arc<Self>, app: &AppHandle, reason: &str, structural: bool, ids: &[i64]) {
+ {
+ let mut p = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+ let cur = p.get_or_insert_with(Default::default);
+ merge(cur, reason, structural, ids);
+ }
+ if self.scheduled.swap(true, Ordering::AcqRel) {
+ return;
+ }
+ let me = Arc::clone(self);
+ let app = app.clone();
+ std::thread::spawn(move || {
+ std::thread::sleep(Self::WINDOW);
+ me.scheduled.store(false, Ordering::Release);
+ let payload = me.pending.lock().unwrap_or_else(PoisonError::into_inner).take();
+ if let Some(mut payload) = payload {
+ payload.sample_ids.sort_unstable();
+ payload.sample_ids.dedup();
+ let _ = app.emit("library-changed", payload);
+ }
+ });
+ }
 }
 
 /// Pure merge, unit-tested on its own.
 fn merge(cur: &mut LibraryChangedPayload, reason: &str, structural: bool, ids: &[i64]) {
-    cur.structural |= structural;
-    cur.sample_ids.extend_from_slice(ids);
-    if cur.reason.is_empty() {
-        cur.reason = reason.to_owned();
-    }
+ cur.structural |= structural;
+ cur.sample_ids.extend_from_slice(ids);
+ if cur.reason.is_empty() {
+ cur.reason = reason.to_owned();
+ }
 }
 ```
 
@@ -714,36 +714,36 @@ Put one `Arc<ChangeCoalescer>` in `AppState` and pass it into `WatchShared`. Rep
 
 - New Rust command `get_samples(ids: Vec<i64>) -> Vec<SampleDto>`: off main, `WHERE id IN (...)` in chunks of 500, same DTO and tag join as `list_samples`.
 - `App.tsx` `library-changed` handler:
-  - `structural`: refresh stats + tree + tags and bump the list token, as today.
-  - otherwise: write the ids to a `rowChangesStore` (from A4's `createStore`). `LibraryView` subscribes, intersects the ids with its current rows, and if any match calls `ipc.getSamples(matching)` and patches those rows. Refresh `db_stats` at most every 10 s. The tree is not touched.
-- Remove the `analysis-progress` `remaining === 0` → `bump()` path. The per-sample ids already patch rows.
+ - `structural`: refresh stats + tree + tags and bump the list token, as today.
+ - otherwise: write the ids to a `rowChangesStore` (from A4's `createStore`). `LibraryView` subscribes, intersects the ids with its current rows, and if any match calls `ipc.getSamples(matching)` and patches those rows. Refresh `db_stats` at most every 10 s. The tree is not touched.
+- Remove the `analysis-progress` path that calls `bump()` when `remaining === 0`. The per-sample ids already patch rows.
 - Edits (`toggleFavorite`, type, BPM, key, tags, undo/redo): after the IPC resolves, patch the affected rows with `getSamples(ids)` instead of `reload()`. For favorite, flip the row first (optimistic), then reconcile with the fetched row. `reload()` stays only for root add/remove, purge missing and remove sample.
 - Keep object identity for untouched rows so memoized rows skip rendering:
 
-  ```ts
-  // src/lib/patchRows.ts
-  export function patchRows(rows: readonly SampleRow[], updates: readonly SampleRow[]): SampleRow[] {
-    if (updates.length === 0) return rows as SampleRow[];
-    const byId = new Map(updates.map((u) => [u.id, u] as const));
-    let changed = false;
-    const next = rows.map((r) => {
-      const u = byId.get(r.id);
-      if (!u) return r;
-      changed = true;
-      return u;
-    });
-    return changed ? next : (rows as SampleRow[]);
-  }
-  ```
+ ```ts
+ // src/lib/patchRows.ts
+ export function patchRows(rows: readonly SampleRow[], updates: readonly SampleRow[]): SampleRow[] {
+ if (updates.length === 0) return rows as SampleRow[];
+ const byId = new Map(updates.map((u) => [u.id, u] as const));
+ let changed = false;
+ const next = rows.map((r) => {
+ const u = byId.get(r.id);
+ if (!u) return r;
+ changed = true;
+ return u;
+ });
+ return changed ? next : (rows as SampleRow[]);
+ }
+ ```
 
 **Step 3: cheaper `folder_tree`.** Done in the quick fixes; listed here for reference.
 
 ```rust
 let rows: Vec<(i32, String, i64)> = samples_dsl::samples
-    .filter(samples_dsl::missing.eq(0))
-    .group_by((samples_dsl::root_id, samples_dsl::parent_path))
-    .select((samples_dsl::root_id, samples_dsl::parent_path, diesel::dsl::count_star()))
-    .load(conn)?;
+ .filter(samples_dsl::missing.eq(0))
+ .group_by((samples_dsl::root_id, samples_dsl::parent_path))
+ .select((samples_dsl::root_id, samples_dsl::parent_path, diesel::dsl::count_star()))
+ .load(conn)?;
 ```
 
 Walk ancestors once per distinct parent (2 817 instead of 20 439) and add `n` instead of 1 to the inclusive counts. Output stays identical.
@@ -770,7 +770,7 @@ Walk ancestors once per distinct parent (2 817 instead of 20 439) and add `n` in
 
 **Files:** `src/lib/rowPeaks.ts`, `src/components/SampleTable.tsx`, `SampleRowView.tsx` (from A4), `RowWaveform.tsx`, new `src/lib/waveTheme.ts`, new `src/lib/paintQueue.ts`, `src/theme/subscribeThemePaint.ts`, `src/lib/spectralColor.ts`, `library.css`.
 
-**Step 1: measure the 240 ms (30 min).** With A1's inspector: Timelines → record while scrolling a 700-row folder with waves on. Note whether the cost sits in Layout (forced by `clientWidth`) or in canvas/Paint (backing store). Write the answer into this doc. Steps 2 to 6 remove both causes either way; the answer only decides whether D1 is ever needed.
+**Step 1: measure the 240 ms (30 min).** With A1's inspector: Timelines, record while scrolling a 700-row folder with waves on. Note whether the cost sits in Layout (forced by `clientWidth`) or in canvas/Paint (backing store). Write the answer into this doc. Steps 2 to 6 remove both causes either way; the answer only decides whether D1 is ever needed.
 
 **Step 2: smaller window.** Done in the quick fixes (`ROW_OVERSCAN` 6).
 
@@ -782,7 +782,7 @@ const slots = assignSlots(slotsRef.current, virtualItems.map((v) => v.index));
 slotsRef.current = slots;
 
 {virtualItems.map((v) => (
-  <SampleRowView key={slots.byIndex.get(v.index) ?? v.index} /* ... */ />
+ <SampleRowView key={slots.byIndex.get(v.index) ?? v.index} /* ... */ />
 ))}
 ```
 
@@ -791,7 +791,7 @@ slotsRef.current = slots;
 Changes this needs in `RowWaveform`:
 
 - **Always render the `<canvas>`**, also while analyzing, missing, cloud or peaks not loaded. Draw the placeholder on the canvas (a 1 px line at mid height in the ink color at 35 % alpha). Show the shimmer as an absolutely positioned overlay `<span>` only when the row's `analyzing` flag is set. Today the component swaps the canvas for a `<div>`, which destroys the canvas every time.
-- Reset per-row UI state when `sampleId` changes: `hoverFraction` → `null`.
+- Reset per-row UI state when `sampleId` changes: `hoverFraction` to `null`.
 - Read peaks by id with `useSyncExternalStore`, not `useState` + effect, so a reused row never paints the previous sample's wave for a frame. In this phase, make the existing `peakCache` in `rowPeaks.ts` subscribable: add `getRowPeaks(id)` and `subscribeRowPeaks(id, fn)` with the same signatures as in B1, and call the id's listeners when a fetch lands. B1 later swaps the internals and keeps these two functions.
 
 **Step 4: no layout or style reads per paint.**
@@ -805,18 +805,18 @@ let cached: WaveTheme | null = null;
 
 /** One getComputedStyle per theme change, not per row. The vars live on :root. */
 export function waveTheme(): WaveTheme {
-  if (cached) return cached;
-  const s = getComputedStyle(document.documentElement);
-  cached = {
-    ink: s.getPropertyValue("--color-row-wave").trim() || "#6a6d80",
-    inkSelected: s.getPropertyValue("--color-row-wave-sel").trim() || "#b9b0f0",
-    bands: readSpectralBandsFrom(s),
-  };
-  return cached;
+ if (cached) return cached;
+ const s = getComputedStyle(document.documentElement);
+ cached = {
+ ink: s.getPropertyValue("--color-row-wave").trim() || "#6a6d80",
+ inkSelected: s.getPropertyValue("--color-row-wave-sel").trim() || "#b9b0f0",
+ bands: readSpectralBandsFrom(s),
+ };
+ return cached;
 }
 
 export function invalidateWaveTheme(): void {
-  cached = null;
+ cached = null;
 }
 ```
 
@@ -833,23 +833,23 @@ let raf = 0;
 const BUDGET_MS = 6;
 
 export function schedulePaint(canvas: HTMLCanvasElement, paint: () => void): void {
-  queue.set(canvas, paint); // latest paint for a canvas wins
-  if (raf === 0) raf = requestAnimationFrame(flush);
+ queue.set(canvas, paint); // latest paint for a canvas wins
+ if (raf === 0) raf = requestAnimationFrame(flush);
 }
 
 export function cancelPaint(canvas: HTMLCanvasElement): void {
-  queue.delete(canvas);
+ queue.delete(canvas);
 }
 
 function flush(): void {
-  raf = 0;
-  const deadline = performance.now() + BUDGET_MS;
-  for (const [canvas, paint] of queue) {
-    queue.delete(canvas);
-    paint();
-    if (performance.now() > deadline) break;
-  }
-  if (queue.size > 0) raf = requestAnimationFrame(flush);
+ raf = 0;
+ const deadline = performance.now() + BUDGET_MS;
+ for (const [canvas, paint] of queue) {
+ queue.delete(canvas);
+ paint();
+ if (performance.now() > deadline) break;
+ }
+ if (queue.size > 0) raf = requestAnimationFrame(flush);
 }
 ```
 
@@ -873,16 +873,16 @@ function flush(): void {
 
 Run the profile protocol. Then:
 
-- **Stop** if the success bar is met.
-- **Go to Phase B** if visible waves take > 150 ms to fill after scrolling stops, the peaks queue wait (`fe.peaks_start`) p95 > 50 ms, WebContent memory grows on a second scroll through 3k rows, or sift footprint climbs past ~400 MB while auditioning long files.
-- **Consider D1** if `fe.row_wave_paint` still has paints over 16 ms and A7 Step 1 blamed canvas creation.
-- **Consider D3** on its trigger (list IPC or list commit still slow for n ≥ 3 000).
+- Stop if the success bar is met.
+- Go to Phase B if visible waves take > 150 ms to fill after scrolling stops, the peaks queue wait (`fe.peaks_start`) p95 > 50 ms, WebContent memory grows on a second scroll through 3k rows, or sift footprint climbs past ~400 MB while auditioning long files.
+- Consider D1 if `fe.row_wave_paint` still has paints over 16 ms and A7 Step 1 blamed canvas creation.
+- Consider D3 on its trigger (list IPC or list commit still slow for n ≥ 3 000).
 
 ---
 
 ## Phase B: row peaks and decode cache
 
-Goal: row waves arrive in one small binary batch for what is on screen, and audition memory has a byte limit.
+Goal: row waves arrive in one small binary batch for what is on screen. Audition memory gets a byte limit.
 
 ---
 
@@ -897,16 +897,16 @@ Goal: row waves arrive in one small binary batch for what is on screen, and audi
 **Step 1: wire format.** Little-endian. One response per batch:
 
 ```text
-u32  count
+u32 count
 repeat count:
-  i32  sample_id
-  u8   status        0 = ok, 1 = not ready (no peakfile yet), 2 = not local or missing
-  u8   reserved
-  u16  buckets       256 for rows; 0 when status != 0
-  f32  duration_ms
-  i8   min[buckets]  mono: min over channels, scaled by 127
-  i8   max[buckets]  mono: max over channels, scaled by 127
-  u8   rgb[buckets*3]
+ i32 sample_id
+ u8 status 0 = ok, 1 = not ready (no peakfile yet), 2 = not local or missing
+ u8 reserved
+ u16 buckets 256 for rows; 0 when status != 0
+ f32 duration_ms
+ i8 min[buckets] mono: min over channels, scaled by 127
+ i8 max[buckets] mono: max over channels, scaled by 127
+ u8 rgb[buckets*3]
 ```
 
 12-byte row header plus 1 280 bytes of data. A 64-row batch is ~83 KB, against ~3.2 MB of JSON today.
@@ -919,7 +919,7 @@ pub const ROW_BUCKETS: usize = 256;
 
 /// Read the cached 1024-bucket peakfile. Never decodes.
 pub fn read_cached_peaks(peaks_dir: &Path, sample_id: i64) -> AppResult<Option<PeakData>> {
-    read_peakfile(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
+ read_peakfile(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
 }
 
 /// Append one encoded row (status 0). Downsample by grouping
@@ -937,31 +937,31 @@ pub fn encode_status(out: &mut Vec<u8>, sample_id: i32, status: u8);
 // commands/mod.rs
 #[tauri::command]
 pub async fn get_row_peaks(app: AppHandle, ids: Vec<i64>) -> AppResult<tauri::ipc::Response> {
-    off_main(app.clone(), move |state| {
-        // One `WHERE id IN (...)` query: (id, missing, availability).
-        let rows = state.db.with_conn(|conn| samples::row_targets(conn, &ids))?;
-        let mut out = Vec::with_capacity(ids.len().saturating_mul(1_300).saturating_add(4));
-        out.extend_from_slice(&u32::try_from(rows.len()).unwrap_or(0).to_le_bytes());
-        let mut not_ready = Vec::new();
-        for (id, missing, availability) in rows {
-            if missing || availability != "local" {
-                peaks::encode_status(&mut out, id, 2);
-                continue;
-            }
-            match peaks::read_cached_peaks(&state.paths.peaks_dir, id_to_i64(id))? {
-                Some(data) => peaks::encode_row(&mut out, id, &data),
-                None => {
-                    peaks::encode_status(&mut out, id, 1);
-                    not_ready.push(id_to_i64(id));
-                }
-            }
-        }
-        if !not_ready.is_empty() {
-            crate::analyze::enqueue_ids(app, state.db.clone(), state.paths.peaks_dir.clone(), not_ready);
-        }
-        Ok(tauri::ipc::Response::new(out))
-    })
-    .await
+ off_main(app.clone(), move |state| {
+ // One `WHERE id IN (...)` query: (id, missing, availability).
+ let rows = state.db.with_conn(|conn| samples::row_targets(conn, &ids))?;
+ let mut out = Vec::with_capacity(ids.len().saturating_mul(1_300).saturating_add(4));
+ out.extend_from_slice(&u32::try_from(rows.len()).unwrap_or(0).to_le_bytes());
+ let mut not_ready = Vec::new();
+ for (id, missing, availability) in rows {
+ if missing || availability != "local" {
+ peaks::encode_status(&mut out, id, 2);
+ continue;
+ }
+ match peaks::read_cached_peaks(&state.paths.peaks_dir, id_to_i64(id))? {
+ Some(data) => peaks::encode_row(&mut out, id, &data),
+ None => {
+ peaks::encode_status(&mut out, id, 1);
+ not_ready.push(id_to_i64(id));
+ }
+ }
+ }
+ if !not_ready.is_empty() {
+ crate::analyze::enqueue_ids(app, state.db.clone(), state.paths.peaks_dir.clone(), not_ready);
+ }
+ Ok(tauri::ipc::Response::new(out))
+ })
+ .await
 }
 ```
 
@@ -973,11 +973,11 @@ The row path never decodes. A missing peakfile queues analyze; the row gets its 
 import { invoke } from "@tauri-apps/api/core";
 
 export interface RowPeaks {
-  durationMs: number;
-  buckets: number;
-  mins: Int8Array;
-  maxs: Int8Array;
-  colors: Uint8Array;
+ durationMs: number;
+ buckets: number;
+ mins: Int8Array;
+ maxs: Int8Array;
+ colors: Uint8Array;
 }
 export type RowPeaksEntry = RowPeaks | "not-ready" | "unavailable";
 
@@ -989,48 +989,48 @@ let wanted: number[] = [];
 let inflight = false;
 
 export function getRowPeaks(id: number): RowPeaksEntry | undefined {
-  return cache.get(id); // no reordering here: getSnapshot must be pure
+ return cache.get(id); // no reordering here: getSnapshot must be pure
 }
 
 export function subscribeRowPeaks(id: number, fn: () => void): () => void {
-  let set = listeners.get(id);
-  if (!set) listeners.set(id, (set = new Set()));
-  set.add(fn);
-  return () => {
-    set.delete(fn);
-    if (set.size === 0) listeners.delete(id);
-  };
+ let set = listeners.get(id);
+ if (!set) listeners.set(id, (set = new Set()));
+ set.add(fn);
+ return () => {
+ set.delete(fn);
+ if (set.size === 0) listeners.delete(id);
+ };
 }
 
 /** Replace the wanted list with what is on screen. Ids no longer visible are dropped. */
 export function requestVisible(ids: readonly number[]): void {
-  wanted = [];
-  for (const id of ids) {
-    const hit = cache.get(id);
-    if (hit === undefined || hit === "not-ready") wanted.push(id);
-    else touch(id, hit); // keep visible rows at the fresh end of the LRU
-  }
-  void pump();
+ wanted = [];
+ for (const id of ids) {
+ const hit = cache.get(id);
+ if (hit === undefined || hit === "not-ready") wanted.push(id);
+ else touch(id, hit); // keep visible rows at the fresh end of the LRU
+ }
+ void pump();
 }
 
 /** Called with A6 change ids: refetch those that had no peakfile yet. */
 export function invalidateRowPeaks(ids: readonly number[]): void {
-  for (const id of ids) if (cache.get(id) === "not-ready") cache.delete(id);
+ for (const id of ids) if (cache.get(id) === "not-ready") cache.delete(id);
 }
 
 async function pump(): Promise<void> {
-  if (inflight || wanted.length === 0) return;
-  const batch = wanted.splice(0, BATCH);
-  inflight = true;
-  try {
-    const buf = await invoke<ArrayBuffer>("get_row_peaks", { ids: batch });
-    for (const [id, entry] of decodeRowPeaks(buf)) setEntry(id, entry);
-  } catch {
-    /* leave ids uncached; the next requestVisible retries */
-  } finally {
-    inflight = false;
-    void pump();
-  }
+ if (inflight || wanted.length === 0) return;
+ const batch = wanted.splice(0, BATCH);
+ inflight = true;
+ try {
+ const buf = await invoke<ArrayBuffer>("get_row_peaks", { ids: batch });
+ for (const [id, entry] of decodeRowPeaks(buf)) setEntry(id, entry);
+ } catch {
+ /* leave ids uncached; the next requestVisible retries */
+ } finally {
+ inflight = false;
+ void pump();
+ }
 }
 ```
 
@@ -1044,15 +1044,15 @@ async function pump(): Promise<void> {
 ```ts
 const isScrolling = virtualizer.isScrolling;
 useEffect(() => {
-  if (!showWaveforms || isScrolling) return;
-  const ids: number[] = [];
-  const from = Math.max(0, rangeStart - 8);
-  const to = Math.min(samples.length - 1, rangeEnd + 8);
-  for (let i = from; i <= to; i++) {
-    const s = samples[i];
-    if (s && !s.missing && s.availability === "local") ids.push(s.id);
-  }
-  requestVisible(ids);
+ if (!showWaveforms || isScrolling) return;
+ const ids: number[] = [];
+ const from = Math.max(0, rangeStart - 8);
+ const to = Math.min(samples.length - 1, rangeEnd + 8);
+ for (let i = from; i <= to; i++) {
+ const s = samples[i];
+ if (s && !s.missing && s.availability === "local") ids.push(s.id);
+ }
+ requestVisible(ids);
 }, [showWaveforms, isScrolling, samples, rangeStart, rangeEnd]);
 ```
 
@@ -1070,7 +1070,7 @@ While scrolling nothing is fetched. 150 ms after scrolling stops, one batch cove
 - `invalidateRowPeaks` clears only `not-ready` entries.
 - Rust: `encode_row` on a hand-built 2-channel, 1024-bucket `PeakData` gives the expected header, `max >= min` everywhere, ±1.0 quantized to ±127, and averaged colors.
 
-**Verify:** `fe.peaks_batch` p95 < 30 ms for 64 rows. Visible waves filled within 150 ms after scrolling stops. JS heap (Web Inspector → Memory) stays flat when scrolling a 3 000-row folder twice.
+**Verify:** `fe.peaks_batch` p95 < 30 ms for 64 rows. Visible waves filled within 150 ms after scrolling stops. JS heap (Web Inspector, Memory) stays flat when scrolling a 3 000-row folder twice.
 
 ---
 
@@ -1088,14 +1088,14 @@ While scrolling nothing is fetched. 150 ms after scrolling stops, one batch cove
 
 ### Check after Phase B
 
-- **Stop** if the success bar is met.
-- **Go to Phase C** if `fe.fps` median while scrolling during an analyze wave is < 50, `ipc.list_samples` p95 during analyze is more than 2× its idle value, or Instruments shows analyze threads on performance cores while you scroll.
+- Stop if the success bar is met.
+- Go to Phase C if `fe.fps` median while scrolling during an analyze wave is < 50, `ipc.list_samples` p95 during analyze is more than 2× its idle value, or Instruments shows analyze threads on performance cores while you scroll.
 
 ---
 
 ## Phase C: background work tuning
 
-Goal: analyze never competes with the UI for CPU priority or the database.
+Goal: analyze does not compete with the UI for CPU priority or the database.
 
 ---
 
@@ -1105,37 +1105,37 @@ Goal: analyze never competes with the UI for CPU priority or the database.
 
 1. **QoS.** Add `qos-threads = "0.1"`. Read its source first: it is small and new. The unsafe FFI must stay in a dependency because the crate forbids `unsafe_code`. At the top of each analyze worker, and in the index and availability background threads:
 
-   ```rust
-   let _ = qos_threads::set_current_thread(qos_threads::Qos::Low); // macOS: QOS_CLASS_UTILITY
-   ```
+ ```rust
+ let _ = qos_threads::set_current_thread(qos_threads::Qos::Low); // macOS: QOS_CLASS_UTILITY
+ ```
 
-   Spawn with names (`std::thread::Builder::new().name(format!("sift-analyze-{i}"))`) so Instruments shows them.
+ Spawn with names (`std::thread::Builder::new().name(format!("sift-analyze-{i}"))`) so Instruments shows them.
 
 2. **Fewer workers while focused.**
 
-   ```rust
-   pub struct WorkerGate { allowed: Mutex<usize>, cv: Condvar }
+ ```rust
+ pub struct WorkerGate { allowed: Mutex<usize>, cv: Condvar }
 
-   impl WorkerGate {
-       pub fn set_allowed(&self, n: usize) {
-           *self.allowed.lock().unwrap_or_else(PoisonError::into_inner) = n;
-           self.cv.notify_all();
-       }
-       /// Block worker `index` while index >= allowed.
-       pub fn wait_turn(&self, index: usize) {
-           let mut allowed = self.allowed.lock().unwrap_or_else(PoisonError::into_inner);
-           while index >= *allowed {
-               allowed = self.cv.wait(allowed).unwrap_or_else(PoisonError::into_inner);
-           }
-       }
-   }
-   ```
+ impl WorkerGate {
+ pub fn set_allowed(&self, n: usize) {
+ *self.allowed.lock().unwrap_or_else(PoisonError::into_inner) = n;
+ self.cv.notify_all();
+ }
+ /// Block worker `index` while index >= allowed.
+ pub fn wait_turn(&self, index: usize) {
+ let mut allowed = self.allowed.lock().unwrap_or_else(PoisonError::into_inner);
+ while index >= *allowed {
+ allowed = self.cv.wait(allowed).unwrap_or_else(PoisonError::into_inner);
+ }
+ }
+ }
+ ```
 
-   Workers call `gate.wait_turn(i)` before taking the next job. In `lib.rs`, add `.on_window_event(|window, event| if let WindowEvent::Focused(f) = event { gate.set_allowed(if *f { 2 } else { 4 }) })`.
+ Workers call `gate.wait_turn(i)` before taking the next job. In `lib.rs`, add `.on_window_event(|window, event| if let WindowEvent::Focused(f) = event { gate.set_allowed(if *f { 2 } else { 4 }) })`.
 
 **Test:** with `allowed = 2`, worker index 3 blocks until `set_allowed(4)` (spawn a thread, check it has not progressed after 50 ms, then release).
 
-**Verify:** Instruments → CPU: analyze threads run on efficiency cores while you scroll. A full wave with the window unfocused finishes within 10 % of today's wall time.
+**Verify:** Instruments, CPU: analyze threads run on efficiency cores while you scroll. A full wave with the window unfocused finishes within 10 % of today's wall time.
 
 ---
 
@@ -1145,41 +1145,41 @@ Goal: analyze never competes with the UI for CPU priority or the database.
 
 1. **Read connection.**
 
-   ```rust
-   pub struct Db {
-       conn: Mutex<SqliteConnection>, // writer: migrations and all writes
-       read: Mutex<SqliteConnection>, // UI reads only
-   }
-   // open_inner: after migrations, open a second connection to the same file with
-   //   PRAGMA foreign_keys = ON; PRAGMA query_only = ON; PRAGMA busy_timeout = 2000;
-   // and add PRAGMA busy_timeout = 5000 to the writer.
-   pub fn with_read<T>(&self, f: impl FnOnce(&mut SqliteConnection) -> AppResult<T>) -> AppResult<T>;
-   ```
+ ```rust
+ pub struct Db {
+ conn: Mutex<SqliteConnection>, // writer: migrations and all writes
+ read: Mutex<SqliteConnection>, // UI reads only
+ }
+ // open_inner: after migrations, open a second connection to the same file with
+ // PRAGMA foreign_keys = ON; PRAGMA query_only = ON; PRAGMA busy_timeout = 2000;
+ // and add PRAGMA busy_timeout = 5000 to the writer.
+ pub fn with_read<T>(&self, f: impl FnOnce(&mut SqliteConnection) -> AppResult<T>) -> AppResult<T>;
+ ```
 
-   Move to `with_read`: `list_samples`, `get_samples`, `row_targets`, the `get_sample` lookups in `get_peaks` / `play_sample` / `prefetch_decode`, `folder_tree`, `db_stats`, `list_tags`, `list_roots`, `get_settings`. Everything else stays on `with_conn`.
+ Move to `with_read`: `list_samples`, `get_samples`, `row_targets`, the `get_sample` lookups in `get_peaks` / `play_sample` / `prefetch_decode`, `folder_tree`, `db_stats`, `list_tags`, `list_roots`, `get_settings`. Everything else stays on `with_conn`.
 
 2. **One UPDATE per analyzed sample.** Replace the separate `diesel::update` calls in `analyze_sample` (technical fields plus up to 6 more) with one changeset, in one transaction with the tag inserts:
 
-   ```rust
-   #[derive(AsChangeset, Default)]
-   #[diesel(table_name = samples)]
-   pub struct AnalysisUpdate {
-       pub sample_rate: Option<i32>,
-       pub channels: Option<i32>,
-       pub duration_ms: Option<f64>,
-       pub format: Option<String>,
-       pub bit_depth: Option<i32>,
-       pub bpm: Option<f64>,
-       pub bpm_confidence: Option<f64>,
-       pub key_name: Option<String>,
-       pub key_confidence: Option<f64>,
-       pub sample_type: Option<String>,
-       pub analyzed_at: Option<String>,
-       pub updated_at: Option<String>,
-   }
-   ```
+ ```rust
+ #[derive(AsChangeset, Default)]
+ #[diesel(table_name = samples)]
+ pub struct AnalysisUpdate {
+ pub sample_rate: Option<i32>,
+ pub channels: Option<i32>,
+ pub duration_ms: Option<f64>,
+ pub format: Option<String>,
+ pub bit_depth: Option<i32>,
+ pub bpm: Option<f64>,
+ pub bpm_confidence: Option<f64>,
+ pub key_name: Option<String>,
+ pub key_confidence: Option<f64>,
+ pub sample_type: Option<String>,
+ pub analyzed_at: Option<String>,
+ pub updated_at: Option<String>,
+ }
+ ```
 
-   Diesel skips `None` fields in an `AsChangeset`, which matches today's "write only when detected" rules.
+ Diesel skips `None` fields in an `AsChangeset`, which matches today's "write only when detected" rules.
 
 **Tests:** existing analyze tests pass; add a test that a `with_read` query succeeds while another thread holds an open write transaction on the writer.
 
@@ -1189,7 +1189,7 @@ Goal: analyze never competes with the UI for CPU priority or the database.
 
 ### Check after Phase C
 
-- **Stop** if the success bar is met.
+- Stop if the success bar is met.
 - Otherwise check the Phase D triggers. If none apply, re-profile with Instruments and Web Inspector and add a new finding to this doc before writing more code.
 
 ---
@@ -1218,39 +1218,39 @@ After A5, the 38-minute file still holds ~800 MB interleaved plus ~400 MB mono u
 
 1. **moodbar streaming API.** Open a PR on [gildesmarais/moodbar.rs](https://github.com/gildesmarais/moodbar.rs) that exports the existing internals:
 
-   ```rust
-   pub struct MoodbarStream { inner: FrameAnalyzer }
-   impl MoodbarStream {
-       pub fn new(sample_rate: u32, options: &GenerateOptions, total_samples_hint: Option<usize>) -> Self;
-       pub fn feed(&mut self, mono: &[f32]);
-       pub fn finish(self) -> MoodbarAnalysis;
-   }
-   ```
+ ```rust
+ pub struct MoodbarStream { inner: FrameAnalyzer }
+ impl MoodbarStream {
+ pub fn new(sample_rate: u32, options: &GenerateOptions, total_samples_hint: Option<usize>) -> Self;
+ pub fn feed(&mut self, mono: &[f32]);
+ pub fn finish(self) -> MoodbarAnalysis;
+ }
+ ```
 
-   Until it is released, point at a fork: `[patch.crates-io] moodbar-analysis = { git = "https://github.com/<your-fork>/moodbar.rs", rev = "<sha>" }`, and note it in `docs/TECH_STACK.md`.
+ Until it is released, point at a fork: `[patch.crates-io] moodbar-analysis = { git = "https://github.com/<your-fork>/moodbar.rs", rev = "<sha>" }`, and note it in `docs/TECH_STACK.md`.
 
 2. **Stream in one pass** when `num_frames` is known. Fall back to A5's path when it is not.
 
-   ```rust
-   pub struct StreamResult {
-       pub peaks: PeakData,   // 1024 buckets per channel, same as today
-       pub excerpt: Vec<f32>, // mono, excerpt_range() only
-       pub tech: TechInfo,
-   }
+ ```rust
+ pub struct StreamResult {
+ pub peaks: PeakData, // 1024 buckets per channel, same as today
+ pub excerpt: Vec<f32>, // mono, excerpt_range() only
+ pub tech: TechInfo,
+ }
 
-   pub fn analyze_stream(opened: OpenedAudio, buckets: usize) -> AppResult<StreamResult> {
-       // frames known: bucket for frame f = f * buckets / frames (checked math)
-       // per packet:
-       //   copy interleaved into packet_scratch (reused Vec)
-       //   for each frame: update per-channel min/max for its bucket,
-       //     mono = mean of channels, push into mono_scratch (reused, packet-sized),
-       //     if the frame is inside the excerpt range: push mono into `excerpt`
-       //   moodbar.feed(&mono_scratch); mono_scratch.clear()
-       // finish: colors = resample_colors(moodbar.finish().colors(), buckets)
-   }
-   ```
+ pub fn analyze_stream(opened: OpenedAudio, buckets: usize) -> AppResult<StreamResult> {
+ // frames known: bucket for frame f = f * buckets / frames (checked math)
+ // per packet:
+ // copy interleaved into packet_scratch (reused Vec)
+ // for each frame: update per-channel min/max for its bucket,
+ // mono = mean of channels, push into mono_scratch (reused, packet-sized),
+ // if the frame is inside the excerpt range: push mono into `excerpt`
+ // moodbar.feed(&mono_scratch); mono_scratch.clear()
+ // finish: colors = resample_colors(moodbar.finish().colors(), buckets)
+ }
+ ```
 
-   Moodbar options must match `generate_spectral_colors` today (`adaptive_fft_size(frames)`, `GlobalPeak`, cuts at 200 Hz and 6 kHz, `max_target_frames = buckets`) so peakfiles look the same. No peakfile version bump.
+ Moodbar options must match `generate_spectral_colors` today (`adaptive_fft_size(frames)`, `GlobalPeak`, cuts at 200 Hz and 6 kHz, `max_target_frames = buckets`) so peakfiles look the same. No peakfile version bump.
 
 3. `analyze_sample` uses `analyze_stream` for every file with known `num_frames`. The large-file permit stays for the fallback path only.
 
@@ -1290,7 +1290,7 @@ sqlite3 "$HOME/Library/Application Support/dev.jfk.Sift/library.sqlite3" "UPDATE
 find "$HOME/Library/Caches/dev.jfk.Sift/peaks" -name '*.peaks' -delete
 ```
 
-User-set BPM, key and type survive: Normal analyze only fills empty fields. Let Dropbox keep syncing. Then: 2 minutes with no folder open, 3 minutes scrolling a 2k+ folder with waves on, 1 minute auditioning with arrow keys, then idle until `analyze.queue_done` plus 60 s.
+User-set BPM, key and type survive. Normal analyze only fills empty fields. Let Dropbox keep syncing. Then: 2 minutes with no folder open, 3 minutes scrolling a 2k+ folder with waves on, 1 minute auditioning with arrow keys, then idle until `analyze.queue_done` plus 60 s.
 
 | Scenario | Metric | Target | Item |
 | --- | --- | --- | --- |
@@ -1316,10 +1316,10 @@ User-set BPM, key and type survive: Normal analyze only fills empty fields. Let 
 
 ## Decisions taken
 
-These were open questions. Defaults are set so work can start; change them here if you disagree.
+Open questions, with defaults so work can start. Change them here if you disagree.
 
-- **Analysis excerpt:** 60 s, starting at 10 % of the file (at most 30 s in) for files over 60 s. Affects 183 of 20 439 files. If a long-file BPM turns out wrong, add a "full file" option to Custom analysis.
-- **Sidebar:** virtualize the full expanded tree (A6 Step 4). Behavior stays as today.
-- **Row buckets:** 256, mono (min/max over channels). The detail pane keeps 1024 per channel.
-- **Workers:** 2 while the window is focused, 4 when not. QoS utility always.
-- **moodbar:** upstream PR plus a pinned git fork until released. If the maintainer declines, vendor the crate under `src-tauri/vendor/moodbar-analysis` with the one added type.
+- Analysis excerpt: 60 s, starting at 10 % of the file (at most 30 s in) for files over 60 s. Affects 183 of 20 439 files. If a long-file BPM turns out wrong, add a "full file" option to Custom analysis.
+- Sidebar: virtualize the full expanded tree (A6 Step 4). Behavior stays as today.
+- Row buckets: 256, mono (min/max over channels). The detail pane keeps 1024 per channel.
+- Workers: 2 while the window is focused, 4 when not. QoS utility always.
+- moodbar: upstream PR plus a pinned git fork until released. If the maintainer declines, vendor the crate under `src-tauri/vendor/moodbar-analysis` with the one added type.

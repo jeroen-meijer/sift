@@ -300,7 +300,7 @@ Ordered by impact / feasibility. Refine after more samples in this doc.
    show that a sample exists.
 1. **Expose readiness separately from Missing.** Persist or compute
    Ready / Pending(cloud) / Missing (see Goal table above). Pending must not
-   look like deleted. Play / analyze / waveforms only when Ready (or after an
+   read as deleted. Play / analyze / waveforms only when Ready (or after an
    explicit user-triggered hydrate that runs off the UI thread).
 2. **Gate the bytes pipeline.** Auto-analyze and row-waveform prefetch skip
    Pending files; optional background hydrate queue that never blocks list,
