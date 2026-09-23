@@ -55,7 +55,7 @@ Watch Clippy: `cd src-tauri && bacon clippy`.
 
 ## Release
 
-Version lives in `package.json` (`bun run version:sync` / `version:set`). Changelog bullets go under `## Upcoming` in `CHANGELOG.md`.
+Version lives in `package.json` (`bun run version:sync` / `version:set`). Keep `CHANGELOG.md` → `## Upcoming` as a short user-facing draft for the next release (merge unshipped work; do not append fix-of-unshipped-feat noise).
 
 ```bash
 ./tool/prepare_release.sh 0.2.0   # on clean main: bump, push, triggers macOS + Windows installers

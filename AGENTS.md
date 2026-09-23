@@ -49,8 +49,13 @@ bun run version:set 0.2.0
 
 ## Changelog / release
 
-- Prepend bullets under `## Upcoming` in `CHANGELOG.md` (newest first).
-- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (rewrites changelog, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers + GitHub release + tag).
+`CHANGELOG.md` → `## Upcoming` is the **user-facing draft for the next release**, not a commit diary.
+
+- Write for someone who installs the next version. Conventional prefixes (`feat` / `fix` / `perf` / …) are fine; the rest of the line should read as a product note.
+- **Unshipped work:** edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
+- **After a release:** only then does a later bugfix get its own Upcoming line.
+- Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn (overscan tweaks, temporary flags, profiling hooks) unless it changes what users notice.
+- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers + GitHub release + tag).
 - Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.
 - Retry: Actions → **Publish Release** → Run workflow with the version.
 - macOS signing/notarization is optional (unsigned if Apple secrets are absent).
