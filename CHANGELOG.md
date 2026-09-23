@@ -1,5 +1,7 @@
 ## Upcoming
 
+- fix(ui): shrink overlay titlebar to 32px so default macOS traffic lights sit centered (no trafficLightPosition)
+- feat(detail): right-click the filename for the sample context menu (incl. show parent folder)
 - feat(analyze): guess BPM and key from filenames (`140BPM`, `_174_`, `F#min`, `(D)`); prefer over audio when present
 - feat(sidebar): ease-out 180ms expand/collapse row animation (respects reduced motion)
 - fix(sidebar): tree-sort so "FX One Shots" does not sit inside the "FX" subtree; expand one level; Alt-click / menu Expand All · Collapse All

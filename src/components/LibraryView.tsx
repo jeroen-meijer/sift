@@ -1098,6 +1098,10 @@ export function LibraryView({
             onRecheckPath={onRecheckPath}
             onLocate={onLocate}
             onRemoveMissing={onRemoveMissing}
+            onOpenMenu={(x, y) => {
+              if (!focused) return;
+              setMenu({ x, y, sample: focused });
+            }}
           />
         </main>
       </div>
