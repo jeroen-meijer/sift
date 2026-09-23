@@ -1,7 +1,8 @@
 import {
+  BAND_COUNT,
   blendSpectralRgb,
   bucketWeights,
-  type Rgb,
+  type BandWeights,
   type SpectralBandColors,
 } from "./spectralColor";
 
@@ -18,7 +19,7 @@ function sampleBucket(
   lane: WaveLanePeaks,
   channelIndex: number,
   pos: number,
-): { min: number; max: number; weights: Rgb } {
+): { min: number; max: number; weights: BandWeights } {
   const last = Math.max(1, lane.bucketCount - 1);
   const ch = Math.max(1, lane.channels);
   const clamped = Math.min(last, Math.max(0, pos));
@@ -40,6 +41,7 @@ function sampleBucket(
       Math.round(w0[0] + (w1[0] - w0[0]) * f),
       Math.round(w0[1] + (w1[1] - w0[1]) * f),
       Math.round(w0[2] + (w1[2] - w0[2]) * f),
+      Math.round(w0[3] + (w1[3] - w0[3]) * f),
     ],
   };
 }
@@ -95,7 +97,7 @@ function paintGradientEnvelope(
 
   const last = Math.max(1, bucketCount - 1);
   const ch = Math.max(1, channels);
-  const hasColors = colored && colors.length >= bucketCount * 3;
+  const hasColors = colored && colors.length >= bucketCount * BAND_COUNT;
 
   ctx.beginPath();
   for (let i = 0; i < bucketCount; i++) {
@@ -149,7 +151,7 @@ function paintColumns(
 
   const last = Math.max(1, bucketCount - 1);
   const cols = Math.max(1, Math.ceil(width));
-  const hasColors = colored && colors.length >= bucketCount * 3;
+  const hasColors = colored && colors.length >= bucketCount * BAND_COUNT;
   const colLast = Math.max(1, cols - 1);
 
   for (let c = 0; c < cols; c++) {

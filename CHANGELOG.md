@@ -1,5 +1,6 @@
 ## Upcoming
 
+- feat(wave): four-band spectral colors (bass, low-mid, high-mid, treble) so brighter pads can shift hue instead of staying one mid green
 - ci: run PR checks on Ubuntu with Bun and Rust caches; pin Bun 1.4.2
 - ci: leave Apple signing identity unset when the secret is empty so unsigned macOS publish works
 

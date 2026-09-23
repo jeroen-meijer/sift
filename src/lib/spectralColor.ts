@@ -1,14 +1,20 @@
 /**
- * Spectral waveform colors: peakfile stores Classic moodbar weights
- * (R = bass, G = mid, B = treble). Themes supply the three band hues;
- * we blend them additively so bass+treble reads purple, etc.
+ * Spectral waveform colors: peakfile stores four band weights
+ * (bass, low-mid, high-mid, treble). Themes supply the band hues; we blend
+ * them additively so bass+treble reads purple, etc.
  */
 
 export type Rgb = readonly [number, number, number];
 
+/** Per-bucket band weights (0–255), same order as the peakfile. */
+export type BandWeights = readonly [number, number, number, number];
+
+export const BAND_COUNT = 4 as const;
+
 export interface SpectralBandColors {
   bass: Rgb;
-  mid: Rgb;
+  lowMid: Rgb;
+  highMid: Rgb;
   treble: Rgb;
 }
 
@@ -117,30 +123,37 @@ export function readSpectralBands(el: Element): SpectralBandColors {
 export function readSpectralBandsFrom(styles: CSSStyleDeclaration): SpectralBandColors {
   const fallback: SpectralBandColors = {
     bass: [240, 96, 140],
-    mid: [110, 210, 150],
+    lowMid: [110, 210, 150],
+    highMid: [64, 200, 230],
     treble: [130, 180, 255],
   };
+  /* `--color-wave-mid` is the legacy name for low-mid. */
+  const lowMid =
+    parseCssColor(styles.getPropertyValue("--color-wave-low-mid")) ??
+    parseCssColor(styles.getPropertyValue("--color-wave-mid")) ??
+    fallback.lowMid;
   return {
     bass: parseCssColor(styles.getPropertyValue("--color-wave-bass")) ?? fallback.bass,
-    mid: parseCssColor(styles.getPropertyValue("--color-wave-mid")) ?? fallback.mid,
+    lowMid,
+    highMid:
+      parseCssColor(styles.getPropertyValue("--color-wave-high-mid")) ?? fallback.highMid,
     treble: parseCssColor(styles.getPropertyValue("--color-wave-treble")) ?? fallback.treble,
   };
 }
 
 /**
- * Blend Classic weights with theme band colors.
+ * Blend band weights with theme band colors.
  *
- * Raise the dominant band share (winner-take-more) so amen mid stretches read
- * green and hat hits violet instead of collapsing to a flat purple mix.
- * Overlaps still blend (not hard argmax). Treble tokens stay violet (not sky)
- * so mid+treble does not become cyan. Brightness is not tied to spectral
- * energy (geometry already shows amp).
+ * Raise the dominant band share (winner-take-more) so clear leads read as that
+ * hue instead of collapsing to a flat mix. Overlaps still blend (not hard
+ * argmax). Brightness is not tied to spectral energy (geometry already shows amp).
  */
-export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
+export function blendSpectralRgb(weights: BandWeights, bands: SpectralBandColors): Rgb {
   const rawB = weights[0] / 255;
-  const rawM = weights[1] / 255;
-  const rawT = weights[2] / 255;
-  const sum = rawB + rawM + rawT;
+  const rawL = weights[1] / 255;
+  const rawH = weights[2] / 255;
+  const rawT = weights[3] / 255;
+  const sum = rawB + rawL + rawH + rawT;
   if (sum < 1e-6) {
     return [0, 0, 0];
   }
@@ -148,16 +161,30 @@ export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   /* Soft mix ≈ 1.5; hard winner ≈ 6+. 3.5 keeps ties blended but swings clear. */
   const emphasis = 3.5;
   let pB = (rawB / sum) ** emphasis;
-  let pM = (rawM / sum) ** emphasis;
+  let pL = (rawL / sum) ** emphasis;
+  let pH = (rawH / sum) ** emphasis;
   let pT = (rawT / sum) ** emphasis;
-  const pSum = pB + pM + pT || 1;
+  const pSum = pB + pL + pH + pT || 1;
   pB /= pSum;
-  pM /= pSum;
+  pL /= pSum;
+  pH /= pSum;
   pT /= pSum;
 
-  let r = pB * bands.bass[0] + pM * bands.mid[0] + pT * bands.treble[0];
-  let g = pB * bands.bass[1] + pM * bands.mid[1] + pT * bands.treble[1];
-  let b = pB * bands.bass[2] + pM * bands.mid[2] + pT * bands.treble[2];
+  let r =
+    pB * bands.bass[0] +
+    pL * bands.lowMid[0] +
+    pH * bands.highMid[0] +
+    pT * bands.treble[0];
+  let g =
+    pB * bands.bass[1] +
+    pL * bands.lowMid[1] +
+    pH * bands.highMid[1] +
+    pT * bands.treble[1];
+  let b =
+    pB * bands.bass[2] +
+    pL * bands.lowMid[2] +
+    pH * bands.highMid[2] +
+    pT * bands.treble[2];
 
   const avg = (r + g + b) / 3;
   const sat = 1.65;
@@ -172,13 +199,18 @@ export function blendSpectralRgb(weights: Rgb, bands: SpectralBandColors): Rgb {
   ];
 }
 
-export function spectralCss(weights: Rgb, bands: SpectralBandColors): string {
+export function spectralCss(weights: BandWeights, bands: SpectralBandColors): string {
   const [r, g, b] = blendSpectralRgb(weights, bands);
   return `rgb(${String(r)},${String(g)},${String(b)})`;
 }
 
 /** Bucket `i` weights from the flat peakfile color buffer. */
-export function bucketWeights(colors: readonly number[], i: number): Rgb {
-  const ci = i * 3;
-  return [colors[ci] ?? 0, colors[ci + 1] ?? 0, colors[ci + 2] ?? 0];
+export function bucketWeights(colors: readonly number[], i: number): BandWeights {
+  const ci = i * BAND_COUNT;
+  return [
+    colors[ci] ?? 0,
+    colors[ci + 1] ?? 0,
+    colors[ci + 2] ?? 0,
+    colors[ci + 3] ?? 0,
+  ];
 }
