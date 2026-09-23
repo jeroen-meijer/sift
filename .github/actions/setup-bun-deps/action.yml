@@ -1,5 +1,11 @@
 name: Setup Bun dependencies
-description: Install Bun, restore/save dependency cache, then bun install --frozen-lockfile.
+description: Install Bun (pinned), restore/save dependency cache, then bun install --frozen-lockfile.
+
+inputs:
+  bun-version:
+    description: Bun version to install
+    required: false
+    default: "1.4.2"
 
 runs:
   using: composite
@@ -7,7 +13,8 @@ runs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
       with:
-        bun-version: latest
+        # Pin so setup-bun + node_modules caches stay warm across runs.
+        bun-version: ${{ inputs.bun-version }}
 
     - name: Restore Bun dependency cache
       uses: actions/cache@v4
@@ -17,10 +24,12 @@ runs:
           ~/.bun/install/cache
           node_modules
           node_modules/.tmp
-        key: bun-deps-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        key: bun-deps-${{ runner.os }}-${{ runner.arch }}-${{ inputs.bun-version }}-${{ hashFiles('bun.lock') }}
         restore-keys: |
-          bun-deps-${{ runner.os }}-
+          bun-deps-${{ runner.os }}-${{ runner.arch }}-${{ inputs.bun-version }}-
+          bun-deps-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Install dependencies
+      # Still run install on cache hit so lockfile / linked bins stay correct.
       run: bun install --frozen-lockfile
       shell: bash
