@@ -1,5 +1,6 @@
 ## Upcoming
 
+- feat(analyze): guess BPM and key from filenames (`140BPM`, `_174_`, `F#min`, `(D)`); prefer over audio when present
 - feat(sidebar): ease-out 180ms expand/collapse row animation (respects reduced motion)
 - fix(sidebar): tree-sort so "FX One Shots" does not sit inside the "FX" subtree; expand one level; Alt-click / menu Expand All · Collapse All
 - fix(sidebar): nest folder children under their parent (was sorted by depth, caret looked expanded with no kids below)

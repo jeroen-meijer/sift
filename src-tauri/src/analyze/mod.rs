@@ -1,5 +1,7 @@
 //! Background sample analysis: path auto-tags, BPM/key, loop vs one-shot, row peakfiles.
 
+mod name_meta;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -287,10 +289,16 @@ impl Analyzer for PathTokenAnalyzer {
             }
         }
 
+        let meta = name_meta::from_path(path);
+        let key_name = meta.key_name;
+        let key_confidence = key_name.as_ref().map(|_| name_meta::NAME_KEY_CONFIDENCE);
         AnalysisResult {
             sample_type,
+            bpm: meta.bpm,
+            bpm_confidence: meta.bpm.map(|_| name_meta::NAME_BPM_CONFIDENCE),
+            key_name,
+            key_confidence,
             suggested_tag_paths: prune_parent_tags(tags),
-            ..Default::default()
         }
     }
 }
@@ -693,8 +701,27 @@ pub fn analyze_sample(
         .clone()
         .or_else(|| audio_result.sample_type.clone());
 
-    let write_bpm = row.bpm.is_none() || rerun_bpm;
-    let write_key = row.key_name.is_none() || rerun_key;
+    /* Filename BPM/key beat weak audio guesses (pack names are usually right). */
+    let bpm = path_result.bpm.or(audio_result.bpm);
+    let bpm_confidence = if path_result.bpm.is_some() {
+        path_result.bpm_confidence
+    } else {
+        audio_result.bpm_confidence
+    };
+    let key_name = path_result
+        .key_name
+        .clone()
+        .or_else(|| audio_result.key_name.clone());
+    let key_confidence = if path_result.key_name.is_some() {
+        path_result.key_confidence
+    } else {
+        audio_result.key_confidence
+    };
+
+    /* Filename hits always win (even over a prior weak audio guess). Empty
+     * fields still fill from audio when the name has nothing. */
+    let write_bpm = row.bpm.is_none() || rerun_bpm || path_result.bpm.is_some();
+    let write_key = row.key_name.is_none() || rerun_key || path_result.key_name.is_some();
     let write_type = row.sample_type.is_none() || rerun_type;
 
     let db_start = Instant::now();
@@ -705,24 +732,24 @@ pub fn analyze_sample(
         let id = id_from_i64(sample_id)?;
 
         if write_bpm {
-            if let Some(v) = audio_result.bpm {
+            if let Some(v) = bpm {
                 diesel::update(samples_dsl::samples.find(id))
                     .set(samples_dsl::bpm.eq(v))
                     .execute(conn)?;
             }
-            if let Some(v) = audio_result.bpm_confidence {
+            if let Some(v) = bpm_confidence {
                 diesel::update(samples_dsl::samples.find(id))
                     .set(samples_dsl::bpm_confidence.eq(v))
                     .execute(conn)?;
             }
         }
         if write_key {
-            if let Some(ref v) = audio_result.key_name {
+            if let Some(ref v) = key_name {
                 diesel::update(samples_dsl::samples.find(id))
                     .set(samples_dsl::key_name.eq(v))
                     .execute(conn)?;
             }
-            if let Some(v) = audio_result.key_confidence {
+            if let Some(v) = key_confidence {
                 diesel::update(samples_dsl::samples.find(id))
                     .set(samples_dsl::key_confidence.eq(v))
                     .execute(conn)?;
