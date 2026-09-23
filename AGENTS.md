@@ -19,7 +19,7 @@ Local sample manager (Tauri 2 + React). Product rules: [SPEC.md](SPEC.md). Stack
 | Frontend tests | Vitest (`src/**/*.{test,spec}.{ts,tsx}`) |
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
 | Package manager | Bun |
-| CI | `.github/workflows/ci.yml` (fmt · clippy · nextest · eslint · tsc · vitest) |
+| CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest); Bun+Rust caches; publish on macOS/Windows |
 | Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (macOS + Windows) |
 
 ## Commands
@@ -55,6 +55,7 @@ bun run version:set 0.2.0
 - **Unshipped work:** edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
 - **After a release:** only then does a later bugfix get its own Upcoming line.
 - Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn (overscan tweaks, temporary flags, profiling hooks) unless it changes what users notice.
+- Run `/humanize` (or match that skill) on every new or edited Upcoming bullet before you commit. Keep conventional prefixes; the rest should read like a short product note, not a session diary.
 - Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers + GitHub release + tag).
 - Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.
 - Retry: Actions → **Publish Release** → Run workflow with the version.

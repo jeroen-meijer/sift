@@ -1,6 +1,7 @@
 ## Upcoming
 
-- ci: faster Actions — Ubuntu PR CI, Bun+Rust caches (incl. frontend), pin Bun 1.4.2; skip empty `APPLE_SIGNING_IDENTITY` so unsigned macOS publish does not fail codesign
+- ci: run PR checks on Ubuntu with Bun and Rust caches; pin Bun 1.4.2
+- ci: leave Apple signing identity unset when the secret is empty so unsigned macOS publish works
 
 ## 0.2.0
 
