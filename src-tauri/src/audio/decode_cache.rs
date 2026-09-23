@@ -1,6 +1,6 @@
 //! In-memory LRU of fully decoded PCM for preview playback.
 //!
-//! Select→play and mid-file seeks re-use entries so Symphonia work is not
+//! Select-to-play and mid-file seeks re-use entries so Symphonia work is not
 //! repeated for the same path. Entries are keyed by path and invalidated when
 //! the file's mtime changes. Eviction is by decoded byte budget, not entry count.
 
@@ -207,7 +207,7 @@ mod tests {
         let b = PathBuf::from("/b");
         let c = PathBuf::from("/c");
         cache.insert_decoded(a.clone(), tiny(12), None); // 48 bytes
-        cache.insert_decoded(b.clone(), tiny(12), None); // 48 bytes → used 96
+        cache.insert_decoded(b.clone(), tiny(12), None); // 48 bytes, used 96
         // Touch a so b is oldest.
         let _ = cache.get_fresh(&a);
         cache.insert_decoded(c.clone(), tiny(12), None);

@@ -6,13 +6,13 @@ Open problems found while dogfooding. Newest first. Remove an entry when its fix
 
 Found 2026-09-23 during the Phase A profile run, scrolling the full `samples` folder (5,000 rows) with waveforms on.
 
-**Status 2026-09-23 (afternoon):**
+Status 2026-09-23 (afternoon):
 
-- **Regression fixed:** paint-budget no longer `clearRect`s a correct wave.
-- **Lite/fast-scroll mode removed:** it hid tags/icons until ~100 ms after scroll and felt like pop-in. Full rows always.
-- Overscan **40**; peaks prefetch pad 12; canvas `willReadFrequently`.
-- **Profiling voids:** `fe.void_scroll` / `fe.void` / `fe.scroll` (`gap=`). In a recent dogfood stretch, `gap` stayed 0 while chrome still “popped” — that was lite mode, not missing rows. If voids remain with `gap=0` after a restart, check WebKit Layers (checkerboarding).
-- Hard flicks can still show one frame of empty row *lines* (browser vs React); row-line tile mitigates black void.
+- Paint-budget no longer `clearRect`s a correct wave (that regression is fixed).
+- Lite/fast-scroll mode is gone. It hid tags and icons until about 100 ms after scroll and felt like pop-in. Rows stay fully drawn.
+- Overscan is 40; peaks prefetch pad is 12; canvas uses `willReadFrequently`.
+- Profile marks for voids: `fe.void_scroll`, `fe.void`, `fe.scroll` (`gap=`). In a recent dogfood stretch, `gap` stayed 0 while chrome still "popped". That was lite mode, not missing rows. If voids remain with `gap=0` after a restart, check WebKit Layers (checkerboarding).
+- Hard flicks can still show one frame of empty row lines (browser vs React). The row-line tile softens the black void.
 
 ## Whole-library list still capped at 25 000
 
