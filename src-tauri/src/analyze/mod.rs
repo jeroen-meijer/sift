@@ -701,10 +701,20 @@ pub fn analyze_sample(
         .clone()
         .or_else(|| audio_result.sample_type.clone());
 
-    /* Filename BPM/key beat weak audio guesses (pack names are usually right). */
-    let bpm = path_result.bpm.or(audio_result.bpm);
+    /* Filename BPM/key beat weak audio guesses (pack names are usually right).
+     * One-shots with no tempo in the name skip audio BPM (clicks/hits often
+     * get a nonsense tempo from the DSP). Loops still fall back to audio. */
+    let bpm = path_result.bpm.or_else(|| {
+        if detected_type.as_deref() == Some("one-shot") {
+            None
+        } else {
+            audio_result.bpm
+        }
+    });
     let bpm_confidence = if path_result.bpm.is_some() {
         path_result.bpm_confidence
+    } else if detected_type.as_deref() == Some("one-shot") {
+        None
     } else {
         audio_result.bpm_confidence
     };

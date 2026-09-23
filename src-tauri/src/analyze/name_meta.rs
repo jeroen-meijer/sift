@@ -14,14 +14,15 @@
 use std::path::Path;
 
 const BPM_MIN: i32 = 60;
-const BPM_MAX: i32 = 200;
+const BPM_MAX: i32 = 250;
 
-/// Common tempi get a score bump when several numbers compete.
+/// Tie-break only when several numbers compete in one name. Any value in
+/// [`BPM_MIN`]..=[`BPM_MAX`] is still accepted when it is the only / best hit.
 const COMMON_BPM: &[i32] = &[
     60, 70, 72, 74, 75, 76, 78, 80, 82, 84, 85, 86, 87, 88, 90, 92, 94, 95, 96, 98, 100, 102, 105,
     108, 110, 112, 115, 116, 118, 120, 122, 124, 125, 126, 128, 130, 132, 134, 135, 136, 138, 140,
-    142, 144, 145, 148, 150, 152, 155, 160, 165, 168, 170, 172, 173, 174, 175, 176, 178, 180, 190,
-    200,
+    142, 144, 145, 148, 150, 152, 155, 160, 165, 168, 170, 172, 173, 174, 175, 176, 178, 180, 185,
+    190, 200, 210, 220, 230, 240, 250,
 ];
 
 /// Confidence written when BPM/key come from the filename.
@@ -72,7 +73,7 @@ fn parse_bpm(stem: &str) -> Option<f64> {
         if COMMON_BPM.contains(&v) {
             score += 3;
         }
-        if (70..=180).contains(&v) {
+        if (BPM_MIN..=BPM_MAX).contains(&v) {
             score += 1;
         }
         if i * 10 >= tokens.len() * 3 {
@@ -393,6 +394,13 @@ mod tests {
             from_stem("EQ-Mu487 EPI CHORDS FURNITZ 100").bpm,
             Some(100.0)
         );
+    }
+
+    #[test]
+    fn bpm_allows_uncommon_in_range() {
+        assert_eq!(from_stem("weird_loop_167").bpm, Some(167.0));
+        assert_eq!(from_stem("neuro_bass_220BPM").bpm, Some(220.0));
+        assert_eq!(from_stem("pack_250_drum_loop").bpm, Some(250.0));
     }
 
     #[test]
