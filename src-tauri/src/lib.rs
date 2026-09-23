@@ -29,7 +29,7 @@ pub mod perf {
 use state::AppState;
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 // Tauri entry: `generate_context!` expands to a `process::exit`, and init failures
@@ -52,33 +52,41 @@ pub fn run() {
             let db = state.db.clone();
             let peaks_dir = state.paths.peaks_dir.clone();
             let changes = Arc::clone(&state.changes);
-            std::thread::spawn(move || {
-                let start = std::time::Instant::now();
-                let refresh = crate::samples::refresh_availability_all(&db).unwrap_or_default();
-                crate::profile_log::event(
-                    "avail.library_refresh",
-                    start.elapsed(),
-                    &format!(
-                        "updated={} became_local={}",
-                        refresh.updated,
-                        refresh.became_local_ids.len()
-                    ),
-                );
-                if refresh.updated > 0 {
-                    // Rows that changed but did not become local (for example
-                    // local → cloud) are rare; a structural refresh covers them.
-                    let only_became_local =
-                        u64::try_from(refresh.became_local_ids.len()).ok() == Some(refresh.updated);
-                    changes.push(
-                        &handle,
-                        "availability",
-                        !only_became_local,
-                        &refresh.became_local_ids,
+            let _ = std::thread::Builder::new()
+                .name("sift-avail-backfill".into())
+                .spawn(move || {
+                    let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
+                    let start = std::time::Instant::now();
+                    let refresh = crate::samples::refresh_availability_all(&db).unwrap_or_default();
+                    crate::profile_log::event(
+                        "avail.library_refresh",
+                        start.elapsed(),
+                        &format!(
+                            "updated={} became_local={}",
+                            refresh.updated,
+                            refresh.became_local_ids.len()
+                        ),
                     );
-                }
-                crate::analyze::enqueue_unanalyzed(handle, db, peaks_dir);
-            });
+                    if refresh.updated > 0 {
+                        // Rows that changed but did not become local (for example
+                        // local → cloud) are rare; a structural refresh covers them.
+                        let only_became_local = u64::try_from(refresh.became_local_ids.len()).ok()
+                            == Some(refresh.updated);
+                        changes.push(
+                            &handle,
+                            "availability",
+                            !only_became_local,
+                            &refresh.became_local_ids,
+                        );
+                    }
+                    crate::analyze::enqueue_unanalyzed(handle, db, peaks_dir);
+                });
             Ok(())
+        })
+        .on_window_event(|_window, event| {
+            if let WindowEvent::Focused(focused) = event {
+                crate::analyze::set_analyze_workers_for_focus(*focused);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,

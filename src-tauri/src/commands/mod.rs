@@ -120,32 +120,35 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
         crate::profile_log::event("ipc.add_root", total.elapsed(), &format!("id={root_id}"));
         let index_app = app;
         let peaks_dir = state.paths.peaks_dir.clone();
-        std::thread::spawn(move || {
-            let index_start = std::time::Instant::now();
-            let _ = db.with_conn(|conn| {
-                indexer::index_root(conn, root_id, |progress| {
-                    crate::profile_log::count_emit("index-progress");
-                    let _ = index_app.emit("index-progress", &progress);
-                })
+        let _ = std::thread::Builder::new()
+            .name("sift-index-root".into())
+            .spawn(move || {
+                let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
+                let index_start = std::time::Instant::now();
+                let _ = db.with_conn(|conn| {
+                    indexer::index_root(conn, root_id, |progress| {
+                        crate::profile_log::count_emit("index-progress");
+                        let _ = index_app.emit("index-progress", &progress);
+                    })
+                });
+                crate::profile_log::event(
+                    "index.root_done",
+                    index_start.elapsed(),
+                    &format!("id={root_id}"),
+                );
+                let _ = index_app.emit(
+                    "index-progress",
+                    &IndexProgress {
+                        root_id,
+                        scanned: 0,
+                        indexed: 0,
+                        skipped: 0,
+                        current_path: String::new(),
+                        done: true,
+                    },
+                );
+                crate::analyze::enqueue_unanalyzed(index_app, db, peaks_dir);
             });
-            crate::profile_log::event(
-                "index.root_done",
-                index_start.elapsed(),
-                &format!("id={root_id}"),
-            );
-            let _ = index_app.emit(
-                "index-progress",
-                &IndexProgress {
-                    root_id,
-                    scanned: 0,
-                    indexed: 0,
-                    skipped: 0,
-                    current_path: String::new(),
-                    done: true,
-                },
-            );
-            crate::analyze::enqueue_unanalyzed(index_app, db, peaks_dir);
-        });
         Ok(root)
     })
     .await
@@ -198,15 +201,18 @@ pub async fn reindex_root(app: AppHandle, root_id: i64) -> AppResult<()> {
     off_main(app.clone(), move |state| {
         let db = state.db.clone();
         let peaks_dir = state.paths.peaks_dir.clone();
-        std::thread::spawn(move || {
-            let _ = db.with_conn(|conn| {
-                indexer::index_root(conn, root_id, |progress| {
-                    crate::profile_log::count_emit("index-progress");
-                    let _ = app.emit("index-progress", &progress);
-                })
+        let _ = std::thread::Builder::new()
+            .name("sift-reindex-root".into())
+            .spawn(move || {
+                let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
+                let _ = db.with_conn(|conn| {
+                    indexer::index_root(conn, root_id, |progress| {
+                        crate::profile_log::count_emit("index-progress");
+                        let _ = app.emit("index-progress", &progress);
+                    })
+                });
+                crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
             });
-            crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
-        });
         Ok(())
     })
     .await
@@ -221,15 +227,18 @@ pub async fn reindex_all(app: AppHandle) -> AppResult<()> {
     off_main(app.clone(), move |state| {
         let db = state.db.clone();
         let peaks_dir = state.paths.peaks_dir.clone();
-        std::thread::spawn(move || {
-            let _ = db.with_conn(|conn| {
-                indexer::index_all_roots(conn, |progress| {
-                    crate::profile_log::count_emit("index-progress");
-                    let _ = app.emit("index-progress", &progress);
-                })
+        let _ = std::thread::Builder::new()
+            .name("sift-reindex-all".into())
+            .spawn(move || {
+                let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
+                let _ = db.with_conn(|conn| {
+                    indexer::index_all_roots(conn, |progress| {
+                        crate::profile_log::count_emit("index-progress");
+                        let _ = app.emit("index-progress", &progress);
+                    })
+                });
+                crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
             });
-            crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
-        });
         Ok(())
     })
     .await
