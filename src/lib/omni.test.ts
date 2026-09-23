@@ -19,6 +19,12 @@ describe("folderChipLabel", () => {
     );
   });
 
+  it("prefixes a sample file path with the root name", () => {
+    expect(
+      folderChipLabel(`${EXAMPLE.path}/Studio/sounds/packs/lead.wav`, ROOTS),
+    ).toBe("example_samples/Studio/sounds/packs/lead.wav");
+  });
+
   it("picks the longest matching root", () => {
     const nested = [...ROOTS, { path: `${EXAMPLE.path}/limbowrld_drumkit`, name: "limbowrld_drumkit" }];
     expect(folderChipLabel(`${EXAMPLE.path}/limbowrld_drumkit/808s`, nested)).toBe(

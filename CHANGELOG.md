@@ -1,5 +1,12 @@
 ## Upcoming
 
+- feat(sidebar): ease-out 180ms expand/collapse row animation (respects reduced motion)
+- fix(sidebar): tree-sort so "FX One Shots" does not sit inside the "FX" subtree; expand one level; Alt-click / menu Expand All · Collapse All
+- fix(sidebar): nest folder children under their parent (was sorted by depth, caret looked expanded with no kids below)
+- feat(sidebar): folder context menu (reveal, copy, favorite, expand/collapse, re-index / remove root)
+- fix(sidebar): even row heights (no root overlap); caret expand/collapse for nested folders; drop folder icons
+- fix(detail): truncate long sample titles with end ellipsis; hover shows the full name in a dark chip
+- fix(detail): show library-relative path truncated at the start; hover copy control for the full path
 - perf(analyze): Low QoS on analyze/index threads; 2 workers while focused, 4 when not
 - fix(library): arrow keys scroll selection into view; showParent clears filters and reveals the sample
 - feat(library): list the whole library when no folder is selected (limit 25k); center empty state

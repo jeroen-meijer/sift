@@ -184,7 +184,10 @@ pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec
     for root in &roots {
         let rid = id_from_i64(root.id).unwrap_or(0);
         let mut paths = by_root.remove(&rid).unwrap_or_default();
-        paths.sort_by_key(|p| (depth_under_root(&root.path, p), p.to_lowercase()));
+        /* Segment-wise tree order: parent before children, and a sibling like
+         * "FX One Shots" after the whole "FX/…" subtree (plain path sort puts
+         * "FX One Shots" between "FX" and "FX/Impacts" because ' ' < '/'). */
+        paths.sort_by(|a, b| cmp_tree_paths(a, b));
         for path in paths {
             let depth = depth_under_root(&root.path, &path);
             if depth > max_depth && path != root.path {
@@ -222,6 +225,26 @@ fn depth_under_root(root: &str, path: &str) -> u32 {
         return 0;
     }
     u32::try_from(rest.split(std::path::MAIN_SEPARATOR).count()).unwrap_or(u32::MAX)
+}
+
+/// Compare paths so each directory's descendants stay together under it.
+fn cmp_tree_paths(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let mut aa = a.split(std::path::MAIN_SEPARATOR);
+    let mut bb = b.split(std::path::MAIN_SEPARATOR);
+    loop {
+        match (aa.next(), bb.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) => {
+                let ord = x.to_lowercase().cmp(&y.to_lowercase());
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -291,6 +314,68 @@ mod tests {
         let nodes = folder_tree(&mut conn, 1).unwrap();
         assert!(nodes.iter().any(|n| n.path == "/lib/a"));
         assert!(!nodes.iter().any(|n| n.path == "/lib/a/b"));
+    }
+
+    #[test]
+    fn folder_tree_order_nests_children_under_parent() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        insert_sample(&mut conn, root_id, "/lib/avant/sub/a.wav");
+        insert_sample(&mut conn, root_id, "/lib/blackout/b.wav");
+
+        let paths: Vec<_> = folder_tree(&mut conn, 6)
+            .unwrap()
+            .into_iter()
+            .map(|n| n.path)
+            .collect();
+        assert_eq!(
+            paths,
+            vec![
+                "/lib".to_string(),
+                "/lib/avant".to_string(),
+                "/lib/avant/sub".to_string(),
+                "/lib/blackout".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn folder_tree_order_keeps_prefix_siblings_after_subtree() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        insert_sample(&mut conn, root_id, "/lib/FX/Impacts/a.wav");
+        insert_sample(&mut conn, root_id, "/lib/FX/Risers/b.wav");
+        insert_sample(&mut conn, root_id, "/lib/FX One Shots/c.wav");
+
+        let paths: Vec<_> = folder_tree(&mut conn, 6)
+            .unwrap()
+            .into_iter()
+            .map(|n| n.path)
+            .collect();
+        assert_eq!(
+            paths,
+            vec![
+                "/lib".to_string(),
+                "/lib/FX".to_string(),
+                "/lib/FX/Impacts".to_string(),
+                "/lib/FX/Risers".to_string(),
+                "/lib/FX One Shots".to_string(),
+            ]
+        );
     }
 
     #[test]

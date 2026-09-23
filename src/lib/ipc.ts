@@ -238,6 +238,9 @@ export const ipc = {
   folderTree: (maxDepth = 6) => invoke<FolderNode[]>("folder_tree", { maxDepth }),
   addRoot: (path: string) => invoke<unknown>("add_root", { path }),
   removeRoot: (rootId: number) => run("remove_root", { rootId }),
+  setFolderFavorite: (path: string, favorite: boolean) =>
+    run("set_folder_favorite", { path, favorite }),
+  reindexRoot: (rootId: number) => run("reindex_root", { rootId }),
 
   listSamples: (query: SampleQuery) => {
     const key = JSON.stringify(query);

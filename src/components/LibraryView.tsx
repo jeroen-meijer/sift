@@ -27,6 +27,7 @@ import { FolderSidebar } from "./FolderSidebar";
 import { EMPTY_OMNI, omniHasQuery, type OmniState, type OptionalColumn } from "../lib/omni";
 import { OmniSearch } from "./OmniSearch";
 import { SampleMenu, type SampleAction } from "./SampleMenu";
+import { type FolderAction } from "./FolderMenu";
 import { SampleTable, type SampleTableScrollApi } from "./SampleTable";
 import { SelectionBar } from "./SelectionBar";
 import { StatusBar } from "./StatusBar";
@@ -833,6 +834,36 @@ export function LibraryView({
   const onRemoveRoot = useStableCallback((node: FolderNode) => {
     setDialog({ kind: "removeRoot", node });
   });
+  const onFolderAction = useStableCallback((action: FolderAction, folder: FolderNode) => {
+    switch (action) {
+      case "reveal":
+        void revealItemInDir(folder.path).catch(console.error);
+        break;
+      case "copyPath":
+        void navigator.clipboard.writeText(folder.path);
+        break;
+      case "copyName":
+        void navigator.clipboard.writeText(folder.name);
+        break;
+      case "favorite":
+        void ipc
+          .setFolderFavorite(folder.path, !folder.favorite)
+          .then(() => {
+            onRefreshLibrary();
+          })
+          .catch(console.error);
+        break;
+      case "reindex":
+        void ipc.reindexRoot(folder.root_id).catch(console.error);
+        break;
+      case "expand":
+      case "collapse":
+      case "expandAll":
+      case "collapseAll":
+      case "removeRoot":
+        break;
+    }
+  });
   const onToggleHalfDouble = useStableCallback(() => {
     onSettingChange("half_double_bpm", !settings.half_double_bpm);
   });
@@ -971,6 +1002,11 @@ export function LibraryView({
     if (focused) setDialog({ kind: "removeMissing", sample: focused });
   });
 
+  const rootsForPath = useMemo(
+    () => folders.filter((n) => n.is_root).map((n) => ({ path: n.path, name: n.name })),
+    [folders],
+  );
+
   return (
     <>
       <div className="library-layout">
@@ -984,6 +1020,7 @@ export function LibraryView({
           onAddRoot={onAddRoot}
           onRemoveRoot={onRemoveRoot}
           onManageTags={onManageTags}
+          onFolderAction={onFolderAction}
         />
 
         <main className="library-main">
@@ -1039,6 +1076,7 @@ export function LibraryView({
             sample={focused}
             peaks={peaks}
             allTags={tags}
+            roots={rootsForPath}
             snap={settings.snap}
             waveformMode={settings.waveform_view}
             coloredWaveforms={settings.colored_waveforms}
