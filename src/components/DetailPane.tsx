@@ -48,10 +48,18 @@ interface Props {
   onRecheckPath: () => void;
   onLocate: () => void;
   onRemoveMissing: () => void;
+  /** Right-click the filename: same sample menu as the table. */
+  onOpenMenu: (x: number, y: number) => void;
 }
 
 /** Truncated filename; when clipped, hover shows the full name in a dark chip. */
-function DetailName({ name }: { name: string }) {
+function DetailName({
+  name,
+  onContextMenu,
+}: {
+  name: string;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
   const clipRef = useRef<HTMLSpanElement>(null);
   const [truncated, setTruncated] = useState(false);
 
@@ -70,7 +78,14 @@ function DetailName({ name }: { name: string }) {
   }, [name]);
 
   return (
-    <span className={`detail-name${truncated ? " is-truncated" : ""}`}>
+    <span
+      className={`detail-name${truncated ? " is-truncated" : ""}`}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(e);
+      }}
+    >
       <span className="detail-name-clip" ref={clipRef}>
         {name}
       </span>
@@ -168,6 +183,7 @@ export const DetailPane = memo(function DetailPane({
   onRecheckPath,
   onLocate,
   onRemoveMissing,
+  onOpenMenu,
 }: Props) {
   const { t } = useTranslation("library");
   useRenderTiming("DetailPane");
@@ -214,7 +230,12 @@ export const DetailPane = memo(function DetailPane({
 
         <div className="detail-identity">
           <div className="detail-name-row">
-            <DetailName name={sample.filename} />
+            <DetailName
+              name={sample.filename}
+              onContextMenu={(e) => {
+                onOpenMenu(e.clientX, e.clientY);
+              }}
+            />
             {sample.missing ? <span className="detail-badge">{t("fileMissing")}</span> : null}
           </div>
           <DetailPath absolutePath={sample.path} displayPath={displayPath} />

@@ -26,7 +26,8 @@
   --motion-hover-grace: 240ms;
 
   --sidebar-width: 248px;
-  --titlebar-height: 38px;
+  /* Match macOS Overlay traffic-light band; tune until lights look centered. */
+  --titlebar-height: 32px;
   --statusbar-height: 28px;
   --omnibar-height: 52px;
   --detail-height: 300px;

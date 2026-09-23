@@ -66,7 +66,10 @@ export const keys = {
   open: { match: primary('KeyO'), hint: `${mod}O` },
   reveal: { match: primary('KeyR'), hint: `${mod}R` },
   copyFilename: { match: primary('KeyC'), hint: `${mod}C` },
-  copyPath: { match: primaryShift('KeyC'), hint: IS_MAC ? `⌥${mod}C` : `Alt+${mod}+C` },
+  copyPath: {
+    match: primaryShift('KeyC'),
+    hint: IS_MAC ? `⇧${mod}C` : `Shift+${mod}+C`,
+  },
 
   favorite: { match: ['KeyF'], hint: 'F' },
   tags: { match: ['KeyT'], hint: 'T' },

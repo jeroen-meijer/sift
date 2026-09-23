@@ -66,9 +66,6 @@ export const StatusBar = memo(function StatusBar({
       {analysis ? (
         <div className="statusbar-analysis">
           <CircleNotchIcon size={12} className="statusbar-spin" />
-          <span className="statusbar-analysis-label">
-            {t("statusAnalyzingLocal")}
-          </span>
           <div className="statusbar-bar" aria-hidden>
             <div className="statusbar-bar-fill" style={{ width: `${pct}%` }} />
           </div>

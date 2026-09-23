@@ -86,10 +86,6 @@
   margin-left: auto;
 }
 
-.statusbar-analysis-label {
-  color: var(--color-neutral-400);
-}
-
 .statusbar-spin {
   flex: none;
   color: var(--color-accent);
