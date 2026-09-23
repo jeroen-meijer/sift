@@ -12,6 +12,7 @@ use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::schema::tags::dsl as tags_dsl;
 use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
+use crate::fs_ready::{self, Availability};
 use crate::ids::{id_from_i64, id_to_i64};
 
 #[derive(Debug, Clone, Serialize)]
@@ -31,6 +32,8 @@ pub struct SampleDto {
     pub extension: String,
     pub size_bytes: Option<i64>,
     pub missing: bool,
+    /// `local` | `cloud` | `missing` | `unknown`
+    pub availability: String,
     pub sample_rate: Option<i64>,
     pub bit_depth: Option<i64>,
     pub channels: Option<i64>,
@@ -78,6 +81,7 @@ fn sample_to_dto(s: Sample) -> SampleDto {
         extension: s.extension,
         size_bytes: s.size_bytes,
         missing: s.missing != 0,
+        availability: s.availability,
         sample_rate: s.sample_rate.map(id_to_i64),
         bit_depth: s.bit_depth.map(id_to_i64),
         channels: s.channels.map(id_to_i64),
@@ -462,6 +466,7 @@ pub fn get_sample_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<
 }
 
 pub fn mark_missing(conn: &mut SqliteConnection, path: &str) -> AppResult<bool> {
+    let now = utc_now();
     let n = diesel::update(
         samples_dsl::samples
             .filter(samples_dsl::path.eq(path))
@@ -469,10 +474,126 @@ pub fn mark_missing(conn: &mut SqliteConnection, path: &str) -> AppResult<bool> 
     )
     .set((
         samples_dsl::missing.eq(1),
-        samples_dsl::updated_at.eq(utc_now()),
+        samples_dsl::availability.eq(Availability::Missing.as_str()),
+        samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+        samples_dsl::updated_at.eq(now.as_str()),
     ))
     .execute(conn)?;
     Ok(n > 0)
+}
+
+/// Result of re-statting sample paths for `availability` (no decode / open).
+#[derive(Debug, Clone, Default)]
+pub struct AvailabilityRefresh {
+    /// Rows whose `availability` or `missing` flag changed.
+    pub updated: u64,
+    /// Ids that moved from non-`local` → `local` (candidates for analyze).
+    pub became_local_ids: Vec<i64>,
+}
+
+/// Outcome of a watch-driven technical refresh for one path.
+#[derive(Debug, Clone)]
+pub struct TechnicalRefresh {
+    pub sample_id: i64,
+    /// Size/mtime/missing/availability changed enough for the UI to reload.
+    pub changed: bool,
+    /// Flipped to on-disk local bytes (hydrate or first classify).
+    pub became_local: bool,
+}
+
+#[must_use]
+fn stored_is_local(availability: &str) -> bool {
+    availability == Availability::Local.as_str()
+}
+
+fn apply_availability_update(
+    conn: &mut SqliteConnection,
+    id: i32,
+    old_availability: &str,
+    old_missing: i32,
+    avail: Availability,
+) -> AppResult<Option<(bool, bool)>> {
+    let now = utc_now();
+    let missing_flag = i32::from(avail == Availability::Missing);
+    let avail_s = avail.as_str();
+    if old_availability == avail_s && old_missing == missing_flag {
+        return Ok(None);
+    }
+    diesel::update(samples_dsl::samples.find(id))
+        .set((
+            samples_dsl::availability.eq(avail_s),
+            samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+            samples_dsl::missing.eq(missing_flag),
+            samples_dsl::updated_at.eq(now.as_str()),
+        ))
+        .execute(conn)?;
+    let became_local = !stored_is_local(old_availability) && avail == Availability::Local;
+    Ok(Some((true, became_local)))
+}
+
+/// Re-stat paths (no decode) and update `availability`.
+pub fn refresh_availability_for_paths(
+    conn: &mut SqliteConnection,
+    paths: &[String],
+) -> AppResult<AvailabilityRefresh> {
+    let mut out = AvailabilityRefresh::default();
+    for path in paths {
+        let existing: Option<(i32, String, i32)> = samples_dsl::samples
+            .filter(samples_dsl::path.eq(path))
+            .select((
+                samples_dsl::id,
+                samples_dsl::availability,
+                samples_dsl::missing,
+            ))
+            .first(conn)
+            .optional()?;
+        let Some((id, old_avail, old_missing)) = existing else {
+            continue;
+        };
+        let avail = fs_ready::classify_path(std::path::Path::new(path));
+        if let Some((changed, became_local)) =
+            apply_availability_update(conn, id, &old_avail, old_missing, avail)?
+        {
+            if changed {
+                out.updated = out.updated.saturating_add(1);
+            }
+            if became_local {
+                out.became_local_ids.push(id_to_i64(id));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Re-stat every sample path (metadata only). For launch backfill after schema add
+/// or while a cloud provider is still hydrating.
+pub fn refresh_availability_all(conn: &mut SqliteConnection) -> AppResult<AvailabilityRefresh> {
+    let rows: Vec<(i32, String, String, i32)> = samples_dsl::samples
+        .select((
+            samples_dsl::id,
+            samples_dsl::path,
+            samples_dsl::availability,
+            samples_dsl::missing,
+        ))
+        .load(conn)?;
+    let mut out = AvailabilityRefresh::default();
+    conn.transaction::<_, AppError, _>(|conn| {
+        for (id, path, old_avail, old_missing) in rows {
+            let avail = fs_ready::classify_path(std::path::Path::new(&path));
+            if let Some((changed, became_local)) =
+                apply_availability_update(conn, id, &old_avail, old_missing, avail)?
+            {
+                if changed {
+                    out.updated = out.updated.saturating_add(1);
+                }
+                if became_local {
+                    out.became_local_ids.push(id_to_i64(id));
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }
 
 pub fn remove_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<()> {
@@ -519,16 +640,40 @@ pub fn update_path(conn: &mut SqliteConnection, from: &str, to: &str) -> AppResu
     Ok(n > 0)
 }
 
-/// Refresh size/mtime/inode (+ probe technical audio fields). Keeps bpm/key/tags/type.
-pub fn refresh_technical(conn: &mut SqliteConnection, path: &str) -> AppResult<bool> {
+/// Refresh size/mtime/inode. Probe technical audio fields when local. Keeps bpm/key/tags/type.
+pub fn refresh_technical(
+    conn: &mut SqliteConnection,
+    path: &str,
+) -> AppResult<Option<TechnicalRefresh>> {
     use std::fs;
     use std::path::Path;
     use std::time::SystemTime;
 
+    type ExistingRow = (i32, Option<i64>, Option<i64>, String, i32);
+    let existing: Option<ExistingRow> = samples_dsl::samples
+        .filter(samples_dsl::path.eq(path))
+        .select((
+            samples_dsl::id,
+            samples_dsl::size_bytes,
+            samples_dsl::mtime_ms,
+            samples_dsl::availability,
+            samples_dsl::missing,
+        ))
+        .first(conn)
+        .optional()?;
+    let Some((id, old_size, old_mtime, old_avail, old_missing)) = existing else {
+        return Ok(None);
+    };
+    let sample_id = id_to_i64(id);
+
     let path_buf = Path::new(path);
     let Ok(meta) = fs::metadata(path_buf) else {
-        mark_missing(conn, path)?;
-        return Ok(false);
+        let marked = mark_missing(conn, path)?;
+        return Ok(Some(TechnicalRefresh {
+            sample_id,
+            changed: marked,
+            became_local: false,
+        }));
     };
     let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
     let mtime = meta.modified().ok().and_then(|t| {
@@ -543,25 +688,25 @@ pub fn refresh_technical(conn: &mut SqliteConnection, path: &str) -> AppResult<b
     };
     #[cfg(not(unix))]
     let inode: Option<i64> = None;
+    let avail = fs_ready::classify_meta(&meta);
+    let now = utc_now();
+    let missing_flag = i32::from(avail == Availability::Missing);
+    let became_local = !stored_is_local(&old_avail) && avail == Availability::Local;
+    let avail_changed = old_avail != avail.as_str() || old_missing != missing_flag;
 
-    let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
-        .filter(samples_dsl::path.eq(path))
-        .select((
-            samples_dsl::id,
-            samples_dsl::size_bytes,
-            samples_dsl::mtime_ms,
-        ))
-        .first(conn)
-        .optional()?;
-
-    let Some((id, old_size, old_mtime)) = existing else {
-        return Ok(false);
-    };
     if old_size == Some(size) && old_mtime == mtime {
         diesel::update(samples_dsl::samples.find(id))
-            .set(samples_dsl::missing.eq(0))
+            .set((
+                samples_dsl::missing.eq(missing_flag),
+                samples_dsl::availability.eq(avail.as_str()),
+                samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+            ))
             .execute(conn)?;
-        return Ok(false);
+        return Ok(Some(TechnicalRefresh {
+            sample_id,
+            changed: avail_changed,
+            became_local,
+        }));
     }
 
     diesel::update(samples_dsl::samples.find(id))
@@ -569,12 +714,21 @@ pub fn refresh_technical(conn: &mut SqliteConnection, path: &str) -> AppResult<b
             samples_dsl::size_bytes.eq(Some(size)),
             samples_dsl::mtime_ms.eq(mtime),
             samples_dsl::inode.eq(inode),
-            samples_dsl::missing.eq(0),
-            samples_dsl::updated_at.eq(utc_now()),
+            samples_dsl::missing.eq(missing_flag),
+            samples_dsl::availability.eq(avail.as_str()),
+            samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+            samples_dsl::updated_at.eq(now.as_str()),
         ))
         .execute(conn)?;
-    let _ = crate::audio::probe_and_update_sample(conn, id_to_i64(id), path_buf);
-    Ok(true)
+    // Never decode cloud placeholders here (would hydrate and block).
+    if avail == Availability::Local {
+        let _ = crate::audio::probe_and_update_sample(conn, sample_id, path_buf);
+    }
+    Ok(Some(TechnicalRefresh {
+        sample_id,
+        changed: true,
+        became_local,
+    }))
 }
 
 pub fn set_sample_bpm(conn: &mut SqliteConnection, id: i64, bpm: Option<f64>) -> AppResult<()> {

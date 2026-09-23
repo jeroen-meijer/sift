@@ -62,6 +62,25 @@ describe("rowPeaks concurrency", () => {
     await Promise.all([p2, p3]);
   });
 
+  it("skips getPeaks for non-local availability", async () => {
+    const result = await loadRowPeaks(99, "cloud");
+    expect(result).toBeNull();
+    expect(getPeaks).not.toHaveBeenCalled();
+  });
+
+  it("prefetch skips cloud ids when availability map is set", async () => {
+    getPeaks.mockResolvedValue({ id: 1 });
+    const avail = new Map<number, string>([
+      [1, "local"],
+      [2, "cloud"],
+      [3, "missing"],
+    ]);
+    prefetchRowPeaks([1, 2, 3], { availabilityById: avail });
+    await flush();
+    expect(getPeaks).toHaveBeenCalledTimes(1);
+    expect(getPeaks).toHaveBeenCalledWith(1);
+  });
+
   it("keeps a third request queued until a slot frees", async () => {
     const gates = [deferred<unknown>(), deferred<unknown>(), deferred<unknown>()];
     getPeaks.mockImplementation((id: number) => {

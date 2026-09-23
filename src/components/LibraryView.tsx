@@ -18,6 +18,7 @@ import {
   type TagNode,
 } from "../lib/ipc";
 import { cachedRowPeaks } from "../lib/rowPeaks";
+import { isProfileOn, profileEvent, profileMark } from "../lib/profile";
 import { DetailPane } from "./DetailPane";
 import { FolderSidebar } from "./FolderSidebar";
 import { EMPTY_OMNI, omniHasQuery, type OmniState, type OptionalColumn } from "../lib/omni";
@@ -120,9 +121,23 @@ export function LibraryView({
   /* ── data ──────────────────────────────────────────────────────────── */
 
   const refreshSamples = useCallback(async () => {
+    const hasScope =
+      Boolean(omni.folder) ||
+      Boolean(omni.text) ||
+      omni.tags.length > 0 ||
+      omni.bpmMin != null ||
+      omni.bpmMax != null ||
+      Boolean(omni.key) ||
+      favoritesOnly;
+    if (!hasScope) {
+      setSamples([]);
+      setSamplesLoading(false);
+      return;
+    }
     /* Keep showing rows while a filter refreshes; only spin when the list is empty. */
     if (samplesRef.current.length === 0) setSamplesLoading(true);
     try {
+      const t0 = performance.now();
       const rows = await ipc.listSamples({
         folder_prefix: omni.folder,
         text: omni.text || null,
@@ -139,7 +154,46 @@ export function LibraryView({
         limit: 5000,
         offset: 0,
       });
+      const applyAt = performance.now();
       setSamples(rows);
+      if (isProfileOn()) {
+        profileMark(
+          "fe.list_apply",
+          applyAt - t0,
+          `n=${String(rows.length)} folder=${omni.folder ?? ""}`,
+        );
+        queueMicrotask(() => {
+          profileMark(
+            "fe.list_apply_commit",
+            performance.now() - applyAt,
+            `n=${String(rows.length)}`,
+          );
+        });
+      }
+      const cloudPaths = rows
+        .filter((r) => r.availability === "cloud" || r.availability === "unknown")
+        .map((r) => r.path)
+        .slice(0, 200);
+      if (cloudPaths.length > 0) {
+        if (isProfileOn()) {
+          profileEvent("fe.avail_refresh_start", `n=${String(cloudPaths.length)}`);
+        }
+        const refreshAt = performance.now();
+        void ipc
+          .refreshSampleAvailability(cloudPaths)
+          .then((changed) => {
+            if (isProfileOn()) {
+              profileMark(
+                "fe.avail_refresh",
+                performance.now() - refreshAt,
+                `paths=${String(cloudPaths.length)} changed=${String(changed)}`,
+              );
+            }
+          })
+          .catch(() => {
+            /* ignore */
+          });
+      }
     } finally {
       setSamplesLoading(false);
     }
@@ -169,6 +223,8 @@ export function LibraryView({
       startSecs: number | null,
       region?: { start: number; end: number } | null,
     ) => {
+      const row = samplesRef.current.find((s) => s.id === sampleId);
+      if (row && (row.missing || row.availability !== "local")) return;
       setPlayingId(sampleId);
       void ipc.play(sampleId, startSecs, region).catch(console.error);
     },
@@ -192,7 +248,8 @@ export function LibraryView({
       return;
     }
     setSelection(null);
-    if (samplesRef.current.find((s) => s.id === focusedId)?.missing) {
+    const focusedRow = samplesRef.current.find((s) => s.id === focusedId);
+    if (!focusedRow || focusedRow.missing || focusedRow.availability !== "local") {
       setPeaks(null);
       return;
     }
@@ -200,7 +257,9 @@ export function LibraryView({
     const warmIds: number[] = [];
     for (const offset of [-1, 0, 1, 2]) {
       const sample = samplesRef.current[idx + offset];
-      if (sample && !sample.missing) warmIds.push(sample.id);
+      if (sample && !sample.missing && sample.availability === "local") {
+        warmIds.push(sample.id);
+      }
     }
     void ipc.prefetchDecode(warmIds).catch(() => {
       /* best-effort */
@@ -713,6 +772,15 @@ export function LibraryView({
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
             hoverPreviewHeld={hoverPreviewHeld}
+            selectFolderHint={
+              !omni.folder &&
+              !omni.text &&
+              omni.tags.length === 0 &&
+              omni.bpmMin == null &&
+              omni.bpmMax == null &&
+              !omni.key &&
+              !favoritesOnly
+            }
             onSelect={selectRow}
             onHoverPreview={(id) => {
               skipPlayOnSelect.current = true;

@@ -1,14 +1,17 @@
-//! Background sample analysis: path auto-tags, BPM/key, loop vs one-shot.
+//! Background sample analysis: path auto-tags, BPM/key, loop vs one-shot, row peakfiles.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::audio::{DecodedAudio, decode_file, probe_and_update_sample};
+use crate::audio::peaks::{self, DEFAULT_BUCKETS};
+use crate::audio::{DecodedAudio, decode_file, write_technical_fields};
 use crate::db::models::SampleTag;
 use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
 use crate::db::schema::samples::dsl as samples_dsl;
@@ -16,11 +19,17 @@ use crate::db::schema::tag_rejects::dsl as rejects_dsl;
 use crate::db::schema::tags::dsl as tags_dsl;
 use crate::db::{Db, settings, utc_now};
 use crate::error::{AppError, AppResult};
+use crate::fs_ready::Availability;
 use crate::ids::{f64_to_f32, id_from_i64, id_to_i64};
 
 const BPM_CONF_MIN: f64 = 0.08;
 const KEY_CONF_MIN: f64 = 0.25;
 const LOOP_MIN_DURATION_SECS: f64 = 1.5;
+
+/// Every Nth sample gets decode/heuristic/db breakdown marks (all samples still
+/// get a single `analyze.sample` total when profiling).
+const ANALYZE_DETAIL_EVERY: u64 = 25;
+static ANALYZE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// BPM, key, type, and tag suggestions from one analyzer pass.
 #[derive(Debug, Clone, Default)]
@@ -429,56 +438,117 @@ pub enum AnalyzeMode {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct AnalysisQueuePayload {
+    pub total: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct AnalysisProgress {
     pub sample_id: i64,
     pub done: u64,
     pub remaining: u64,
+    pub total: u64,
 }
 
 #[derive(Debug, Clone)]
 struct SampleRow {
     path: String,
     missing: bool,
+    availability: String,
     bpm: Option<f64>,
     key_name: Option<String>,
     sample_type: Option<String>,
 }
 
-/// Analyze one sample and write results respecting overrides / rejects.
+/// Analyze one sample. Decode outside the DB mutex; only short writes hold the lock.
+/// Also writes the row peakfile from the same PCM (analysis includes waveforms).
 pub fn analyze_sample(
-    conn: &mut SqliteConnection,
+    db: &Db,
+    peaks_dir: &Path,
     sample_id: i64,
     mode: &AnalyzeMode,
     bpm_range: (f64, f64),
 ) -> AppResult<()> {
-    let row = load_sample_row(conn, sample_id)?.ok_or_else(|| AppError::msg("sample not found"))?;
-    if row.missing {
+    let total = Instant::now();
+    let seq = ANALYZE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let detail = seq.is_multiple_of(ANALYZE_DETAIL_EVERY);
+
+    let row = db
+        .with_conn(|conn| load_sample_row(conn, sample_id))?
+        .ok_or_else(|| AppError::msg("sample not found"))?;
+    if row.missing || Availability::parse(&row.availability) != Availability::Local {
         return Ok(());
     }
     let path = Path::new(&row.path);
-    if !path.exists() {
+
+    let stat_start = Instant::now();
+    let exists = path.exists();
+    if detail {
+        crate::profile_log::event(
+            "analyze.stat",
+            stat_start.elapsed(),
+            &format!("id={sample_id} exists={exists}"),
+        );
+    }
+    if !exists {
         return Ok(());
     }
 
-    // Always refresh technical info (and get PCM).
-    let pcm = match probe_and_update_sample(conn, sample_id, path) {
-        Ok(p) => p,
-        Err(_) => match decode_file(path) {
-            Ok(p) => p,
-            Err(_) => return Ok(()),
-        },
+    // Decode off the DB lock (Dropbox may hydrate here when the file is local).
+    let decode_start = Instant::now();
+    let Ok(pcm) = decode_file(path) else {
+        return Ok(());
     };
+    if detail {
+        crate::profile_log::event(
+            "analyze.decode",
+            decode_start.elapsed(),
+            &format!(
+                "id={sample_id} frames={} ch={}",
+                pcm.frame_count(),
+                pcm.channels
+            ),
+        );
+    }
+
+    // Peakfile from the same buffer so browse/scroll does not decode again.
+    let peaks_start = Instant::now();
+    match peaks::cache_peaks_from_decoded(peaks_dir, sample_id, &pcm, DEFAULT_BUCKETS) {
+        Ok(_) => {
+            if detail {
+                crate::profile_log::event(
+                    "analyze.peaks",
+                    peaks_start.elapsed(),
+                    &format!("id={sample_id}"),
+                );
+            }
+        }
+        Err(e) => {
+            crate::profile_log::event(
+                "analyze.peaks_err",
+                peaks_start.elapsed(),
+                &format!("id={sample_id} err={e}"),
+            );
+        }
+    }
 
     let (bpm_min, bpm_max) = bpm_range;
+    let heur_start = Instant::now();
     let path_result = PathTokenAnalyzer.analyze(path, &pcm, bpm_min, bpm_max);
     let audio_result = HeuristicAnalyzer.analyze(path, &pcm, bpm_min, bpm_max);
+    if detail {
+        crate::profile_log::event(
+            "analyze.heuristic",
+            heur_start.elapsed(),
+            &format!("id={sample_id}"),
+        );
+    }
 
     let (overwrite_tags, rerun_bpm, rerun_key, rerun_type) = match mode {
         AnalyzeMode::Normal => (false, false, false, false),
         AnalyzeMode::Custom(c) => (c.overwrite_tags, c.rerun_bpm, c.rerun_key, c.rerun_type),
     };
 
-    // Path tokens win for type when present; else audio heuristic.
     let detected_type = path_result
         .sample_type
         .clone()
@@ -488,52 +558,71 @@ pub fn analyze_sample(
     let write_key = row.key_name.is_none() || rerun_key;
     let write_type = row.sample_type.is_none() || rerun_type;
 
-    let now = utc_now();
-    let id = id_from_i64(sample_id)?;
+    let db_start = Instant::now();
+    db.with_conn(|conn| {
+        write_technical_fields(conn, sample_id, path, &pcm)?;
 
-    if write_bpm {
-        if let Some(v) = audio_result.bpm {
+        let now = utc_now();
+        let id = id_from_i64(sample_id)?;
+
+        if write_bpm {
+            if let Some(v) = audio_result.bpm {
+                diesel::update(samples_dsl::samples.find(id))
+                    .set(samples_dsl::bpm.eq(v))
+                    .execute(conn)?;
+            }
+            if let Some(v) = audio_result.bpm_confidence {
+                diesel::update(samples_dsl::samples.find(id))
+                    .set(samples_dsl::bpm_confidence.eq(v))
+                    .execute(conn)?;
+            }
+        }
+        if write_key {
+            if let Some(ref v) = audio_result.key_name {
+                diesel::update(samples_dsl::samples.find(id))
+                    .set(samples_dsl::key_name.eq(v))
+                    .execute(conn)?;
+            }
+            if let Some(v) = audio_result.key_confidence {
+                diesel::update(samples_dsl::samples.find(id))
+                    .set(samples_dsl::key_confidence.eq(v))
+                    .execute(conn)?;
+            }
+        }
+        if write_type && let Some(ref v) = detected_type {
             diesel::update(samples_dsl::samples.find(id))
-                .set(samples_dsl::bpm.eq(v))
+                .set(samples_dsl::sample_type.eq(v))
                 .execute(conn)?;
         }
-        if let Some(v) = audio_result.bpm_confidence {
-            diesel::update(samples_dsl::samples.find(id))
-                .set(samples_dsl::bpm_confidence.eq(v))
-                .execute(conn)?;
-        }
-    }
-    if write_key {
-        if let Some(ref v) = audio_result.key_name {
-            diesel::update(samples_dsl::samples.find(id))
-                .set(samples_dsl::key_name.eq(v))
-                .execute(conn)?;
-        }
-        if let Some(v) = audio_result.key_confidence {
-            diesel::update(samples_dsl::samples.find(id))
-                .set(samples_dsl::key_confidence.eq(v))
-                .execute(conn)?;
-        }
-    }
-    if write_type && let Some(ref v) = detected_type {
+
         diesel::update(samples_dsl::samples.find(id))
-            .set(samples_dsl::sample_type.eq(v))
+            .set((
+                samples_dsl::analyzed_at.eq(&now),
+                samples_dsl::updated_at.eq(&now),
+            ))
             .execute(conn)?;
+
+        apply_suggested_tags(
+            conn,
+            sample_id,
+            &path_result.suggested_tag_paths,
+            overwrite_tags,
+        )?;
+        Ok(())
+    })?;
+    if detail {
+        crate::profile_log::event(
+            "analyze.db_write",
+            db_start.elapsed(),
+            &format!("id={sample_id}"),
+        );
     }
 
-    diesel::update(samples_dsl::samples.find(id))
-        .set((
-            samples_dsl::analyzed_at.eq(&now),
-            samples_dsl::updated_at.eq(&now),
-        ))
-        .execute(conn)?;
-
-    apply_suggested_tags(
-        conn,
-        sample_id,
-        &path_result.suggested_tag_paths,
-        overwrite_tags,
-    )?;
+    crate::profile_log::event(
+        "analyze.sample",
+        total.elapsed(),
+        &format!("id={sample_id}"),
+    );
 
     Ok(())
 }
@@ -606,7 +695,14 @@ fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i
         .optional()?)
 }
 
-type SampleRowTuple = (String, i32, Option<f64>, Option<String>, Option<String>);
+type SampleRowTuple = (
+    String,
+    i32,
+    String,
+    Option<f64>,
+    Option<String>,
+    Option<String>,
+);
 
 fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleRow>> {
     let row: Option<SampleRowTuple> = samples_dsl::samples
@@ -614,21 +710,23 @@ fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<Sam
         .select((
             samples_dsl::path,
             samples_dsl::missing,
+            samples_dsl::availability,
             samples_dsl::bpm,
             samples_dsl::key_name,
             samples_dsl::sample_type,
         ))
         .first(conn)
         .optional()?;
-    Ok(
-        row.map(|(path, missing, bpm, key_name, sample_type)| SampleRow {
+    Ok(row.map(
+        |(path, missing, availability, bpm, key_name, sample_type)| SampleRow {
             path,
             missing: missing != 0,
+            availability,
             bpm,
             key_name,
             sample_type,
-        }),
-    )
+        },
+    ))
 }
 
 pub fn bpm_range_from_settings(conn: &mut SqliteConnection) -> AppResult<(f64, f64)> {
@@ -641,51 +739,281 @@ pub fn bpm_range_from_settings(conn: &mut SqliteConnection) -> AppResult<(f64, f
     Ok((min, max))
 }
 
-pub fn list_unanalyzed_ids(conn: &mut SqliteConnection) -> AppResult<Vec<i64>> {
-    let ids: Vec<i32> = samples_dsl::samples
-        .filter(samples_dsl::analyzed_at.is_null())
+/// Local samples that still need analysis work: never analyzed, or peakfile missing.
+pub fn list_analysis_queue_ids(
+    conn: &mut SqliteConnection,
+    peaks_dir: &Path,
+) -> AppResult<Vec<i64>> {
+    let rows: Vec<(i32, Option<String>)> = samples_dsl::samples
         .filter(samples_dsl::missing.eq(0))
-        .select(samples_dsl::id)
+        .filter(samples_dsl::availability.eq(Availability::Local.as_str()))
+        .select((samples_dsl::id, samples_dsl::analyzed_at))
         .order(samples_dsl::id.asc())
         .load(conn)?;
-    Ok(ids.into_iter().map(id_to_i64).collect())
+    let mut ids = Vec::new();
+    for (id, analyzed_at) in rows {
+        if analyzed_at.is_none() {
+            ids.push(id_to_i64(id));
+            continue;
+        }
+        let peak = peaks_dir.join(format!("{id}.peaks"));
+        if !peak.exists() {
+            ids.push(id_to_i64(id));
+        }
+    }
+    Ok(ids)
 }
 
-/// Fire-and-forget batch on a background thread.
-pub fn spawn_analysis_batch(app: AppHandle, db: Arc<Db>, sample_ids: Vec<i64>, mode: AnalyzeMode) {
-    if sample_ids.is_empty() {
-        return;
+const ANALYZE_WORKERS: usize = 4;
+const PROGRESS_EVERY: u64 = 25;
+
+struct AnalysisJob {
+    sample_id: i64,
+    mode: AnalyzeMode,
+}
+
+#[derive(Default)]
+struct QueueProgress {
+    /// Completed since the queue last went idle.
+    done: u64,
+    pending: u64,
+    in_flight: u64,
+    /// Pending or running ids (dedupe; released when idle).
+    active: std::collections::HashSet<i64>,
+    last_emit: Option<Instant>,
+}
+
+impl QueueProgress {
+    const fn remaining(&self) -> u64 {
+        self.pending.saturating_add(self.in_flight)
     }
-    std::thread::spawn(move || {
-        let total = u64::try_from(sample_ids.len()).unwrap_or(u64::MAX);
-        let _ = app.emit("analysis-queue", &sample_ids);
-        let mut done = 0u64;
-        for sample_id in sample_ids {
-            let bpm_range = db
-                .with_conn(bpm_range_from_settings)
-                .unwrap_or((70.0, 180.0));
-            let _ = db.with_conn(|conn| analyze_sample(conn, sample_id, &mode, bpm_range));
-            done = done.saturating_add(1);
-            let remaining = total.saturating_sub(done);
+
+    const fn total(&self) -> u64 {
+        self.done.saturating_add(self.remaining())
+    }
+
+    const fn is_idle(&self) -> bool {
+        self.pending == 0 && self.in_flight == 0
+    }
+}
+
+struct AnalysisRuntime {
+    tx: std::sync::mpsc::Sender<AnalysisJob>,
+    progress: Arc<std::sync::Mutex<QueueProgress>>,
+}
+
+fn analysis_runtime(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf) -> &'static AnalysisRuntime {
+    use std::sync::OnceLock;
+    static RUNTIME: OnceLock<AnalysisRuntime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<AnalysisJob>();
+        let rx = Arc::new(std::sync::Mutex::new(rx));
+        let progress = Arc::new(std::sync::Mutex::new(QueueProgress::default()));
+        for _ in 0..ANALYZE_WORKERS {
+            let rx = Arc::clone(&rx);
+            let db = Arc::clone(&db);
+            let peaks_dir = peaks_dir.clone();
+            let app = app.clone();
+            let progress = Arc::clone(&progress);
+            std::thread::spawn(move || analysis_worker(app, db, peaks_dir, rx, progress));
+        }
+        AnalysisRuntime { tx, progress }
+    })
+}
+
+fn analysis_worker(
+    app: AppHandle,
+    db: Arc<Db>,
+    peaks_dir: PathBuf,
+    rx: Arc<std::sync::Mutex<std::sync::mpsc::Receiver<AnalysisJob>>>,
+    progress: Arc<std::sync::Mutex<QueueProgress>>,
+) {
+    loop {
+        let job = {
+            let guard = rx
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.recv()
+        };
+        let Ok(job) = job else {
+            break;
+        };
+
+        {
+            let mut st = progress
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            st.pending = st.pending.saturating_sub(1);
+            st.in_flight = st.in_flight.saturating_add(1);
+        }
+
+        let bpm_range = db
+            .with_conn(bpm_range_from_settings)
+            .unwrap_or((70.0, 180.0));
+        let _ = analyze_sample(&db, &peaks_dir, job.sample_id, &job.mode, bpm_range);
+
+        // Emit under the progress lock so a concurrent enqueue cannot race a
+        // "remaining=0" clear past newly queued work.
+        let mut st = progress
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        st.in_flight = st.in_flight.saturating_sub(1);
+        st.done = st.done.saturating_add(1);
+        st.active.remove(&job.sample_id);
+        let remaining = st.remaining();
+        let total = st.total();
+        let done = st.done;
+        let finished_idle = st.is_idle();
+        let should_emit = finished_idle
+            || done.is_multiple_of(PROGRESS_EVERY)
+            || st
+                .last_emit
+                .is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(250));
+        if should_emit {
+            st.last_emit = Some(Instant::now());
             let _ = app.emit(
                 "analysis-progress",
                 &AnalysisProgress {
-                    sample_id,
+                    sample_id: job.sample_id,
                     done,
                     remaining,
+                    total,
                 },
             );
         }
-    });
+        if finished_idle {
+            crate::profile_log::event(
+                "analyze.queue_done",
+                std::time::Duration::ZERO,
+                &format!("n={done}"),
+            );
+            st.done = 0;
+            st.active.clear();
+            st.last_emit = None;
+        }
+    }
 }
 
-/// After indexing finishes: analyze samples that have never been analyzed.
-///
-/// On modify watch events, refresh technical fields only (`probe_and_update_sample`).
-/// Do not re-run Normal analysis on already analyzed samples (that would re-apply auto tags).
-pub fn enqueue_unanalyzed(app: AppHandle, db: Arc<Db>) {
-    let ids = db.with_conn(list_unanalyzed_ids).unwrap_or_default();
-    spawn_analysis_batch(app, db, ids, AnalyzeMode::Normal);
+/// Push work onto the single shared analyze queue (fixed worker pool, one status bar).
+pub fn spawn_analysis_batch(
+    app: AppHandle,
+    db: Arc<Db>,
+    peaks_dir: PathBuf,
+    sample_ids: Vec<i64>,
+    mode: AnalyzeMode,
+) {
+    if sample_ids.is_empty() {
+        return;
+    }
+    let rt = analysis_runtime(app.clone(), db, peaks_dir);
+    let mut st = rt
+        .progress
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let was_idle = st.is_idle() && st.done == 0;
+    let mut added = 0u64;
+    for sample_id in sample_ids {
+        if !st.active.insert(sample_id) {
+            continue;
+        }
+        st.pending = st.pending.saturating_add(1);
+        if rt
+            .tx
+            .send(AnalysisJob {
+                sample_id,
+                mode: mode.clone(),
+            })
+            .is_err()
+        {
+            st.pending = st.pending.saturating_sub(1);
+            st.active.remove(&sample_id);
+            break;
+        }
+        added = added.saturating_add(1);
+    }
+    if added == 0 {
+        return;
+    }
+    if was_idle {
+        crate::profile_log::event(
+            "analyze.queue_start",
+            std::time::Duration::ZERO,
+            &format!("n={}", st.total()),
+        );
+        let _ = app.emit(
+            "analysis-queue",
+            &AnalysisQueuePayload { total: st.total() },
+        );
+    }
+    st.last_emit = Some(Instant::now());
+    let _ = app.emit(
+        "analysis-progress",
+        &AnalysisProgress {
+            sample_id: 0,
+            done: st.done,
+            remaining: st.remaining(),
+            total: st.total(),
+        },
+    );
+}
+
+/// After indexing (or on launch): analyze local samples that need metadata and/or peakfiles.
+pub fn enqueue_unanalyzed(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf) {
+    let peaks = peaks_dir.clone();
+    let ids = db
+        .with_conn(|conn| list_analysis_queue_ids(conn, &peaks))
+        .unwrap_or_default();
+    spawn_analysis_batch(app, db, peaks_dir, ids, AnalyzeMode::Normal);
+}
+
+/// Enqueue specific samples that just became local (hydrate / availability refresh).
+pub fn enqueue_ids(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf, sample_ids: Vec<i64>) {
+    if sample_ids.is_empty() {
+        return;
+    }
+    let peaks = peaks_dir.clone();
+    let ids = db
+        .with_conn(|conn| filter_analysis_queue_ids(conn, &peaks, &sample_ids))
+        .unwrap_or_default();
+    spawn_analysis_batch(app, db, peaks_dir, ids, AnalyzeMode::Normal);
+}
+
+/// Keep only ids that are local and still need analysis or a peakfile.
+fn filter_analysis_queue_ids(
+    conn: &mut SqliteConnection,
+    peaks_dir: &Path,
+    sample_ids: &[i64],
+) -> AppResult<Vec<i64>> {
+    let mut out = Vec::new();
+    for &sample_id in sample_ids {
+        let Ok(id) = id_from_i64(sample_id) else {
+            continue;
+        };
+        let row: Option<(i32, String, Option<String>)> = samples_dsl::samples
+            .find(id)
+            .select((
+                samples_dsl::missing,
+                samples_dsl::availability,
+                samples_dsl::analyzed_at,
+            ))
+            .first(conn)
+            .optional()?;
+        let Some((missing, availability, analyzed_at)) = row else {
+            continue;
+        };
+        if missing != 0 || availability != Availability::Local.as_str() {
+            continue;
+        }
+        if analyzed_at.is_none() {
+            out.push(sample_id);
+            continue;
+        }
+        let peak = peaks_dir.join(format!("{sample_id}.peaks"));
+        if !peak.exists() {
+            out.push(sample_id);
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -730,5 +1058,34 @@ mod tests {
             "Drums/Kick/808".into(),
         ]);
         assert_eq!(tags, vec!["Drums/Kick/808".to_string()]);
+    }
+
+    #[test]
+    fn analysis_queue_payload_shape() {
+        let q = AnalysisQueuePayload { total: 42 };
+        let v = serde_json::to_value(&q).expect("serialize");
+        assert_eq!(v.get("total").and_then(serde_json::Value::as_u64), Some(42));
+        assert!(v.get("ids").is_none());
+    }
+
+    #[test]
+    fn analysis_progress_payload_shape() {
+        let p = AnalysisProgress {
+            sample_id: 7,
+            done: 3,
+            remaining: 9,
+            total: 12,
+        };
+        let v = serde_json::to_value(&p).expect("serialize");
+        assert_eq!(v["sample_id"], 7);
+        assert_eq!(v["done"], 3);
+        assert_eq!(v["remaining"], 9);
+        assert_eq!(v["total"], 12);
+    }
+
+    #[test]
+    fn cloud_availability_is_not_local() {
+        assert_ne!(Availability::parse("cloud"), Availability::Local);
+        assert_eq!(Availability::parse("cloud"), Availability::Cloud);
     }
 }

@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
@@ -14,6 +14,7 @@ use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::settings;
 use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
+use crate::fs_ready::{self, Availability};
 use crate::ids::{id_from_i64, id_to_i64};
 
 const AUDIO_EXTS: &[&str] = &[
@@ -87,6 +88,7 @@ pub fn index_root(
     let mut scanned = 0u64;
     let mut indexed = 0u64;
     let mut skipped = 0u64;
+    let mut batch_start = Instant::now();
 
     for entry in WalkDir::new(&root)
         .follow_links(false)
@@ -130,6 +132,10 @@ pub fn index_root(
         let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
         let mtime = mtime_ms(&meta);
         let inode = inode_of(&meta);
+        let avail = fs_ready::classify_meta(&meta);
+        let avail_s = avail.as_str();
+        let checked = utc_now();
+        let missing_flag = i32::from(avail == Availability::Missing);
 
         let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
             .filter(samples_dsl::path.eq(&path_str))
@@ -145,7 +151,9 @@ pub fn index_root(
             Some((id, old_size, old_mtime)) if old_size == Some(size) && old_mtime == mtime => {
                 diesel::update(samples_dsl::samples.find(id))
                     .set((
-                        samples_dsl::missing.eq(0),
+                        samples_dsl::missing.eq(missing_flag),
+                        samples_dsl::availability.eq(avail_s),
+                        samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
                         samples_dsl::root_id.eq(root_id_i32),
                     ))
                     .execute(conn)?;
@@ -160,7 +168,9 @@ pub fn index_root(
                         samples_dsl::size_bytes.eq(Some(size)),
                         samples_dsl::mtime_ms.eq(mtime),
                         samples_dsl::inode.eq(inode),
-                        samples_dsl::missing.eq(0),
+                        samples_dsl::missing.eq(missing_flag),
+                        samples_dsl::availability.eq(avail_s),
+                        samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
                         samples_dsl::updated_at.eq(utc_now()),
                     ))
                     .execute(conn)?;
@@ -177,6 +187,8 @@ pub fn index_root(
                         size_bytes: Some(size),
                         mtime_ms: mtime,
                         inode,
+                        availability: avail_s,
+                        availability_checked_at: Some(checked.as_str()),
                     })
                     .execute(conn)?;
                 indexed = indexed.saturating_add(1);
@@ -184,6 +196,12 @@ pub fn index_root(
         }
 
         if scanned.is_multiple_of(25) {
+            crate::profile_log::event(
+                "index.batch",
+                batch_start.elapsed(),
+                &format!("scanned={scanned} indexed={indexed} skipped={skipped}"),
+            );
+            batch_start = Instant::now();
             on_progress(IndexProgress {
                 root_id,
                 scanned,
@@ -283,6 +301,10 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
     let mtime = mtime_ms(&meta);
     let inode = inode_of(&meta);
     let root_id_i32 = id_from_i64(root_id)?;
+    let avail = fs_ready::classify_meta(&meta);
+    let avail_s = avail.as_str();
+    let checked = utc_now();
+    let missing_flag = i32::from(avail == Availability::Missing);
 
     let existing: Option<(i32, Option<i64>, Option<i64>)> = samples_dsl::samples
         .filter(samples_dsl::path.eq(&path_str))
@@ -298,7 +320,9 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
         Some((id, old_size, old_mtime)) if old_size == Some(size) && old_mtime == mtime => {
             diesel::update(samples_dsl::samples.find(id))
                 .set((
-                    samples_dsl::missing.eq(0),
+                    samples_dsl::missing.eq(missing_flag),
+                    samples_dsl::availability.eq(avail_s),
+                    samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
                     samples_dsl::root_id.eq(root_id_i32),
                 ))
                 .execute(conn)?;
@@ -314,7 +338,9 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
                     samples_dsl::size_bytes.eq(Some(size)),
                     samples_dsl::mtime_ms.eq(mtime),
                     samples_dsl::inode.eq(inode),
-                    samples_dsl::missing.eq(0),
+                    samples_dsl::missing.eq(missing_flag),
+                    samples_dsl::availability.eq(avail_s),
+                    samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
                     samples_dsl::updated_at.eq(utc_now()),
                 ))
                 .execute(conn)?;
@@ -331,6 +357,8 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
                     size_bytes: Some(size),
                     mtime_ms: mtime,
                     inode,
+                    availability: avail_s,
+                    availability_checked_at: Some(checked.as_str()),
                 })
                 .execute(conn)?;
             Ok(true)

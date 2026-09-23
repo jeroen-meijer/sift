@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::channel;
 
 use serde_json::{Value, json};
@@ -78,17 +79,37 @@ pub fn list_roots(state: State<'_, AppState>) -> AppResult<Vec<RootDto>> {
 
 #[tauri::command]
 pub fn add_root(app: AppHandle, state: State<'_, AppState>, path: String) -> AppResult<RootDto> {
+    let total = std::time::Instant::now();
     let root = state.db.with_conn(|conn| library::add_root(conn, &path))?;
     let root_id = root.id;
     let db = state.db.clone();
-    restart_watches(&app, &state);
+    // Do not block IPC on recursive FSEvents registration.
+    let watch_app = app.clone();
+    let watch_shared = state.watch_shared.clone();
+    let watch_guard = Arc::clone(&state.watch_guard);
     std::thread::spawn(move || {
+        watch::restart(&watch_app, &watch_shared, &watch_guard);
+    });
+    crate::profile_log::event(
+        "ipc.add_root",
+        total.elapsed(),
+        &format!("id={root_id}"),
+    );
+    let index_app = app;
+    let peaks_dir = state.paths.peaks_dir.clone();
+    std::thread::spawn(move || {
+        let index_start = std::time::Instant::now();
         let _ = db.with_conn(|conn| {
             indexer::index_root(conn, root_id, |progress| {
-                let _ = app.emit("index-progress", &progress);
+                let _ = index_app.emit("index-progress", &progress);
             })
         });
-        let _ = app.emit(
+        crate::profile_log::event(
+            "index.root_done",
+            index_start.elapsed(),
+            &format!("id={root_id}"),
+        );
+        let _ = index_app.emit(
             "index-progress",
             &IndexProgress {
                 root_id,
@@ -99,7 +120,7 @@ pub fn add_root(app: AppHandle, state: State<'_, AppState>, path: String) -> App
                 done: true,
             },
         );
-        crate::analyze::enqueue_unanalyzed(app, db);
+        crate::analyze::enqueue_unanalyzed(index_app, db, peaks_dir);
     });
     Ok(root)
 }
@@ -118,9 +139,10 @@ pub fn folder_tree(
     state: State<'_, AppState>,
     max_depth: Option<u32>,
 ) -> AppResult<Vec<FolderNode>> {
-    state
-        .db
-        .with_conn(|conn| library::folder_tree(conn, max_depth.unwrap_or(6)))
+    let depth = max_depth.unwrap_or(6);
+    crate::profile_log::time("ipc.folder_tree", &format!("depth={depth}"), || {
+        state.db.with_conn(|conn| library::folder_tree(conn, depth))
+    })
 }
 
 #[tauri::command]
@@ -141,13 +163,14 @@ pub fn set_folder_favorite(
 )]
 pub fn reindex_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) -> AppResult<()> {
     let db = state.db.clone();
+    let peaks_dir = state.paths.peaks_dir.clone();
     std::thread::spawn(move || {
         let _ = db.with_conn(|conn| {
             indexer::index_root(conn, root_id, |progress| {
                 let _ = app.emit("index-progress", &progress);
             })
         });
-        crate::analyze::enqueue_unanalyzed(app, db);
+        crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
     });
     Ok(())
 }
@@ -159,13 +182,14 @@ pub fn reindex_root(app: AppHandle, state: State<'_, AppState>, root_id: i64) ->
 )]
 pub fn reindex_all(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let db = state.db.clone();
+    let peaks_dir = state.paths.peaks_dir.clone();
     std::thread::spawn(move || {
         let _ = db.with_conn(|conn| {
             indexer::index_all_roots(conn, |progress| {
                 let _ = app.emit("index-progress", &progress);
             })
         });
-        crate::analyze::enqueue_unanalyzed(app, db);
+        crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
     });
     Ok(())
 }
@@ -301,6 +325,7 @@ pub fn reanalyze_samples(
     crate::analyze::spawn_analysis_batch(
         app,
         state.db.clone(),
+        state.paths.peaks_dir.clone(),
         ids,
         crate::analyze::AnalyzeMode::Normal,
     );
@@ -323,7 +348,7 @@ pub fn analyze_samples(
         crate::analyze::AnalyzeMode::Normal,
         crate::analyze::AnalyzeMode::Custom,
     );
-    crate::analyze::spawn_analysis_batch(app, state.db.clone(), ids, mode);
+    crate::analyze::spawn_analysis_batch(app, state.db.clone(), state.paths.peaks_dir.clone(), ids, mode);
     Ok(n)
 }
 
@@ -356,7 +381,7 @@ pub fn respond_ask_index(
                     reason: "ask-index".into(),
                 },
             );
-            crate::analyze::enqueue_unanalyzed(app, state.db.clone());
+            crate::analyze::enqueue_unanalyzed(app, state.db.clone(), state.paths.peaks_dir.clone());
         }
         Ok(n)
     } else {
@@ -395,17 +420,52 @@ pub fn redo_meta(state: State<'_, AppState>) -> AppResult<bool> {
 }
 
 #[tauri::command]
+pub fn refresh_sample_availability(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> AppResult<u64> {
+    if paths.is_empty() {
+        return Ok(0);
+    }
+    let result = state
+        .db
+        .with_conn(|conn| samples::refresh_availability_for_paths(conn, &paths))?;
+    if !result.became_local_ids.is_empty() {
+        crate::analyze::enqueue_ids(
+            app,
+            state.db.clone(),
+            state.paths.peaks_dir.clone(),
+            result.became_local_ids,
+        );
+    }
+    Ok(result.updated)
+}
+
+#[tauri::command]
 pub fn get_peaks(state: State<'_, AppState>, sample_id: i64) -> AppResult<PeakData> {
     crate::profile_log::time("ipc.get_peaks", &format!("id={sample_id}"), || {
         let sample = state
             .db
             .with_conn(|conn| samples::get_sample(conn, sample_id))?
             .ok_or_else(|| AppError::msg("sample not found"))?;
+        if sample.missing || sample.availability != "local" {
+            // Empty placeholder. Never decode cloud stubs on the interactive path.
+            return Ok(peaks::empty_peaks(DEFAULT_BUCKETS));
+        }
         let path = Path::new(&sample.path);
         if sample.sample_rate.is_none() || sample.duration_ms.is_none() {
-            let _ = state
-                .db
-                .with_conn(|conn| crate::audio::probe_and_update_sample(conn, sample_id, path));
+            // Decode off the DB lock, then write technical fields briefly.
+            match crate::audio::decode_file(path) {
+                Ok(decoded) => {
+                    let _ = state.db.with_conn(|conn| {
+                        crate::audio::write_technical_fields(conn, sample_id, path, &decoded)
+                    });
+                }
+                Err(_) => {
+                    return Ok(peaks::empty_peaks(DEFAULT_BUCKETS));
+                }
+            }
         }
         peaks::ensure_peaks(&state.paths, sample_id, path, DEFAULT_BUCKETS)
     })
@@ -426,6 +486,11 @@ pub fn play_sample(
         .ok_or_else(|| AppError::msg("sample not found"))?;
     if sample.missing {
         return Err(AppError::msg("sample file is missing"));
+    }
+    if sample.availability != "local" {
+        return Err(AppError::msg(
+            "sample is online-only; download it before playing",
+        ));
     }
     let path = Path::new(&sample.path);
     let play_type = SamplePlayType::from_str_opt(sample.sample_type.as_deref());
@@ -475,6 +540,7 @@ pub fn prefetch_decode(state: State<'_, AppState>, sample_ids: Vec<i64>) -> AppR
         for id in sample_ids {
             if let Some(sample) = samples::get_sample(conn, id)?
                 && !sample.missing
+                && sample.availability == "local"
             {
                 paths.push(sample.path);
             }
@@ -843,4 +909,18 @@ pub fn profile_log_path() -> Option<String> {
 #[tauri::command]
 pub fn profile_mark(name: String, ms: f64, detail: Option<String>) {
     crate::profile_log::mark(&name, ms, detail.as_deref().unwrap_or(""));
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ProfileMarkDto {
+    pub name: String,
+    pub ms: f64,
+    pub detail: Option<String>,
+}
+
+#[tauri::command]
+pub fn profile_mark_batch(marks: Vec<ProfileMarkDto>) {
+    for mark in marks {
+        crate::profile_log::mark(&mark.name, mark.ms, mark.detail.as_deref().unwrap_or(""));
+    }
 }

@@ -31,14 +31,15 @@ import { formatCount } from "../lib/format";
 import type { SampleRow, SortColumn, SortDirection } from "../lib/ipc";
 import { tagPalette } from "../lib/tagColors";
 import type { OptionalColumn } from "../lib/omni";
-import { prefetchRowPeaks } from "../lib/rowPeaks";
+import { isProfileOn, profileMark } from "../lib/profile";
+import { peaksQueueSnapshot, prefetchRowPeaks } from "../lib/rowPeaks";
 import { RowWaveform } from "./RowWaveform";
 
 const ROW_HEIGHT = 28;
 /** Extra rows above/below the viewport so scroll rarely paints an empty slot. */
 const ROW_OVERSCAN = 40;
 /** Prefetch peaks this far past the overscan window (first-pass scroll). */
-const PEAK_PREFETCH_PAD = 80;
+const PEAK_PREFETCH_PAD = 24;
 const EM_DASH = "—";
 /** Movement past this (css px) turns a header press into a column reorder. */
 const REORDER_THRESHOLD_PX = 5;
@@ -93,6 +94,8 @@ interface Props {
   sortDirection: SortDirection;
   highlightText: string;
   hoverPreviewHeld: boolean;
+  /** True when the empty state should ask for a folder (no query scope yet). */
+  selectFolderHint?: boolean;
   onSelect: (id: number, e: React.MouseEvent) => void;
   onHoverPreview: (id: number) => void;
   onToggleFavorite: (id: number, favorite: boolean) => void;
@@ -121,6 +124,7 @@ export function SampleTable({
   sortDirection,
   highlightText,
   hoverPreviewHeld,
+  selectFolderHint = false,
   onSelect,
   onHoverPreview,
   onToggleFavorite,
@@ -136,6 +140,9 @@ export function SampleTable({
   const tableRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollAt = useRef(0);
+  const lastScrollTop = useRef(0);
+  const lastRangeKey = useRef("");
   const dragRef = useRef<{
     column: ResizableColumn;
     startX: number;
@@ -173,18 +180,63 @@ export function SampleTable({
   const rangeStart = virtualItems[0]?.index ?? 0;
   const rangeEnd = virtualItems.at(-1)?.index ?? -1;
 
-  /* Prefetch peaks for the mounted window + lookahead so first scroll stays warm. */
+  /* Scroll + virtualizer marks (profile builds only). */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (!isProfileOn()) return;
+      const top = el.scrollTop;
+      const now = performance.now();
+      const dt = lastScrollAt.current > 0 ? now - lastScrollAt.current : 0;
+      const dy = top - lastScrollTop.current;
+      lastScrollAt.current = now;
+      lastScrollTop.current = top;
+      const q = peaksQueueSnapshot();
+      profileMark(
+        "fe.scroll",
+        dt,
+        `top=${top.toFixed(0)} dy=${dy.toFixed(0)} range=${String(rangeStart)}-${String(rangeEnd)} mounted=${String(virtualItems.length)} n=${String(samples.length)} waves=${String(showWaveforms)} q_active=${String(q.active)} q_wait=${String(q.queued)}`,
+      );
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [rangeStart, rangeEnd, samples.length, showWaveforms, virtualItems.length]);
+
+  useLayoutEffect(() => {
+    if (!isProfileOn()) return;
+    const key = `${String(rangeStart)}:${String(rangeEnd)}:${String(virtualItems.length)}`;
+    if (key === lastRangeKey.current) return;
+    lastRangeKey.current = key;
+    const sinceScroll =
+      lastScrollAt.current > 0 ? performance.now() - lastScrollAt.current : -1;
+    const q = peaksQueueSnapshot();
+    profileMark(
+      "fe.virt_range",
+      sinceScroll < 0 ? 0 : sinceScroll,
+      `range=${String(rangeStart)}-${String(rangeEnd)} mounted=${String(virtualItems.length)} total_h=${String(virtualizer.getTotalSize())} n=${String(samples.length)} since_scroll_ms=${sinceScroll.toFixed(1)} q_wait=${String(q.queued)}`,
+    );
+  }, [rangeStart, rangeEnd, samples.length, virtualItems.length, virtualizer]);
+
+  /* Prefetch peaks for the visible window plus a short lookahead. */
   useEffect(() => {
     if (!showWaveforms || samples.length === 0) return;
     const last = samples.length - 1;
     const urgentStart = rangeEnd < rangeStart ? 0 : rangeStart;
     const urgentEnd = rangeEnd < rangeStart ? Math.min(last, 40) : rangeEnd;
+    const availabilityById = new Map(
+      samples.map((s) => [s.id, s.availability] as const),
+    );
     const urgentIds: number[] = [];
     for (let index = urgentStart; index <= urgentEnd; index++) {
       const sample = samples[index];
-      if (sample && !sample.missing) urgentIds.push(sample.id);
+      if (sample && !sample.missing && sample.availability === "local") {
+        urgentIds.push(sample.id);
+      }
     }
-    prefetchRowPeaks(urgentIds, { urgent: true });
+    prefetchRowPeaks(urgentIds, { urgent: true, availabilityById });
 
     const padStart = Math.max(0, urgentStart - PEAK_PREFETCH_PAD);
     const padEnd = Math.min(last, urgentEnd + PEAK_PREFETCH_PAD);
@@ -192,9 +244,11 @@ export function SampleTable({
     for (let index = padStart; index <= padEnd; index++) {
       if (index >= urgentStart && index <= urgentEnd) continue;
       const sample = samples[index];
-      if (sample && !sample.missing) warmIds.push(sample.id);
+      if (sample && !sample.missing && sample.availability === "local") {
+        warmIds.push(sample.id);
+      }
     }
-    prefetchRowPeaks(warmIds);
+    prefetchRowPeaks(warmIds, { availabilityById });
   }, [showWaveforms, samples, rangeStart, rangeEnd]);
 
   useLayoutEffect(() => {
@@ -392,6 +446,10 @@ export function SampleTable({
           <div key={column} className="col name" data-col={column} title={sample.path}>
             {sample.missing ? (
               <WarningCircleIcon size={11} weight="fill" className="row-missing-icon" />
+            ) : sample.availability === "cloud" ? (
+              <span className="row-cloud-badge" title={tc("statusOnlineOnly")}>
+                {tc("statusOnlineOnly")}
+              </span>
             ) : null}
             <span className="name-text">
               {highlight(base, highlightText)}
@@ -424,6 +482,7 @@ export function SampleTable({
             <RowWaveform
               sampleId={sample.id}
               missing={sample.missing}
+              availability={sample.availability}
               analyzing={analyzing}
               selected={selectedIds.has(sample.id)}
               colored={coloredWaveforms}
@@ -503,7 +562,13 @@ export function SampleTable({
                   onSelect(sample.id, e);
                 }}
                 onMouseEnter={() => {
-                  if (hoverPreviewHeld && !sample.missing) onHoverPreview(sample.id);
+                  if (
+                    hoverPreviewHeld &&
+                    !sample.missing &&
+                    sample.availability === "local"
+                  ) {
+                    onHoverPreview(sample.id);
+                  }
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -549,9 +614,11 @@ export function SampleTable({
             <div className="sample-table-empty">
               <div>
                 <MagnifyingGlassIcon size={26} />
-                <div className="sample-table-empty-title">{t("emptyTitle")}</div>
+                <div className="sample-table-empty-title">
+                  {t(selectFolderHint ? "emptySelectFolderTitle" : "emptyTitle")}
+                </div>
                 <div className="sample-table-empty-body">
-                  {t("emptyBody")}
+                  {t(selectFolderHint ? "emptySelectFolderBody" : "emptyBody")}
                   <br />
                   {t("emptyCount", {
                     count: indexedCount,

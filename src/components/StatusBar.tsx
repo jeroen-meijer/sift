@@ -67,15 +67,17 @@ export function StatusBar({
         <div className="statusbar-analysis">
           <CircleNotchIcon size={12} className="statusbar-spin" />
           <span className="statusbar-analysis-label">
+            {t("statusAnalyzingLocal")}
+          </span>
+          <div className="statusbar-bar" aria-hidden>
+            <div className="statusbar-bar-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="statusbar-hint">
             {t("statusAnalyzingProgress", {
               done: formatCount(analysis.done),
               total: formatCount(analysis.total),
             })}
           </span>
-          <div className="statusbar-bar" aria-hidden>
-            <div className="statusbar-bar-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="statusbar-hint">{t("statusBrowseWhile")}</span>
         </div>
       ) : null}
     </footer>

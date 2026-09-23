@@ -3,6 +3,7 @@ mod audio;
 mod commands;
 mod db;
 mod error;
+mod fs_ready;
 mod ids;
 mod indexer;
 mod library;
@@ -25,7 +26,7 @@ pub mod perf {
 }
 
 use state::AppState;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 // Tauri entry: `generate_context!` expands to a `process::exit`, and init failures
@@ -44,6 +45,33 @@ pub fn run() {
             let state = app.state::<AppState>();
             crate::profile_log::init(&state.paths.cache_dir);
             watch::restart(&handle, &state.watch_shared, &state.watch_guard);
+            // Backfill availability from live metadata, then resume analyze for locals.
+            let db = state.db.clone();
+            let peaks_dir = state.paths.peaks_dir.clone();
+            std::thread::spawn(move || {
+                let start = std::time::Instant::now();
+                let refresh = db
+                    .with_conn(crate::samples::refresh_availability_all)
+                    .unwrap_or_default();
+                crate::profile_log::event(
+                    "avail.library_refresh",
+                    start.elapsed(),
+                    &format!(
+                        "updated={} became_local={}",
+                        refresh.updated,
+                        refresh.became_local_ids.len()
+                    ),
+                );
+                if refresh.updated > 0 {
+                    let _ = handle.emit(
+                        "library-changed",
+                        watch::LibraryChangedPayload {
+                            reason: "availability".into(),
+                        },
+                    );
+                }
+                crate::analyze::enqueue_unanalyzed(handle, db, peaks_dir);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -58,6 +86,7 @@ pub fn run() {
             commands::reindex_root,
             commands::reindex_all,
             commands::list_samples,
+            commands::refresh_sample_availability,
             commands::set_sample_favorite,
             commands::set_sample_bpm,
             commands::set_sample_key,
@@ -97,6 +126,7 @@ pub fn run() {
             commands::analyze_samples,
             commands::profile_enabled,
             commands::profile_mark,
+            commands::profile_mark_batch,
             commands::profile_log_path,
         ])
         .run(tauri::generate_context!())

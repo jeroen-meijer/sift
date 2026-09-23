@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
+import { isProfileOn, profileMark } from "../lib/profile";
 import { cachedRowPeaks, loadRowPeaks } from "../lib/rowPeaks";
 import { readSpectralBands } from "../lib/spectralColor";
 import { subscribeThemePaint } from "../theme/subscribeThemePaint";
@@ -7,6 +8,8 @@ import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 interface Props {
   sampleId: number;
   missing: boolean;
+  /** When not `local`, skip peak fetch (Online only / cloud stub). */
+  availability: string;
   analyzing: boolean;
   selected: boolean;
   /** Bass→red / mid→green / treble→blue from peak colors. */
@@ -20,6 +23,7 @@ interface Props {
 export function RowWaveform({
   sampleId,
   missing,
+  availability,
   analyzing,
   selected,
   colored,
@@ -30,7 +34,7 @@ export function RowWaveform({
   const [peaks, setPeaks] = useState(() => cachedRowPeaks(sampleId));
   const [hoverFraction, setHoverFraction] = useState<number | null>(null);
 
-  const idle = missing || analyzing;
+  const idle = missing || analyzing || availability !== "local";
 
   useEffect(() => {
     if (idle) {
@@ -42,19 +46,20 @@ export function RowWaveform({
     setPeaks(cached);
     if (cached) return;
     let alive = true;
-    void loadRowPeaks(sampleId).then((data) => {
+    void loadRowPeaks(sampleId, availability).then((data) => {
       if (alive) setPeaks(data);
     });
     return () => {
       alive = false;
     };
-  }, [sampleId, idle]);
+  }, [sampleId, idle, availability]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !peaks || idle) return;
 
     const paint = () => {
+      const t0 = isProfileOn() ? performance.now() : 0;
       const dpr = window.devicePixelRatio || 1;
       const width = canvas.clientWidth || 120;
       const height = 18;
@@ -88,11 +93,18 @@ export function RowWaveform({
           maxColorStops: 32,
         },
       );
+      if (isProfileOn()) {
+        profileMark(
+          "fe.row_wave_paint",
+          performance.now() - t0,
+          `id=${String(sampleId)} buckets=${String(peaks.bucket_count)} colored=${String(colored)}`,
+        );
+      }
     };
 
     paint();
     return subscribeThemePaint(paint);
-  }, [peaks, idle, selected, colored]);
+  }, [peaks, idle, selected, colored, sampleId]);
 
   if (analyzing) {
     return (

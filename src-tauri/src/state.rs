@@ -16,7 +16,7 @@ pub struct AppState {
     pub decode_cache: Mutex<DecodeCache>,
     pub undo: Mutex<UndoStack>,
     pub watch_shared: Arc<WatchShared>,
-    pub watch_guard: Mutex<Option<WatchGuard>>,
+    pub watch_guard: Arc<Mutex<Option<WatchGuard>>>,
     /// Where JIT clips are written. Settings can move it, so it is not in `paths`.
     clips_dir: Mutex<PathBuf>,
 }
@@ -25,7 +25,10 @@ impl AppState {
     pub fn init() -> AppResult<Self> {
         let paths = AppPaths::resolve()?;
         let db = Arc::new(Db::open(&paths)?);
-        let watch_shared = Arc::new(WatchShared::new(Arc::clone(&db)));
+        let watch_shared = Arc::new(WatchShared::new(
+            Arc::clone(&db),
+            paths.peaks_dir.clone(),
+        ));
 
         let mut clips_dir = paths.clips_dir.clone();
         let mut player = PlayerEngine::new();
@@ -63,7 +66,7 @@ impl AppState {
             decode_cache: Mutex::new(DecodeCache::default()),
             undo: Mutex::new(UndoStack::default()),
             watch_shared,
-            watch_guard: Mutex::new(None),
+            watch_guard: Arc::new(Mutex::new(None)),
             clips_dir: Mutex::new(clips_dir),
         })
     }

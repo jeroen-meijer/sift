@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::event::{ModifyKind, RenameMode};
 use notify::{EventKind, RecursiveMode};
@@ -36,13 +36,15 @@ pub struct WatchGuard {
 
 pub struct WatchShared {
     pub db: Arc<Db>,
+    pub peaks_dir: PathBuf,
     pub skip_paths: Mutex<HashSet<String>>,
 }
 
 impl WatchShared {
-    pub fn new(db: Arc<Db>) -> Self {
+    pub fn new(db: Arc<Db>, peaks_dir: PathBuf) -> Self {
         Self {
             db,
+            peaks_dir,
             skip_paths: Mutex::new(HashSet::new()),
         }
     }
@@ -97,6 +99,7 @@ fn handle_events(
     let mut modified: Vec<PathBuf> = Vec::new();
     let mut renames: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut changed = false;
+    let mut became_local: Vec<i64> = Vec::new();
 
     for ev in events {
         match ev.kind {
@@ -176,11 +179,16 @@ fn handle_events(
 
     for path in &modified {
         let path_s = path.to_string_lossy().to_string();
-        if shared
+        if let Some(refresh) = shared
             .db
             .with_conn(|conn| samples::refresh_technical(conn, &path_s))?
         {
-            changed = true;
+            if refresh.changed {
+                changed = true;
+            }
+            if refresh.became_local {
+                became_local.push(refresh.sample_id);
+            }
         }
         // Don't also treat as create
         created.retain(|p| p != path);
@@ -208,6 +216,18 @@ fn handle_events(
             .collect()
     };
 
+    if !became_local.is_empty() {
+        became_local.sort_unstable();
+        became_local.dedup();
+        changed = true;
+        crate::analyze::enqueue_ids(
+            app.clone(),
+            shared.db.clone(),
+            shared.peaks_dir.clone(),
+            became_local,
+        );
+    }
+
     if !new_files.is_empty() {
         let mode = shared
             .db
@@ -230,7 +250,11 @@ fn handle_events(
                 .with_conn(|conn| indexer::index_paths(conn, &new_files))?;
             if indexed > 0 {
                 changed = true;
-                crate::analyze::enqueue_unanalyzed(app.clone(), shared.db.clone());
+                crate::analyze::enqueue_unanalyzed(
+                    app.clone(),
+                    shared.db.clone(),
+                    shared.peaks_dir.clone(),
+                );
                 let notify = shared
                     .db
                     .with_conn(|conn| {
@@ -277,6 +301,8 @@ pub fn restart(app: &AppHandle, shared: &Arc<WatchShared>, guard_slot: &Mutex<Op
         })
         .unwrap_or_default();
 
+    let n_roots = roots.len();
+    let reg_start = Instant::now();
     let mut slot = guard_slot
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -286,4 +312,10 @@ pub fn restart(app: &AppHandle, shared: &Arc<WatchShared>, guard_slot: &Mutex<Op
         Ok(guard) => *slot = Some(guard),
         Err(e) => eprintln!("failed to start watches: {e}"),
     }
+    drop(slot);
+    crate::profile_log::event(
+        "watch.register",
+        reg_start.elapsed(),
+        &format!("roots={n_roots}"),
+    );
 }

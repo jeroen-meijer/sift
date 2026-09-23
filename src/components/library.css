@@ -678,6 +678,18 @@ body.col-reordering * {
   color: var(--color-danger-ink);
 }
 
+.row-cloud-badge {
+  flex: none;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  border: 1px solid color-mix(in srgb, var(--color-text-muted) 50%, transparent);
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
 .sample-row .col.type {
   font-size: 11px;
   color: var(--color-text-muted);
