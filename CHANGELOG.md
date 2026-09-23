@@ -1,5 +1,10 @@
 ## Upcoming
 
+- fix(library): arrow keys scroll selection into view; showParent clears filters and reveals the sample
+- feat(library): list the whole library when no folder is selected (limit 25k); center empty state
+- fix(ui): default user-select none; keep path/name in the detail pane selectable
+- perf(analyze): shared ~1 GiB PCM budget instead of one-at-a-time large-file lock
+- perf(audio): decode cache evicts by byte budget (~256 MB) instead of entry count
 - fix(table): drop lite/fast-scroll mode (tags were delayed); overscan 40; keep cached waves while scrolling
 - fix(table): keep cached row waveforms while scrolling fast (do not clearRect on lite/paint budget); overscan 28; void marks ignore rubber-band scrollTop
 - perf(table): light rows (text only) while scrolling fast, full rows ~140 ms after; static SVG row icons instead of icon components; row lines drawn as a repeating tile behind the list

@@ -10,7 +10,7 @@ Goal, in order: input and scroll never stall; memory has a fixed ceiling; backgr
 
 ## Status (handoff, 2026-09-23)
 
-Nothing is committed. All checks pass: `cargo clippy -D warnings`, 49 Rust tests, ESLint, `tsc`, 146 Vitest tests. Open bugs and next steps live in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); read that first.
+Phase A is on `main` (`06e1107`). Follow-ups in flight: KNOWN_ISSUES UX fixes, analyze PCM budget, decode-cache byte budget. Open bugs and next steps live in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); read that first.
 
 ### Phase A: implemented (A1 to A7) and profiled once
 

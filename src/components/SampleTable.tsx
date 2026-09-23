@@ -5,7 +5,7 @@ import {
   CircleNotchIcon,
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   clampColumnWidth,
@@ -28,6 +28,11 @@ import { formatCount } from "../lib/format";
 import type { SampleRow, SortColumn, SortDirection } from "../lib/ipc";
 import type { OptionalColumn } from "../lib/omni";
 import { isProfileOn, profileMark, useRenderTiming } from "../lib/profile";
+
+/** Exposed so LibraryView can keep arrow-key selection on screen. */
+export interface SampleTableScrollApi {
+  scrollToIndex: (index: number) => void;
+}
 import { peaksQueueSnapshot, requestVisible } from "../lib/rowPeaks";
 import { assignSlots, emptySlots, type SlotState } from "../lib/rowSlots";
 import { useStableCallback } from "../lib/useStableCallback";
@@ -73,8 +78,8 @@ interface Props {
   sortDirection: SortDirection;
   highlightText: string;
   hoverPreviewHeld: boolean;
-  /** True when the empty state should ask for a folder (no query scope yet). */
-  selectFolderHint?: boolean;
+  /** Imperative scroll API for arrow-key selection (virtualizer.scrollToIndex). */
+  scrollApiRef?: RefObject<SampleTableScrollApi | null>;
   onSelect: (id: number, e: React.MouseEvent) => void;
   onHoverPreview: (id: number) => void;
   onToggleFavorite: (id: number, favorite: boolean) => void;
@@ -101,7 +106,7 @@ export const SampleTable = memo(function SampleTable({
   sortDirection,
   highlightText,
   hoverPreviewHeld,
-  selectFolderHint = false,
+  scrollApiRef,
   onSelect,
   onHoverPreview,
   onToggleFavorite,
@@ -152,6 +157,18 @@ export const SampleTable = memo(function SampleTable({
     estimateSize: () => ROW_HEIGHT,
     overscan: ROW_OVERSCAN,
   });
+
+  useEffect(() => {
+    if (!scrollApiRef) return;
+    scrollApiRef.current = {
+      scrollToIndex: (index: number) => {
+        virtualizer.scrollToIndex(index, { align: "auto" });
+      },
+    };
+    return () => {
+      scrollApiRef.current = null;
+    };
+  }, [scrollApiRef, virtualizer]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const rangeStart = virtualItems[0]?.index ?? 0;
@@ -550,35 +567,33 @@ export const SampleTable = memo(function SampleTable({
               />
             );
           })}
-
-          {loading && samples.length === 0 ? (
-            <div className="sample-table-empty" role="status" aria-live="polite">
-              <div className="sample-table-loading">
-                <CircleNotchIcon size={28} className="sample-table-spin" aria-hidden />
-                <div className="sample-table-empty-title">{t("loadingSamples")}</div>
-              </div>
-            </div>
-          ) : null}
-
-          {!loading && samples.length === 0 ? (
-            <div className="sample-table-empty">
-              <div>
-                <MagnifyingGlassIcon size={26} />
-                <div className="sample-table-empty-title">
-                  {t(selectFolderHint ? "emptySelectFolderTitle" : "emptyTitle")}
-                </div>
-                <div className="sample-table-empty-body">
-                  {t(selectFolderHint ? "emptySelectFolderBody" : "emptyBody")}
-                  <br />
-                  {t("emptyCount", {
-                    count: indexedCount,
-                    formatted: formatCount(indexedCount),
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
+
+        {loading && samples.length === 0 ? (
+          <div className="sample-table-empty" role="status" aria-live="polite">
+            <div className="sample-table-loading">
+              <CircleNotchIcon size={28} className="sample-table-spin" aria-hidden />
+              <div className="sample-table-empty-title">{t("loadingSamples")}</div>
+            </div>
+          </div>
+        ) : null}
+
+        {!loading && samples.length === 0 ? (
+          <div className="sample-table-empty">
+            <div>
+              <MagnifyingGlassIcon size={26} />
+              <div className="sample-table-empty-title">{t("emptyTitle")}</div>
+              <div className="sample-table-empty-body">
+                {t("emptyBody")}
+                <br />
+                {t("emptyCount", {
+                  count: indexedCount,
+                  formatted: formatCount(indexedCount),
+                })}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ import { FolderSidebar } from "./FolderSidebar";
 import { EMPTY_OMNI, omniHasQuery, type OmniState, type OptionalColumn } from "../lib/omni";
 import { OmniSearch } from "./OmniSearch";
 import { SampleMenu, type SampleAction } from "./SampleMenu";
-import { SampleTable } from "./SampleTable";
+import { SampleTable, type SampleTableScrollApi } from "./SampleTable";
 import { SelectionBar } from "./SelectionBar";
 import { StatusBar } from "./StatusBar";
 import { CustomAnalysisDialog } from "./dialogs/CustomAnalysisDialog";
@@ -37,6 +37,8 @@ import { TagPickerDialog } from "./dialogs/TagPickerDialog";
 import type { Selection } from "./WaveformView";
 
 const PLAYHEAD_POLL_MS = 50;
+/** Cap for unscoped / broad list_samples. Covers a 20k library; D3 windows later. */
+const LIST_SAMPLES_LIMIT = 25_000;
 /** Wait for the selection to settle before writing a clip for it. */
 const CLIP_RENDER_DEBOUNCE_MS = 250;
 const MIN_CLIP_SECS = 0.01;
@@ -110,6 +112,9 @@ export function LibraryView({
   const listApplyAt = useRef<{ at: number; n: number } | null>(null);
   /** Folder whose cloud rows were last re-statted (availability check). */
   const availCheckedFolder = useRef<string | null>(null);
+  const tableScrollRef = useRef<SampleTableScrollApi | null>(null);
+  /** After showParent (or similar), scroll this id into view once the list loads. */
+  const pendingScrollId = useRef<number | null>(null);
   const [hoverPreviewHeld, setHoverPreviewHeld] = useState(false);
 
   /*
@@ -161,19 +166,6 @@ export function LibraryView({
   /* ── data ──────────────────────────────────────────────────────────── */
 
   const refreshSamples = useCallback(async () => {
-    const hasScope =
-      Boolean(omni.folder) ||
-      Boolean(omni.text) ||
-      omni.tags.length > 0 ||
-      omni.bpmMin != null ||
-      omni.bpmMax != null ||
-      Boolean(omni.key) ||
-      favoritesOnly;
-    if (!hasScope) {
-      setSamples([]);
-      setSamplesLoading(false);
-      return;
-    }
     /* Keep showing rows while a filter refreshes; only spin when the list is empty. */
     if (samplesRef.current.length === 0) setSamplesLoading(true);
     try {
@@ -191,7 +183,7 @@ export function LibraryView({
         favorites_only: favoritesOnly,
         sort_column: settings.sort_column,
         sort_direction: settings.sort_direction,
-        limit: 5000,
+        limit: LIST_SAMPLES_LIMIT,
         offset: 0,
       });
       const applyAt = performance.now();
@@ -255,6 +247,16 @@ export function LibraryView({
     if (!pending) return;
     listApplyAt.current = null;
     profileMark("fe.list_commit", performance.now() - pending.at, `n=${String(pending.n)}`);
+  }, [samples]);
+
+  /* Keep showParent (and similar) selection on screen once the list contains it. */
+  useLayoutEffect(() => {
+    const id = pendingScrollId.current;
+    if (id == null) return;
+    const idx = samples.findIndex((s) => s.id === id);
+    if (idx < 0) return;
+    pendingScrollId.current = null;
+    tableScrollRef.current?.scrollToIndex(idx);
   }, [samples]);
 
   /** Full refresh: list, tree, stats and tags. For structural changes only. */
@@ -575,7 +577,11 @@ export function LibraryView({
           break;
         }
         case "showParent":
-          setOmni((prev) => ({ ...prev, folder: sample.parent_path }));
+          pendingScrollId.current = sample.id;
+          setFocusedId(sample.id);
+          setSelectedIds(new Set([sample.id]));
+          setFavoritesOnly(false);
+          setOmni({ ...EMPTY_OMNI, folder: sample.parent_path });
           break;
         case "reveal":
           void revealItemInDir(sample.path).catch(console.error);
@@ -766,6 +772,7 @@ export function LibraryView({
         if (!row) return;
         setFocusedId(row.id);
         setSelectedIds(new Set([row.id]));
+        tableScrollRef.current?.scrollToIndex(next);
       }
     };
 
@@ -964,15 +971,6 @@ export function LibraryView({
     if (focused) setDialog({ kind: "removeMissing", sample: focused });
   });
 
-  const selectFolderHint =
-    !omni.folder &&
-    !omni.text &&
-    omni.tags.length === 0 &&
-    omni.bpmMin == null &&
-    omni.bpmMax == null &&
-    !omni.key &&
-    !favoritesOnly;
-
   return (
     <>
       <div className="library-layout">
@@ -1021,7 +1019,7 @@ export function LibraryView({
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
             hoverPreviewHeld={hoverPreviewHeld}
-            selectFolderHint={selectFolderHint}
+            scrollApiRef={tableScrollRef}
             onSelect={onSelectRow}
             onHoverPreview={onHoverPreview}
             onToggleFavorite={onToggleFavoriteRow}
