@@ -319,15 +319,25 @@
   pointer-events: none;
 }
 
+/* Full-width layer shifted by the played fraction (see usePlayheadStyle). */
+.wave-playhead-track {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform;
+}
+
 .wave-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 0;
   z-index: 6;
   width: 1.5px;
   background: var(--color-text);
   pointer-events: none;
-  will-change: left;
 }
 
 .wave-hover-cursor {
@@ -343,6 +353,7 @@
 .wave-playhead-cap {
   position: absolute;
   top: 0;
+  left: 0;
   z-index: 6;
   width: 9px;
   height: 5px;

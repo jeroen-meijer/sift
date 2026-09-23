@@ -5,6 +5,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { useLayoutEffect } from "react";
 
 let enabled: boolean | null = null;
 
@@ -162,4 +163,24 @@ export function __stopFeProfilersForTests(): void {
   }
   buffer.length = 0;
   enabled = null;
+}
+
+/** Renders shorter than this are not logged. */
+const RENDER_MARK_MIN_MS = 4;
+
+/**
+ * `fe.render` mark: time from this component's render body to its layout
+ * effect, which covers the render and commit of its whole subtree. Works in
+ * release builds, where React's `<Profiler>` reports nothing. Memoized
+ * components that skip rendering log nothing.
+ */
+export function useRenderTiming(id: string): void {
+  // Profile builds only: the render start time is the thing being measured.
+  // eslint-disable-next-line react-hooks/purity
+  const t0 = enabled === true ? performance.now() : 0;
+  useLayoutEffect(() => {
+    if (t0 === 0) return;
+    const ms = performance.now() - t0;
+    if (ms >= RENDER_MARK_MIN_MS) enqueueMark("fe.render", ms, `id=${id}`);
+  });
 }

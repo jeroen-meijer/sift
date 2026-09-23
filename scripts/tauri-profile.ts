@@ -20,9 +20,10 @@ process.env.SIFT_PROFILE_LOG = logPath;
 
 console.log(`[tauri:profile] SIFT_PROFILE=1`);
 console.log(`[tauri:profile] log → ${logPath}`);
-console.log(`[tauri:profile] starting tauri dev --release (first build can take a while)`);
+console.log(`[tauri:profile] starting tauri dev --release --features profile (first build can take a while)`);
+console.log(`[tauri:profile] right-click → Inspect Element opens Web Inspector`);
 
-const child = spawn("bunx", ["tauri", "dev", "--release"], {
+const child = spawn("bunx", ["tauri", "dev", "--release", "--features", "profile"], {
   cwd: root,
   env: process.env,
   stdio: "inherit",

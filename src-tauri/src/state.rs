@@ -1,7 +1,9 @@
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
 use crate::audio::{DecodeCache, PlayerEngine};
+use crate::changes::ChangeCoalescer;
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::paths::AppPaths;
@@ -15,7 +17,12 @@ pub struct AppState {
     /// Decoded PCM LRU for select→play / prefetch (see SPEC audition latency).
     pub decode_cache: Mutex<DecodeCache>,
     pub undo: Mutex<UndoStack>,
+    /// Highest play/stop/pause request number seen from the UI. A play whose
+    /// decode finishes after a newer request is dropped instead of started.
+    pub play_seq: AtomicU64,
     pub watch_shared: Arc<WatchShared>,
+    /// Merges library changes into at most one `library-changed` per window.
+    pub changes: Arc<ChangeCoalescer>,
     pub watch_guard: Arc<Mutex<Option<WatchGuard>>>,
     /// Where JIT clips are written. Settings can move it, so it is not in `paths`.
     clips_dir: Mutex<PathBuf>,
@@ -25,9 +32,11 @@ impl AppState {
     pub fn init() -> AppResult<Self> {
         let paths = AppPaths::resolve()?;
         let db = Arc::new(Db::open(&paths)?);
+        let changes = Arc::new(ChangeCoalescer::default());
         let watch_shared = Arc::new(WatchShared::new(
             Arc::clone(&db),
             paths.peaks_dir.clone(),
+            Arc::clone(&changes),
         ));
 
         let mut clips_dir = paths.clips_dir.clone();
@@ -65,7 +74,9 @@ impl AppState {
             player: Mutex::new(player),
             decode_cache: Mutex::new(DecodeCache::default()),
             undo: Mutex::new(UndoStack::default()),
+            play_seq: AtomicU64::new(0),
             watch_shared,
+            changes,
             watch_guard: Arc::new(Mutex::new(None)),
             clips_dir: Mutex::new(clips_dir),
         })

@@ -8,11 +8,13 @@ import {
   SlidersHorizontalIcon,
   StarIcon,
 } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
 import { formatCount } from "../lib/format";
 import { flattenTags, type FolderNode, type TagNode } from "../lib/ipc";
 import { tagPalette } from "../lib/tagColors";
+import { useRenderTiming } from "../lib/profile";
 
 interface Props {
   folders: FolderNode[];
@@ -26,7 +28,10 @@ interface Props {
   onManageTags: () => void;
 }
 
-export function FolderSidebar({
+/** Matches `.tree-row { height: 23px }` in library.css. */
+const FOLDER_ROW_HEIGHT = 23;
+
+export const FolderSidebar = memo(function FolderSidebar({
   folders,
   tags,
   selectedPath,
@@ -38,6 +43,7 @@ export function FolderSidebar({
   onManageTags,
 }: Props) {
   const { t } = useTranslation("library");
+  useRenderTiming("FolderSidebar");
   const { t: tc } = useTranslation("common");
   const [collapsedRoots, setCollapsedRoots] = useState<Set<string>>(() => new Set());
   const [tagsOpen, setTagsOpen] = useState(true);
@@ -50,6 +56,26 @@ export function FolderSidebar({
   }, [folders, collapsedRoots]);
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
+
+  /* 2.8k folders on a large Dropbox library: only mount what is on screen. */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: visibleFolders.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => FOLDER_ROW_HEIGHT,
+    overscan: 8,
+  });
+
+  /* Keep the selected folder in view when the selection changes (for example
+   * "show parent"), but not on every tree refresh. */
+  const scrolledToPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedPath || selectedPath === scrolledToPath.current) return;
+    const idx = visibleFolders.findIndex((n) => n.path === selectedPath);
+    if (idx < 0) return;
+    scrolledToPath.current = selectedPath;
+    virtualizer.scrollToIndex(idx, { align: "auto" });
+  }, [selectedPath, visibleFolders, virtualizer]);
 
   const toggleRoot = (path: string) => {
     setCollapsedRoots((prev) => {
@@ -74,17 +100,26 @@ export function FolderSidebar({
             <PlusIcon size={12} />
           </button>
         </div>
-        <div className="sidebar-scroll">
+        <div className="sidebar-scroll" ref={scrollRef}>
           {folders.length === 0 ? (
             <div className="sidebar-empty">{t("noRoots")}</div>
           ) : (
-            visibleFolders.map((node) => {
+            <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+              {virtualizer.getVirtualItems().map((virtual) => {
+                const node = visibleFolders[virtual.index];
+                if (!node) return null;
               const selected = selectedPath === node.path;
-              const collapsed = collapsedRoots.has(node.path);
-              return (
+                const collapsed = collapsedRoots.has(node.path);
+                return (
                 <div
                   key={node.path}
                   className={`tree-row${node.is_root ? " root" : ""}${selected ? " selected" : ""}`}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    transform: `translateY(${String(virtual.start)}px)`,
+                  }}
                   onContextMenu={(e) => {
                     if (!node.is_root) return;
                     e.preventDefault();
@@ -134,8 +169,9 @@ export function FolderSidebar({
                     )}
                   </button>
                 </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -199,4 +235,4 @@ export function FolderSidebar({
       </div>
     </aside>
   );
-}
+});

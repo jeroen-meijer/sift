@@ -6,7 +6,7 @@ import {
   StarIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { flattenTags, type SampleRow, type SnapMode, type TagNode } from "../lib/ipc";
 import type { PeakData, WaveformView as WaveformMode } from "../lib/ipc";
@@ -14,6 +14,7 @@ import { tagPalette } from "../lib/tagColors";
 import { Popover } from "../ui/Popover";
 import { TransportBar } from "./TransportBar";
 import { WaveformView, type Selection } from "./WaveformView";
+import { useRenderTiming } from "../lib/profile";
 
 interface Props {
   sample: SampleRow | null;
@@ -22,7 +23,8 @@ interface Props {
   snap: SnapMode;
   waveformMode: WaveformMode;
   coloredWaveforms: boolean;
-  playheadSecs: number | null;
+  /** True while this sample plays. */
+  playheadActive: boolean;
   selection: Selection | null;
   loopPreview: boolean;
   gainDb: number;
@@ -43,14 +45,14 @@ interface Props {
   onRemoveMissing: () => void;
 }
 
-export function DetailPane({
+export const DetailPane = memo(function DetailPane({
   sample,
   peaks,
   allTags,
   snap,
   waveformMode,
   coloredWaveforms,
-  playheadSecs,
+  playheadActive,
   selection,
   loopPreview,
   gainDb,
@@ -70,6 +72,7 @@ export function DetailPane({
   onRemoveMissing,
 }: Props) {
   const { t } = useTranslation("library");
+  useRenderTiming("DetailPane");
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [tagFilter, setTagFilter] = useState("");
 
@@ -250,7 +253,7 @@ export function DetailPane({
               snap={snap}
               mode={waveformMode}
               colored={coloredWaveforms}
-              playheadSecs={playheadSecs}
+              playheadActive={playheadActive}
               selection={selection}
               clipReady={clipReady}
               snapPointer={snapPointer}
@@ -271,4 +274,4 @@ export function DetailPane({
       )}
     </div>
   );
-}
+});

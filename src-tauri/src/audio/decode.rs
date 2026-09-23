@@ -3,10 +3,10 @@ use std::path::Path;
 
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, TrackType};
+use symphonia::core::formats::{FormatOptions, FormatReader, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
@@ -46,8 +46,73 @@ impl DecodedAudio {
     }
 }
 
-/// Decode an audio file to interleaved f32 PCM via Symphonia.
-pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
+/// Technical facts about decoded audio, kept after the PCM itself is dropped.
+#[derive(Debug, Clone, Copy)]
+pub struct TechInfo {
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub bit_depth_hint: Option<u32>,
+    pub duration_ms: f64,
+}
+
+impl DecodedAudio {
+    pub fn tech(&self) -> TechInfo {
+        TechInfo {
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+            bit_depth_hint: self.bit_depth_hint,
+            duration_ms: self.duration_ms(),
+        }
+    }
+}
+
+/// Average all channels into one mono signal.
+pub fn to_mono(pcm: &DecodedAudio) -> Vec<f32> {
+    let ch = usize::from(pcm.channels.max(1));
+    if ch == 1 {
+        return pcm.samples.clone();
+    }
+    pcm.samples.chunks_exact(ch).map(frame_mean).collect()
+}
+
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "channel downmix: float average over a fixed-size frame"
+)]
+fn frame_mean(frame: &[f32]) -> f32 {
+    if frame.is_empty() {
+        return 0.0;
+    }
+    frame.iter().sum::<f32>() / frame.len() as f32
+}
+
+/// A probed file with its decoder ready, before any packet is decoded.
+///
+/// Callers can look at `num_frames` / `channels` to size buffers or take a
+/// large-file permit before [`decode_all`] allocates PCM.
+pub struct OpenedAudio {
+    format: Box<dyn FormatReader>,
+    decoder: Box<dyn AudioDecoder>,
+    track_id: u32,
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub bit_depth_hint: Option<u32>,
+    /// Playable frame count from the container, when it states one.
+    pub num_frames: Option<u64>,
+}
+
+impl OpenedAudio {
+    /// Interleaved sample count (`frames * channels`) when the frame count is known.
+    pub fn expected_samples(&self) -> Option<u64> {
+        self.num_frames
+            .and_then(|f| f.checked_mul(u64::from(self.channels)))
+    }
+}
+
+/// Probe a file and build its decoder. Reads headers only.
+pub fn open_audio(path: &Path) -> AppResult<OpenedAudio> {
     let file = File::open(path)
         .map_err(|e| AppError::msg(format!("failed to open {}: {e}", path.display())))?;
     let mss = MediaSourceStream::new(
@@ -60,7 +125,7 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
         hint.with_extension(ext);
     }
 
-    let mut format = symphonia::default::get_probe()
+    let format = symphonia::default::get_probe()
         .probe(
             &hint,
             mss,
@@ -90,12 +155,39 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
         .map_or(1, |c| u16::try_from(c.count()).unwrap_or(1));
     let bit_depth_hint = audio_params.bits_per_sample;
 
-    let mut decoder = symphonia::default::get_codecs()
+    let decoder = symphonia::default::get_codecs()
         .make_audio_decoder(&audio_params, &AudioDecoderOptions::default())
         .map_err(|e| AppError::msg(format!("decoder init failed: {e}")))?;
 
-    let track_id = track.id;
-    let mut samples: Vec<f32> = Vec::new();
+    Ok(OpenedAudio {
+        format,
+        decoder,
+        track_id: track.id,
+        sample_rate,
+        channels,
+        bit_depth_hint,
+        num_frames: track.num_frames,
+    })
+}
+
+/// Decode every packet of an opened file to interleaved f32 PCM.
+pub fn decode_all(opened: OpenedAudio) -> AppResult<DecodedAudio> {
+    let OpenedAudio {
+        mut format,
+        mut decoder,
+        track_id,
+        sample_rate,
+        channels,
+        bit_depth_hint,
+        num_frames,
+    } = opened;
+
+    // Exact capacity when the container states a length: no doubling growth,
+    // no realloc copies of a large buffer.
+    let expected = num_frames
+        .and_then(|f| usize::try_from(f).ok())
+        .and_then(|f| f.checked_mul(usize::from(channels)));
+    let mut samples: Vec<f32> = Vec::with_capacity(expected.unwrap_or(0));
     let mut packet_scratch: Vec<f32> = Vec::new();
 
     loop {
@@ -127,10 +219,7 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
     }
 
     if samples.is_empty() {
-        return Err(AppError::msg(format!(
-            "no PCM decoded from {}",
-            path.display()
-        )));
+        return Err(AppError::msg("no PCM decoded"));
     }
 
     Ok(DecodedAudio {
@@ -141,37 +230,30 @@ pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
     })
 }
 
-/// Probe a file, decode enough to know duration/rate/channels, write technical columns.
-pub fn probe_and_update_sample(
-    conn: &mut SqliteConnection,
-    sample_id: i64,
-    path: &Path,
-) -> AppResult<DecodedAudio> {
-    let decoded = decode_file(path)?;
-    write_technical_fields(conn, sample_id, path, &decoded)?;
-    Ok(decoded)
+/// Decode an audio file to interleaved f32 PCM via Symphonia.
+pub fn decode_file(path: &Path) -> AppResult<DecodedAudio> {
+    decode_all(open_audio(path)?).map_err(|e| AppError::msg(format!("{e} ({})", path.display())))
 }
 
-/// Persist technical columns from an already-decoded buffer (caller decoded off the DB lock).
-pub fn write_technical_fields(
+/// Persist technical columns in one UPDATE.
+pub fn write_technical_info(
     conn: &mut SqliteConnection,
     sample_id: i64,
     path: &Path,
-    decoded: &DecodedAudio,
+    tech: &TechInfo,
 ) -> AppResult<()> {
     let format = path
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase);
-    let duration_ms = decoded.duration_ms();
-    let bit_depth = decoded.bit_depth_hint.and_then(|b| i32::try_from(b).ok());
+    let bit_depth = tech.bit_depth_hint.and_then(|b| i32::try_from(b).ok());
     let id = id_from_i64(sample_id)?;
 
     diesel::update(samples_dsl::samples.find(id))
         .set((
-            samples_dsl::sample_rate.eq(i32::try_from(decoded.sample_rate).ok()),
-            samples_dsl::channels.eq(Some(i32::from(decoded.channels))),
-            samples_dsl::duration_ms.eq(Some(duration_ms)),
+            samples_dsl::sample_rate.eq(i32::try_from(tech.sample_rate).ok()),
+            samples_dsl::channels.eq(Some(i32::from(tech.channels))),
+            samples_dsl::duration_ms.eq(Some(tech.duration_ms)),
             samples_dsl::updated_at.eq(utc_now()),
         ))
         .execute(conn)?;

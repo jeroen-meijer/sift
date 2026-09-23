@@ -1,11 +1,11 @@
 import { CircleNotchIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
+import { memo } from "react";
 import { formatCount } from "../lib/format";
+import { analysisStore } from "../lib/liveStores";
+import { useStoreSelector } from "../lib/store";
 
-export interface AnalysisBar {
-  done: number;
-  total: number;
-}
+export type { AnalysisBar } from "../lib/liveStores";
 
 interface Props {
   rootCount: number;
@@ -15,18 +15,18 @@ interface Props {
   /** True while the omni bar holds a query, which switches the count to "N results". */
   filtered?: boolean;
   statusText?: string | undefined;
-  analysis?: AnalysisBar | null | undefined;
 }
 
-export function StatusBar({
+/** Analysis progress comes from `analysisStore`, so progress ticks re-render only this bar. */
+export const StatusBar = memo(function StatusBar({
   rootCount,
   fileCount,
   shownCount,
   filtered = false,
   statusText,
-  analysis,
 }: Props) {
   const { t } = useTranslation("common");
+  const analysis = useStoreSelector(analysisStore, (s) => s.bar);
   const pct =
     analysis && analysis.total > 0
       ? Math.min(100, Math.round((analysis.done / analysis.total) * 100))
@@ -82,4 +82,4 @@ export function StatusBar({
       ) : null}
     </footer>
   );
-}
+});

@@ -13,8 +13,8 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use crate::perf::{
-        Analyzer, DEFAULT_BUCKETS, HeuristicAnalyzer, PathTokenAnalyzer, decode_file,
-        generate_peaks, render_clip,
+        AnalysisInput, Analyzer, DEFAULT_BUCKETS, HeuristicAnalyzer, PathTokenAnalyzer,
+        decode_file, generate_peaks, render_clip, to_mono,
     };
 
     fn examples_root() -> PathBuf {
@@ -104,15 +104,11 @@ mod tests {
 
     #[test]
     fn perf_path_token_analyze() {
-        let pcm = crate::audio::decode::DecodedAudio {
-            sample_rate: 44_100,
-            channels: 1,
-            bit_depth_hint: Some(16),
-            samples: vec![0.0; 256],
-        };
+        let mono = vec![0.0f32; 256];
+        let input = AnalysisInput::from_full_mono(&mono, 44_100);
         let path = Path::new("/library/Drums/Kick/Kick_Hard_01.wav");
         let result = measure("path_token_analyze", Duration::from_millis(50), || {
-            PathTokenAnalyzer.analyze(path, &pcm, 70.0, 180.0)
+            PathTokenAnalyzer.analyze(path, &input, 70.0, 180.0)
         });
         assert!(result.suggested_tag_paths.iter().any(|t| t == "Drums/Kick"));
     }
@@ -124,9 +120,11 @@ mod tests {
             return;
         };
         let decoded = decode_file(&path).expect("decode");
+        let mono = to_mono(&decoded);
+        let input = AnalysisInput::from_full_mono(&mono, decoded.sample_rate);
         // stratum-dsp is the heavy part; budget is for debug CI, not release.
         let result = measure("heuristic_analyze", Duration::from_secs(8), || {
-            HeuristicAnalyzer.analyze(&path, &decoded, 70.0, 180.0)
+            HeuristicAnalyzer.analyze(&path, &input, 70.0, 180.0)
         });
         assert!(result.sample_type.is_some());
     }

@@ -110,7 +110,11 @@ export function parseCssColor(raw: string): Rgb | null {
 
 /** Read theme band hues from an element's computed style. */
 export function readSpectralBands(el: Element): SpectralBandColors {
-  const styles = getComputedStyle(el);
+  return readSpectralBandsFrom(getComputedStyle(el));
+}
+
+/** Band hues from an already computed style (no extra style recalc). */
+export function readSpectralBandsFrom(styles: CSSStyleDeclaration): SpectralBandColors {
   const fallback: SpectralBandColors = {
     bass: [240, 96, 140],
     mid: [110, 210, 150],

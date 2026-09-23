@@ -1,5 +1,6 @@
 mod analyze;
 mod audio;
+mod changes;
 mod commands;
 mod db;
 mod error;
@@ -19,14 +20,16 @@ mod watch;
 /// Hot-path APIs for Criterion benches and soft perf budget tests.
 /// Not part of the Tauri IPC surface.
 pub mod perf {
-    pub use crate::analyze::{Analyzer, HeuristicAnalyzer, PathTokenAnalyzer};
-    pub use crate::audio::decode::{DecodedAudio, decode_file};
+    pub use crate::analyze::{AnalysisInput, Analyzer, HeuristicAnalyzer, PathTokenAnalyzer};
+    pub use crate::audio::decode::{DecodedAudio, decode_file, to_mono};
     pub use crate::audio::jit::render_clip;
     pub use crate::audio::peaks::{DEFAULT_BUCKETS, generate_peaks};
 }
 
 use state::AppState;
-use tauri::{Emitter, Manager};
+use std::sync::Arc;
+
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 // Tauri entry: `generate_context!` expands to a `process::exit`, and init failures
@@ -48,11 +51,10 @@ pub fn run() {
             // Backfill availability from live metadata, then resume analyze for locals.
             let db = state.db.clone();
             let peaks_dir = state.paths.peaks_dir.clone();
+            let changes = Arc::clone(&state.changes);
             std::thread::spawn(move || {
                 let start = std::time::Instant::now();
-                let refresh = db
-                    .with_conn(crate::samples::refresh_availability_all)
-                    .unwrap_or_default();
+                let refresh = crate::samples::refresh_availability_all(&db).unwrap_or_default();
                 crate::profile_log::event(
                     "avail.library_refresh",
                     start.elapsed(),
@@ -63,11 +65,15 @@ pub fn run() {
                     ),
                 );
                 if refresh.updated > 0 {
-                    let _ = handle.emit(
-                        "library-changed",
-                        watch::LibraryChangedPayload {
-                            reason: "availability".into(),
-                        },
+                    // Rows that changed but did not become local (for example
+                    // local → cloud) are rare; a structural refresh covers them.
+                    let only_became_local =
+                        u64::try_from(refresh.became_local_ids.len()).ok() == Some(refresh.updated);
+                    changes.push(
+                        &handle,
+                        "availability",
+                        !only_became_local,
+                        &refresh.became_local_ids,
                     );
                 }
                 crate::analyze::enqueue_unanalyzed(handle, db, peaks_dir);
@@ -86,6 +92,7 @@ pub fn run() {
             commands::reindex_root,
             commands::reindex_all,
             commands::list_samples,
+            commands::get_samples,
             commands::refresh_sample_availability,
             commands::set_sample_favorite,
             commands::set_sample_bpm,

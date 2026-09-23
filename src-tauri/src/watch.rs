@@ -11,6 +11,7 @@ use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, ne
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::changes::ChangeCoalescer;
 use crate::db::Db;
 use crate::db::settings;
 use crate::error::AppResult;
@@ -24,11 +25,6 @@ pub struct AskIndexPayload {
     pub paths: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct LibraryChangedPayload {
-    pub reason: String,
-}
-
 /// Keeps the debouncer alive. Dropping stops watches.
 pub struct WatchGuard {
     _debouncer: Debouncer<notify::RecommendedWatcher, RecommendedCache>,
@@ -37,14 +33,16 @@ pub struct WatchGuard {
 pub struct WatchShared {
     pub db: Arc<Db>,
     pub peaks_dir: PathBuf,
+    pub changes: Arc<ChangeCoalescer>,
     pub skip_paths: Mutex<HashSet<String>>,
 }
 
 impl WatchShared {
-    pub fn new(db: Arc<Db>, peaks_dir: PathBuf) -> Self {
+    pub fn new(db: Arc<Db>, peaks_dir: PathBuf, changes: Arc<ChangeCoalescer>) -> Self {
         Self {
             db,
             peaks_dir,
+            changes,
             skip_paths: Mutex::new(HashSet::new()),
         }
     }
@@ -98,7 +96,8 @@ fn handle_events(
     let mut removed: Vec<PathBuf> = Vec::new();
     let mut modified: Vec<PathBuf> = Vec::new();
     let mut renames: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let mut changed = false;
+    let mut structural = false;
+    let mut changed_ids: Vec<i64> = Vec::new();
     let mut became_local: Vec<i64> = Vec::new();
 
     for ev in events {
@@ -157,7 +156,7 @@ fn handle_events(
             .db
             .with_conn(|conn| samples::update_path(conn, &from_s, &to_s))?;
         if updated {
-            changed = true;
+            structural = true;
             // Drop create/remove for these paths if present
             created.retain(|p| p != to);
             removed.retain(|p| p != from);
@@ -173,20 +172,26 @@ fn handle_events(
             .db
             .with_conn(|conn| samples::mark_missing(conn, &path_s))?
         {
-            changed = true;
+            structural = true;
         }
     }
 
     for path in &modified {
         let path_s = path.to_string_lossy().to_string();
-        if let Some(refresh) = shared
-            .db
-            .with_conn(|conn| samples::refresh_technical(conn, &path_s))?
-        {
+        if let Some(refresh) = samples::refresh_technical(&shared.db, &path_s)? {
             if refresh.changed {
-                changed = true;
+                changed_ids.push(refresh.sample_id);
             }
             if refresh.became_local {
+                became_local.push(refresh.sample_id);
+            } else if refresh.content_changed {
+                // Stale waveform and technical fields: drop the peakfile so
+                // the analyze queue rebuilds it (and the status bar shows it).
+                let _ = std::fs::remove_file(
+                    shared
+                        .peaks_dir
+                        .join(format!("{}.peaks", refresh.sample_id)),
+                );
                 became_local.push(refresh.sample_id);
             }
         }
@@ -219,7 +224,7 @@ fn handle_events(
     if !became_local.is_empty() {
         became_local.sort_unstable();
         became_local.dedup();
-        changed = true;
+        changed_ids.extend_from_slice(&became_local);
         crate::analyze::enqueue_ids(
             app.clone(),
             shared.db.clone(),
@@ -249,7 +254,7 @@ fn handle_events(
                 .db
                 .with_conn(|conn| indexer::index_paths(conn, &new_files))?;
             if indexed > 0 {
-                changed = true;
+                structural = true;
                 crate::analyze::enqueue_unanalyzed(
                     app.clone(),
                     shared.db.clone(),
@@ -274,13 +279,8 @@ fn handle_events(
         }
     }
 
-    if changed {
-        let _ = app.emit(
-            "library-changed",
-            LibraryChangedPayload {
-                reason: "watch".into(),
-            },
-        );
+    if structural || !changed_ids.is_empty() {
+        shared.changes.push(app, "watch", structural, &changed_ids);
     }
     Ok(())
 }

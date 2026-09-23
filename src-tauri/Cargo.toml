@@ -49,6 +49,10 @@ moodbar-analysis = "0.7.1"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSEvent", "NSResponder"] }
 
+[features]
+# Profile builds (`bun run tauri:profile`): Web Inspector in release mode.
+profile = ["tauri/devtools"]
+
 [dev-dependencies]
 criterion = "0.8"
 tempfile = "3"

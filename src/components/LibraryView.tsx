@@ -1,5 +1,5 @@
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding, primaryModHeld, shiftHeld as isShiftHeld } from "../lib/bindings";
 import { bpmFromBeats } from "../lib/bpm";
@@ -17,8 +17,11 @@ import {
   type SortColumn,
   type TagNode,
 } from "../lib/ipc";
-import { cachedRowPeaks } from "../lib/rowPeaks";
-import { isProfileOn, profileEvent, profileMark } from "../lib/profile";
+import { playheadStore, rowChangesStore } from "../lib/liveStores";
+import { patchRows } from "../lib/patchRows";
+import { getRowPeaks } from "../lib/rowPeaks";
+import { isProfileOn, profileEvent, profileMark, useRenderTiming } from "../lib/profile";
+import { useStableCallback } from "../lib/useStableCallback";
 import { DetailPane } from "./DetailPane";
 import { FolderSidebar } from "./FolderSidebar";
 import { EMPTY_OMNI, omniHasQuery, type OmniState, type OptionalColumn } from "../lib/omni";
@@ -26,7 +29,7 @@ import { OmniSearch } from "./OmniSearch";
 import { SampleMenu, type SampleAction } from "./SampleMenu";
 import { SampleTable } from "./SampleTable";
 import { SelectionBar } from "./SelectionBar";
-import { StatusBar, type AnalysisBar } from "./StatusBar";
+import { StatusBar } from "./StatusBar";
 import { CustomAnalysisDialog } from "./dialogs/CustomAnalysisDialog";
 import { RemoveMissingDialog } from "./dialogs/RemoveMissingDialog";
 import { RemoveRootDialog } from "./dialogs/RemoveRootDialog";
@@ -37,6 +40,8 @@ const PLAYHEAD_POLL_MS = 50;
 /** Wait for the selection to settle before writing a clip for it. */
 const CLIP_RENDER_DEBOUNCE_MS = 250;
 const MIN_CLIP_SECS = 0.01;
+/** Neighbors longer than this are not decoded ahead of time. */
+const PREFETCH_MAX_DURATION_MS = 30_000;
 
 type Dialog =
   | { kind: "removeRoot"; node: FolderNode }
@@ -50,8 +55,6 @@ interface Props {
   stats: DbStats;
   folders: FolderNode[];
   tags: TagNode[];
-  analyzingIds: Set<number>;
-  analysisBar: AnalysisBar | null;
   statusText: string | undefined;
   /** Bumped by the shell whenever the library changed underneath us. */
   refreshToken: number;
@@ -67,8 +70,6 @@ export function LibraryView({
   stats,
   folders,
   tags,
-  analyzingIds,
-  analysisBar,
   statusText,
   refreshToken,
   onRefreshLibrary,
@@ -77,6 +78,7 @@ export function LibraryView({
   onAnalysisStart,
 }: Props) {
   const { t } = useTranslation("library");
+  useRenderTiming("LibraryView");
   const [omni, setOmni] = useState<OmniState>(EMPTY_OMNI);
   const [samples, setSamples] = useState<SampleRow[]>([]);
   const [samplesLoading, setSamplesLoading] = useState(true);
@@ -86,7 +88,6 @@ export function LibraryView({
   const [hiddenColumns, setHiddenColumns] = useState<Set<OptionalColumn>>(() => new Set());
   const [peaks, setPeaks] = useState<PeakData | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [playhead, setPlayhead] = useState<number | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [clipPath, setClipPath] = useState<string | null>(null);
   /** Scrubbing a row wave must not be overwritten by play-on-select from 0. */
@@ -106,17 +107,56 @@ export function LibraryView({
   });
   const shiftHeld = useRef(false);
   const samplesRef = useRef<SampleRow[]>([]);
+  const listApplyAt = useRef<{ at: number; n: number } | null>(null);
+  /** Folder whose cloud rows were last re-statted (availability check). */
+  const availCheckedFolder = useRef<string | null>(null);
   const [hoverPreviewHeld, setHoverPreviewHeld] = useState(false);
 
-  const focused = useMemo(
-    () => samples.find((s) => s.id === focusedId) ?? null,
+  /*
+   * The detail pane follows the sample you picked, not the current list: a
+   * search or folder change that filters it out must not clear the pane (or
+   * stop showing what is playing). `focusedRow` keeps the last known row; it
+   * changes when you pick another sample, when the row changes (for example
+   * it goes missing), or when the sample is deleted.
+   */
+  const [focusedRow, setFocusedRow] = useState<SampleRow | null>(null);
+  const inList = useMemo(
+    () => (focusedId == null ? null : (samples.find((s) => s.id === focusedId) ?? null)),
     [samples, focusedId],
   );
+  const focused = inList ?? (focusedRow?.id === focusedId ? focusedRow : null);
   const filtered = omniHasQuery(omni) || favoritesOnly;
 
   useEffect(() => {
     samplesRef.current = samples;
   }, [samples]);
+
+  /* Keep the detail row fresh while it is in the list; when it is not (search,
+   * folder change), ask the backend once: deleted clears it, anything else
+   * (including "missing") updates it. */
+  useEffect(() => {
+    if (focusedId == null) {
+      setFocusedRow(null);
+      return;
+    }
+    if (inList) {
+      setFocusedRow(inList);
+      return;
+    }
+    let alive = true;
+    void ipc
+      .getSamples([focusedId])
+      .then(([row]) => {
+        if (!alive) return;
+        if (row) setFocusedRow(row);
+        else setFocusedId(null);
+      })
+      .catch(console.error);
+    return () => {
+      alive = false;
+    };
+    /* refreshToken: a structural change (deleted, gone missing) re-checks it. */
+  }, [focusedId, inList, refreshToken]);
 
   /* ── data ──────────────────────────────────────────────────────────── */
 
@@ -157,19 +197,18 @@ export function LibraryView({
       const applyAt = performance.now();
       setSamples(rows);
       if (isProfileOn()) {
+        /* Round trip of the list IPC (Rust time is `ipc.list_samples`). */
         profileMark(
-          "fe.list_apply",
+          "fe.list_ipc",
           applyAt - t0,
           `n=${String(rows.length)} folder=${omni.folder ?? ""}`,
         );
-        queueMicrotask(() => {
-          profileMark(
-            "fe.list_apply_commit",
-            performance.now() - applyAt,
-            `n=${String(rows.length)}`,
-          );
-        });
+        listApplyAt.current = { at: applyAt, n: rows.length };
       }
+      /* Re-stat cloud rows once per folder open, not on every refresh. */
+      const folderKey = omni.folder ?? "";
+      if (availCheckedFolder.current === folderKey) return;
+      availCheckedFolder.current = folderKey;
       const cloudPaths = rows
         .filter((r) => r.availability === "cloud" || r.availability === "unknown")
         .map((r) => r.path)
@@ -210,10 +249,65 @@ export function LibraryView({
     void refreshSamples().catch(console.error);
   }, [refreshSamples, refreshToken]);
 
+  /* fe.list_commit: from setSamples to the table committed (profile builds). */
+  useLayoutEffect(() => {
+    const pending = listApplyAt.current;
+    if (!pending) return;
+    listApplyAt.current = null;
+    profileMark("fe.list_commit", performance.now() - pending.at, `n=${String(pending.n)}`);
+  }, [samples]);
+
+  /** Full refresh: list, tree, stats and tags. For structural changes only. */
   const reload = useCallback(() => {
     void refreshSamples().catch(console.error);
     onRefreshLibrary();
   }, [refreshSamples, onRefreshLibrary]);
+
+  /** Refetch these rows and swap them in place; the rest of the list is untouched. */
+  const patchFromServer = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
+    void ipc
+      .getSamples(ids)
+      .then((rows) => {
+        setSamples((prev) => patchRows(prev, rows));
+      })
+      .catch(console.error);
+  }, []);
+
+  /* Analysis results / availability flips from the backend: patch visible rows,
+   * and reload the detail waveform when the focused sample was just analyzed. */
+  const focusedIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    focusedIdRef.current = focusedId;
+  }, [focusedId]);
+  useEffect(
+    () =>
+      rowChangesStore.subscribe(() => {
+        const { ids } = rowChangesStore.get();
+        const present = new Set(samplesRef.current.map((s) => s.id));
+        const hit = ids.filter((id) => present.has(id));
+        patchFromServer(hit);
+        const focusId = focusedIdRef.current;
+        if (focusId != null && ids.includes(focusId) && !present.has(focusId)) {
+          /* The detail row is filtered out of the list: refresh it directly. */
+          void ipc
+            .getSamples([focusId])
+            .then(([row]) => {
+              if (row && focusedIdRef.current === focusId) setFocusedRow(row);
+            })
+            .catch(console.error);
+        }
+        if (focusId != null && ids.includes(focusId)) {
+          void ipc
+            .getPeaks(focusId)
+            .then((data) => {
+              if (focusedIdRef.current === focusId && data.bucket_count > 0) setPeaks(data);
+            })
+            .catch(() => undefined);
+        }
+      }),
+    [patchFromServer],
+  );
 
   /* ── preview ───────────────────────────────────────────────────────── */
 
@@ -253,19 +347,26 @@ export function LibraryView({
       setPeaks(null);
       return;
     }
+    /* Warm only the next row, and only short files: a full decode of a long
+     * file on every selection change cost memory and CPU for a guess. */
     const idx = samplesRef.current.findIndex((s) => s.id === focusedId);
     const warmIds: number[] = [];
-    for (const offset of [-1, 0, 1, 2]) {
-      const sample = samplesRef.current[idx + offset];
-      if (sample && !sample.missing && sample.availability === "local") {
-        warmIds.push(sample.id);
-      }
+    const next = samplesRef.current[idx + 1];
+    if (
+      next &&
+      !next.missing &&
+      next.availability === "local" &&
+      next.duration_ms != null &&
+      next.duration_ms <= PREFETCH_MAX_DURATION_MS
+    ) {
+      warmIds.push(next.id);
     }
     void ipc.prefetchDecode(warmIds).catch(() => {
       /* best-effort */
     });
+    /* Waits for analysis when the sample has no peakfile yet (front of the queue). */
     void ipc
-      .getPeaks(focusedId)
+      .getPeaks(focusedId, true)
       .then(setPeaks)
       .catch(() => {
         setPeaks(null);
@@ -281,7 +382,7 @@ export function LibraryView({
    * rAF so the playhead stays smooth on high-refresh displays. */
   useEffect(() => {
     if (playingId == null) {
-      setPlayhead(null);
+      playheadStore.set(null);
       return;
     }
     let pollTimer = 0;
@@ -294,7 +395,8 @@ export function LibraryView({
     const paint = (now: number) => {
       if (!alive) return;
       const secs = moving ? anchorSecs + (now - anchorAt) / 1000 : anchorSecs;
-      setPlayhead(secs);
+      /* Store write, not React state: only the playhead elements move. */
+      playheadStore.set(secs);
       raf = window.requestAnimationFrame(paint);
     };
 
@@ -428,9 +530,16 @@ export function LibraryView({
 
   const toggleFavorite = useCallback(
     (id: number, favorite: boolean) => {
-      void ipc.setFavorite(id, favorite).then(reload).catch(console.error);
+      /* Flip the star right away, then reconcile with the stored row. */
+      setSamples((prev) => prev.map((s) => (s.id === id ? { ...s, favorite } : s)));
+      void ipc
+        .setFavorite(id, favorite)
+        .then(() => {
+          patchFromServer([id]);
+        })
+        .catch(console.error);
     },
-    [reload],
+    [patchFromServer],
   );
 
   const runAction = useCallback(
@@ -442,8 +551,11 @@ export function LibraryView({
           break;
         case "favorite": {
           const next = !sample.favorite;
-          void Promise.all(targets.map((s) => ipc.setFavorite(s.id, next)))
-            .then(reload)
+          const ids = targets.map((s) => s.id);
+          void Promise.all(ids.map((id) => ipc.setFavorite(id, next)))
+            .then(() => {
+              patchFromServer(ids);
+            })
             .catch(console.error);
           break;
         }
@@ -454,8 +566,11 @@ export function LibraryView({
         case "type:one-shot":
         case "type:none": {
           const value = action === "type:none" ? null : action.slice("type:".length);
-          void Promise.all(targets.map((s) => ipc.setType(s.id, value)))
-            .then(reload)
+          const ids = targets.map((s) => s.id);
+          void Promise.all(ids.map((id) => ipc.setType(id, value)))
+            .then(() => {
+              patchFromServer(ids);
+            })
             .catch(console.error);
           break;
         }
@@ -485,7 +600,7 @@ export function LibraryView({
           break;
       }
     },
-    [analyze, reload, targetSamples],
+    [analyze, patchFromServer, targetSamples],
   );
 
   const menuTargets = useMemo(
@@ -497,10 +612,12 @@ export function LibraryView({
     (rows: SampleRow[], bpm: number | null) => {
       if (rows.length === 0) return;
       void Promise.all(rows.map((row) => ipc.setBpm(row.id, bpm)))
-        .then(reload)
+        .then(() => {
+          patchFromServer(rows.map((row) => row.id));
+        })
         .catch(console.error);
     },
-    [reload],
+    [patchFromServer],
   );
 
   /** Each row gets the BPM its own length implies, so a mixed selection works. */
@@ -511,10 +628,12 @@ export function LibraryView({
         .filter((edit): edit is { id: number; bpm: number } => edit.bpm != null);
       if (edits.length === 0) return;
       void Promise.all(edits.map((edit) => ipc.setBpm(edit.id, edit.bpm)))
-        .then(reload)
+        .then(() => {
+          patchFromServer(edits.map((edit) => edit.id));
+        })
         .catch(console.error);
     },
-    [reload, settings.bpm_round_whole],
+    [patchFromServer, settings.bpm_round_whole],
   );
 
   /* ── keyboard ──────────────────────────────────────────────────────── */
@@ -548,14 +667,14 @@ export function LibraryView({
       if (matchesBinding(e, keys.redo)) {
         e.preventDefault();
         void ipc.redo().then((ok) => {
-          if (ok) reload();
+          if (ok) void refreshSamples().catch(console.error);
         });
         return;
       }
       if (matchesBinding(e, keys.undo)) {
         e.preventDefault();
         void ipc.undo().then((ok) => {
-          if (ok) reload();
+          if (ok) void refreshSamples().catch(console.error);
         });
         return;
       }
@@ -666,7 +785,7 @@ export function LibraryView({
     focusedId,
     loopRegion,
     play,
-    reload,
+    refreshSamples,
     runAction,
     samples,
     selectedSamples,
@@ -689,6 +808,171 @@ export function LibraryView({
     return ids;
   }, [selectedSamples]);
 
+  /* ── stable props for memoized children ──────────────────────────────
+   * FolderSidebar, SampleTable, DetailPane, OmniSearch and StatusBar are
+   * memoized. Inline arrows would give them new props on every render, so
+   * every handler below keeps one identity for the life of the view. */
+
+  /* Changing folder or tag clears the multi-selection but keeps the detail
+   * pane on the sample you picked (it may keep playing). */
+  const onSelectFolder = useStableCallback((path: string) => {
+    setOmni((prev) => ({ ...prev, folder: path, tags: [] }));
+    setSelectedIds(new Set());
+  });
+  const onSelectTag = useStableCallback((path: string | null) => {
+    setOmni((prev) => ({ ...prev, tags: path ? [path] : [] }));
+    setSelectedIds(new Set());
+  });
+  const onRemoveRoot = useStableCallback((node: FolderNode) => {
+    setDialog({ kind: "removeRoot", node });
+  });
+  const onToggleHalfDouble = useStableCallback(() => {
+    onSettingChange("half_double_bpm", !settings.half_double_bpm);
+  });
+  const onToggleRelativeKey = useStableCallback(() => {
+    onSettingChange("relative_key", !settings.relative_key);
+  });
+  const onToggleWaveforms = useStableCallback(() => {
+    onSettingChange("row_waveforms", !settings.row_waveforms);
+  });
+  const onToggleFavoritesOnly = useStableCallback(() => {
+    setFavoritesOnly((on) => !on);
+  });
+  const onToggleColumn = useStableCallback((column: OptionalColumn) => {
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(column)) next.add(column);
+      return next;
+    });
+  });
+  const columnLabels = useMemo(
+    () => ({ type: t("colType"), bpm: t("colBpm"), key: t("colKey"), tags: t("colTags") }),
+    [t],
+  );
+  const columnWidths = useMemo(
+    () => mergeColumnWidths(settings.column_widths),
+    [settings.column_widths],
+  );
+  const columnOrder = useMemo(
+    () => mergeColumnOrder(settings.column_order),
+    [settings.column_order],
+  );
+  const onSelectRow = useStableCallback(selectRow);
+  const onHoverPreview = useStableCallback((id: number) => {
+    skipPlayOnSelect.current = true;
+    setFocusedId(id);
+    play(id, 0, null);
+  });
+  const onToggleFavoriteRow = useStableCallback(toggleFavorite);
+  const onSort = useStableCallback((column: SortColumn) => {
+    if (settings.sort_column === column) {
+      if (settings.sort_direction === "asc") {
+        onSettingChange("sort_direction", "desc");
+      } else {
+        /* Third click: drop column sort and return to name ascending. */
+        onSettingChange("sort_column", "name");
+        onSettingChange("sort_direction", "asc");
+      }
+    } else {
+      onSettingChange("sort_column", column);
+      onSettingChange("sort_direction", "asc");
+    }
+  });
+  const onColumnWidthsChange = useStableCallback((widths: ColumnWidths) => {
+    onSettingChange("column_widths", widths);
+  });
+  const onColumnOrderChange = useStableCallback((order: ResizableColumn[]) => {
+    onSettingChange("column_order", order);
+  });
+  const onOpenMenu = useStableCallback((x: number, y: number, sample: SampleRow) => {
+    setMenu({ x, y, sample });
+  });
+  const onDragSelected = useStableCallback(dragSelected);
+  const onScrubRow = useStableCallback((sample: SampleRow, fraction: number) => {
+    const fromSample = (sample.duration_ms ?? 0) / 1000;
+    const fromPeaks = (getRowPeaks(sample.id)?.duration_ms ?? 0) / 1000;
+    const duration = fromSample > 0 ? fromSample : fromPeaks;
+    const start = duration > 0 ? fraction * duration : 0;
+    skipPlayOnSelect.current = true;
+    setFocusedId(sample.id);
+    setSelectedIds(new Set([sample.id]));
+    playheadStore.set(start);
+    play(sample.id, start, null);
+  });
+
+  const onDetailToggleFavorite = useStableCallback(() => {
+    if (focused) toggleFavorite(focused.id, !focused.favorite);
+  });
+  const onDetailAddTag = useStableCallback((tagId: number) => {
+    if (!focused) return;
+    const id = focused.id;
+    void ipc
+      .addSampleTag(id, tagId)
+      .then(() => {
+        patchFromServer([id]);
+      })
+      .catch(console.error);
+  });
+  const onDetailRemoveTag = useStableCallback((tagId: number) => {
+    if (!focused) return;
+    const id = focused.id;
+    void ipc
+      .removeSampleTag(id, tagId)
+      .then(() => {
+        patchFromServer([id]);
+      })
+      .catch(console.error);
+  });
+  const onDetailSeek = useStableCallback((secs: number) => {
+    if (focusedId == null) return;
+    const snapped = snapSecs(secs);
+    const region = loopRegion(focused, selection);
+    play(focusedId, snapped, region);
+    playheadStore.set(snapped);
+  });
+  const onDetailSnapPointer = useStableCallback(snapSecs);
+  const onDetailSelect = useStableCallback((next: Selection | null) => {
+    const snapped = next ? { start: snapSecs(next.start), end: snapSecs(next.end) } : null;
+    setSelection(snapped);
+    if (focusedId == null || !focused || focused.missing) return;
+    const region = loopRegion(focused, snapped);
+    if (region) {
+      if (playingId === focusedId) {
+        void ipc.setPlayRegion(region).catch(console.error);
+      } else {
+        play(focusedId, region.start, region);
+      }
+    } else if (!snapped && playingId === focusedId) {
+      void ipc.setPlayRegion(null).catch(console.error);
+    }
+  });
+  const onDetailDragClip = useStableCallback(dragClip);
+  const onSnapChange = useStableCallback((snap: AppSettings["snap"]) => {
+    onSettingChange("snap", snap);
+  });
+  const onLoopChange = useStableCallback((on: boolean) => {
+    onSettingChange("loop_preview", on);
+  });
+  const onGainChange = useStableCallback((db: number) => {
+    onSettingChange("preview_gain_db", db);
+  });
+  const onRecheckPath = useStableCallback(reload);
+  const onLocate = useStableCallback(() => {
+    if (focused) void revealItemInDir(focused.parent_path).catch(console.error);
+  });
+  const onRemoveMissing = useStableCallback(() => {
+    if (focused) setDialog({ kind: "removeMissing", sample: focused });
+  });
+
+  const selectFolderHint =
+    !omni.folder &&
+    !omni.text &&
+    omni.tags.length === 0 &&
+    omni.bpmMin == null &&
+    omni.bpmMax == null &&
+    !omni.key &&
+    !favoritesOnly;
+
   return (
     <>
       <div className="library-layout">
@@ -697,20 +981,10 @@ export function LibraryView({
           tags={tags}
           selectedPath={omni.folder}
           selectedTagPath={omni.tags[0] ?? null}
-          onSelectFolder={(path) => {
-            setOmni((prev) => ({ ...prev, folder: path, tags: [] }));
-            setSelectedIds(new Set());
-            setFocusedId(null);
-          }}
-          onSelectTag={(path) => {
-            setOmni((prev) => ({ ...prev, tags: path ? [path] : [] }));
-            setSelectedIds(new Set());
-            setFocusedId(null);
-          }}
+          onSelectFolder={onSelectFolder}
+          onSelectTag={onSelectTag}
           onAddRoot={onAddRoot}
-          onRemoveRoot={(node) => {
-            setDialog({ kind: "removeRoot", node });
-          }}
+          onRemoveRoot={onRemoveRoot}
           onManageTags={onManageTags}
         />
 
@@ -721,34 +995,15 @@ export function LibraryView({
             folders={folders}
             halfDouble={settings.half_double_bpm}
             relativeKey={settings.relative_key}
-            onToggleHalfDouble={() => {
-              onSettingChange("half_double_bpm", !settings.half_double_bpm);
-            }}
-            onToggleRelativeKey={() => {
-              onSettingChange("relative_key", !settings.relative_key);
-            }}
+            onToggleHalfDouble={onToggleHalfDouble}
+            onToggleRelativeKey={onToggleRelativeKey}
             showWaveforms={settings.row_waveforms}
-            onToggleWaveforms={() => {
-              onSettingChange("row_waveforms", !settings.row_waveforms);
-            }}
+            onToggleWaveforms={onToggleWaveforms}
             favoritesOnly={favoritesOnly}
-            onToggleFavoritesOnly={() => {
-              setFavoritesOnly((on) => !on);
-            }}
+            onToggleFavoritesOnly={onToggleFavoritesOnly}
             hiddenColumns={hiddenColumns}
-            onToggleColumn={(column) => {
-              setHiddenColumns((prev) => {
-                const next = new Set(prev);
-                if (!next.delete(column)) next.add(column);
-                return next;
-              });
-            }}
-            columnLabels={{
-              type: t("colType"),
-              bpm: t("colBpm"),
-              key: t("colKey"),
-              tags: t("colTags"),
-            }}
+            onToggleColumn={onToggleColumn}
+            columnLabels={columnLabels}
           />
 
           <SampleTable
@@ -757,72 +1012,25 @@ export function LibraryView({
             loading={samplesLoading}
             selectedIds={selectedIds}
             playingId={playingId}
-            playingProgress={
-              playhead != null && peaks && peaks.duration_ms > 0
-                ? Math.min(1, playhead / (peaks.duration_ms / 1000))
-                : null
-            }
-            analyzingIds={analyzingIds}
             showWaveforms={settings.row_waveforms}
             coloredWaveforms={settings.colored_waveforms}
             hiddenColumns={hiddenColumns}
-            columnWidths={mergeColumnWidths(settings.column_widths)}
-            columnOrder={mergeColumnOrder(settings.column_order)}
+            columnWidths={columnWidths}
+            columnOrder={columnOrder}
             sortColumn={settings.sort_column}
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
             hoverPreviewHeld={hoverPreviewHeld}
-            selectFolderHint={
-              !omni.folder &&
-              !omni.text &&
-              omni.tags.length === 0 &&
-              omni.bpmMin == null &&
-              omni.bpmMax == null &&
-              !omni.key &&
-              !favoritesOnly
-            }
-            onSelect={selectRow}
-            onHoverPreview={(id) => {
-              skipPlayOnSelect.current = true;
-              setFocusedId(id);
-              play(id, 0, null);
-            }}
-            onToggleFavorite={toggleFavorite}
-            onSort={(column: SortColumn) => {
-              if (settings.sort_column === column) {
-                if (settings.sort_direction === "asc") {
-                  onSettingChange("sort_direction", "desc");
-                } else {
-                  /* Third click: drop column sort and return to name ascending. */
-                  onSettingChange("sort_column", "name");
-                  onSettingChange("sort_direction", "asc");
-                }
-              } else {
-                onSettingChange("sort_column", column);
-                onSettingChange("sort_direction", "asc");
-              }
-            }}
-            onColumnWidthsChange={(widths: ColumnWidths) => {
-              onSettingChange("column_widths", widths);
-            }}
-            onColumnOrderChange={(order: ResizableColumn[]) => {
-              onSettingChange("column_order", order);
-            }}
-            onOpenMenu={(x, y, sample) => {
-              setMenu({ x, y, sample });
-            }}
-            onDragSelected={dragSelected}
-            onScrubRow={(sample, fraction) => {
-              const fromSample = (sample.duration_ms ?? 0) / 1000;
-              const fromPeaks = (cachedRowPeaks(sample.id)?.duration_ms ?? 0) / 1000;
-              const duration = fromSample > 0 ? fromSample : fromPeaks;
-              const start = duration > 0 ? fraction * duration : 0;
-              skipPlayOnSelect.current = true;
-              setFocusedId(sample.id);
-              setSelectedIds(new Set([sample.id]));
-              setPlayhead(start);
-              play(sample.id, start, null);
-            }}
+            selectFolderHint={selectFolderHint}
+            onSelect={onSelectRow}
+            onHoverPreview={onHoverPreview}
+            onToggleFavorite={onToggleFavoriteRow}
+            onSort={onSort}
+            onColumnWidthsChange={onColumnWidthsChange}
+            onColumnOrderChange={onColumnOrderChange}
+            onOpenMenu={onOpenMenu}
+            onDragSelected={onDragSelected}
+            onScrubRow={onScrubRow}
           />
 
           {selectedIds.size > 1 ? (
@@ -836,63 +1044,24 @@ export function LibraryView({
             snap={settings.snap}
             waveformMode={settings.waveform_view}
             coloredWaveforms={settings.colored_waveforms}
-            playheadSecs={playingId === focusedId ? playhead : null}
+            playheadActive={playingId != null && playingId === focusedId}
             selection={selection}
             loopPreview={settings.loop_preview}
             gainDb={settings.preview_gain_db}
-            onToggleFavorite={() => {
-              if (focused) toggleFavorite(focused.id, !focused.favorite);
-            }}
-            onAddTag={(tagId) => {
-              if (focused) void ipc.addSampleTag(focused.id, tagId).then(reload).catch(console.error);
-            }}
-            onRemoveTag={(tagId) => {
-              if (focused)
-                void ipc.removeSampleTag(focused.id, tagId).then(reload).catch(console.error);
-            }}
-            onSeek={(secs) => {
-              if (focusedId == null) return;
-              const snapped = snapSecs(secs);
-              const region = loopRegion(focused, selection);
-              play(focusedId, snapped, region);
-              setPlayhead(snapped);
-            }}
-            snapPointer={snapSecs}
-            onSelect={(next) => {
-              const snapped = next
-                ? { start: snapSecs(next.start), end: snapSecs(next.end) }
-                : null;
-              setSelection(snapped);
-              if (focusedId == null || !focused || focused.missing) return;
-              const region = loopRegion(focused, snapped);
-              if (region) {
-                if (playingId === focusedId) {
-                  void ipc.setPlayRegion(region).catch(console.error);
-                } else {
-                  play(focusedId, region.start, region);
-                }
-              } else if (!snapped && playingId === focusedId) {
-                void ipc.setPlayRegion(null).catch(console.error);
-              }
-            }}
+            onToggleFavorite={onDetailToggleFavorite}
+            onAddTag={onDetailAddTag}
+            onRemoveTag={onDetailRemoveTag}
+            onSeek={onDetailSeek}
+            snapPointer={onDetailSnapPointer}
+            onSelect={onDetailSelect}
             clipReady={clipPath != null}
-            onDragClip={dragClip}
-            onSnapChange={(snap) => {
-              onSettingChange("snap", snap);
-            }}
-            onLoopChange={(on) => {
-              onSettingChange("loop_preview", on);
-            }}
-            onGainChange={(db) => {
-              onSettingChange("preview_gain_db", db);
-            }}
-            onRecheckPath={reload}
-            onLocate={() => {
-              if (focused) void revealItemInDir(focused.parent_path).catch(console.error);
-            }}
-            onRemoveMissing={() => {
-              if (focused) setDialog({ kind: "removeMissing", sample: focused });
-            }}
+            onDragClip={onDetailDragClip}
+            onSnapChange={onSnapChange}
+            onLoopChange={onLoopChange}
+            onGainChange={onGainChange}
+            onRecheckPath={onRecheckPath}
+            onLocate={onLocate}
+            onRemoveMissing={onRemoveMissing}
           />
         </main>
       </div>
@@ -903,7 +1072,6 @@ export function LibraryView({
         shownCount={samples.length}
         filtered={filtered}
         statusText={statusText}
-        analysis={analysisBar}
       />
 
       {menu ? (
@@ -927,8 +1095,11 @@ export function LibraryView({
           }}
           onSetKey={(key) => {
             if (menuTargets.length === 0) return;
-            void Promise.all(menuTargets.map((row) => ipc.setKey(row.id, key)))
-              .then(reload)
+            const ids = menuTargets.map((row) => row.id);
+            void Promise.all(ids.map((id) => ipc.setKey(id, key)))
+              .then(() => {
+                patchFromServer(ids);
+              })
               .catch(console.error);
           }}
           onSelect={runAction}
@@ -1006,12 +1177,13 @@ export function LibraryView({
           checkedIds={commonTagIds}
           sampleCount={selectedSamples.length}
           onToggle={(tagId, next) => {
+            const ids = selectedSamples.map((s) => s.id);
             void Promise.all(
-              selectedSamples.map((s) =>
-                next ? ipc.addSampleTag(s.id, tagId) : ipc.removeSampleTag(s.id, tagId),
-              ),
+              ids.map((id) => (next ? ipc.addSampleTag(id, tagId) : ipc.removeSampleTag(id, tagId))),
             )
-              .then(reload)
+              .then(() => {
+                patchFromServer(ids);
+              })
               .catch(console.error);
           }}
           onClose={() => {
