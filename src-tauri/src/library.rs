@@ -1,8 +1,7 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use diesel::dsl::count_star;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use serde::Serialize;
@@ -112,6 +111,10 @@ pub fn set_folder_favorite(
     Ok(())
 }
 
+/// Build the sidebar from indexed sample paths (no filesystem walk).
+///
+/// Only folders that contain indexed samples (or are ancestors of those) appear.
+/// Safe on Dropbox / File Provider roots.
 pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec<FolderNode>> {
     let roots = list_roots(conn)?;
     let favs: HashSet<String> = fav_dsl::favorite_folders
@@ -120,92 +123,140 @@ pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec
         .into_iter()
         .collect();
 
-    let mut out = Vec::new();
-    for root in roots {
-        out.push(FolderNode {
-            path: root.path.clone(),
-            name: root.label.clone(),
-            root_id: root.id,
-            depth: 0,
-            is_root: true,
-            favorite: favs.contains(&root.path),
-            sample_count: count_under(conn, &root.path)?,
-        });
-        walk_dirs(
-            conn,
-            Path::new(&root.path),
-            root.id,
-            1,
-            max_depth,
-            &favs,
-            &mut out,
-        )?;
+    let rows: Vec<(i32, String, String)> = samples_dsl::samples
+        .filter(samples_dsl::missing.eq(0))
+        .select((
+            samples_dsl::root_id,
+            samples_dsl::parent_path,
+            samples_dsl::path,
+        ))
+        .load(conn)?;
+
+    // Inclusive sample counts under each folder prefix (built from parent_path).
+    let root_by_id: HashMap<i32, &RootDto> = roots
+        .iter()
+        .map(|r| (id_from_i64(r.id).unwrap_or(0), r))
+        .collect();
+
+    // All folder paths that should appear (ancestors of parents, capped by depth).
+    let mut folder_set: HashSet<(i32, String)> = HashSet::new();
+    for (root_id_i32, parent, _) in &rows {
+        let Some(root) = root_by_id.get(root_id_i32) else {
+            continue;
+        };
+        let mut cur = parent.clone();
+        loop {
+            let depth = depth_under_root(&root.path, &cur);
+            if depth <= max_depth {
+                folder_set.insert((*root_id_i32, cur.clone()));
+            }
+            if cur == root.path {
+                break;
+            }
+            let Some(parent_path) = Path::new(&cur).parent() else {
+                break;
+            };
+            let next = parent_path.to_string_lossy().to_string();
+            if next.is_empty() || next == cur {
+                break;
+            }
+            cur = next;
+        }
+        folder_set.insert((*root_id_i32, root.path.clone()));
     }
-    Ok(out)
+
+    // Inclusive counts: samples under folder prefix.
+    let mut inclusive: HashMap<(i32, String), i64> = HashMap::new();
+    for (root_id_i32, parent, _) in &rows {
+        let Some(root) = root_by_id.get(root_id_i32) else {
+            continue;
+        };
+        let mut cur = parent.clone();
+        loop {
+            let key = (*root_id_i32, cur.clone());
+            let n = inclusive.get(&key).copied().unwrap_or(0).saturating_add(1);
+            inclusive.insert(key, n);
+            if cur == root.path {
+                break;
+            }
+            let Some(parent_path) = Path::new(&cur).parent() else {
+                break;
+            };
+            let next = parent_path.to_string_lossy().to_string();
+            if next.is_empty() || next == cur {
+                break;
+            }
+            cur = next;
+        }
+    }
+
+    let mut nodes: Vec<FolderNode> = Vec::new();
+    // Ensure every root appears even with zero samples.
+    for root in &roots {
+        let rid = id_from_i64(root.id).unwrap_or(0);
+        folder_set.insert((rid, root.path.clone()));
+    }
+
+    let mut by_root: BTreeMap<i32, Vec<String>> = BTreeMap::new();
+    for (rid, path) in &folder_set {
+        by_root.entry(*rid).or_default().push(path.clone());
+    }
+
+    for root in &roots {
+        let rid = id_from_i64(root.id).unwrap_or(0);
+        let mut paths = by_root.remove(&rid).unwrap_or_default();
+        paths.sort_by_key(|p| (depth_under_root(&root.path, p), p.to_lowercase()));
+        for path in paths {
+            let depth = depth_under_root(&root.path, &path);
+            if depth > max_depth && path != root.path {
+                continue;
+            }
+            let name = if path == root.path {
+                root.label.clone()
+            } else {
+                Path::new(&path)
+                    .file_name()
+                    .map_or_else(|| path.clone(), |s| s.to_string_lossy().into_owned())
+            };
+            nodes.push(FolderNode {
+                path: path.clone(),
+                name,
+                root_id: root.id,
+                depth,
+                is_root: path == root.path,
+                favorite: favs.contains(&path),
+                sample_count: inclusive.get(&(rid, path)).copied().unwrap_or(0),
+            });
+        }
+    }
+
+    Ok(nodes)
 }
 
-fn count_under(conn: &mut SqliteConnection, prefix: &str) -> AppResult<i64> {
-    let like = format!("{}{}%", prefix, std::path::MAIN_SEPARATOR);
-    let n: i64 = samples_dsl::samples
-        .filter(
-            samples_dsl::path
-                .eq(prefix)
-                .or(samples_dsl::path.like(like)),
-        )
-        .select(count_star())
-        .first(conn)?;
-    Ok(n)
+fn depth_under_root(root: &str, path: &str) -> u32 {
+    if path == root {
+        return 0;
+    }
+    let rest = path.strip_prefix(root).unwrap_or(path);
+    let rest = rest.trim_start_matches(std::path::MAIN_SEPARATOR);
+    if rest.is_empty() {
+        return 0;
+    }
+    u32::try_from(rest.split(std::path::MAIN_SEPARATOR).count()).unwrap_or(u32::MAX)
 }
 
-fn walk_dirs(
-    conn: &mut SqliteConnection,
-    dir: &Path,
-    root_id: i64,
-    depth: u32,
-    max_depth: u32,
-    favs: &HashSet<String>,
-    out: &mut Vec<FolderNode>,
-) -> AppResult<()> {
-    if depth > max_depth {
-        return Ok(());
-    }
-    let Ok(entries) = fs::read_dir(dir) else {
-        return Ok(());
-    };
+#[cfg(test)]
+mod tests {
+    use super::depth_under_root;
 
-    let mut children: BTreeMap<String, PathBuf> = BTreeMap::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') {
-            continue;
-        }
-        children.insert(name, path);
+    #[test]
+    fn depth_root_is_zero() {
+        assert_eq!(depth_under_root("/a/b", "/a/b"), 0);
     }
 
-    for (name, path) in children {
-        let path_str = path.to_string_lossy().to_string();
-        out.push(FolderNode {
-            path: path_str.clone(),
-            name,
-            root_id,
-            depth,
-            is_root: false,
-            favorite: favs.contains(&path_str),
-            sample_count: count_under(conn, &path_str)?,
-        });
-        walk_dirs(
-            conn,
-            &path,
-            root_id,
-            depth.saturating_add(1),
-            max_depth,
-            favs,
-            out,
-        )?;
+    #[test]
+    fn depth_child() {
+        assert_eq!(depth_under_root("/a/b", "/a/b/c"), 1);
+        assert_eq!(depth_under_root("/a/b", "/a/b/c/d"), 2);
     }
-    Ok(())
 }

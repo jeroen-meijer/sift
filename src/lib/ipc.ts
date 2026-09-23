@@ -23,6 +23,8 @@ export interface SampleRow {
   extension: string;
   size_bytes: number | null;
   missing: boolean;
+  /** `local` | `cloud` | `missing` | `unknown` */
+  availability: string;
   sample_rate: number | null;
   bit_depth: number | null;
   channels: number | null;
@@ -124,10 +126,15 @@ export interface IndexProgress {
   done: boolean;
 }
 
+export interface AnalysisQueuePayload {
+  total: number;
+}
+
 export interface AnalysisProgress {
   sample_id: number;
   done: number;
   remaining: number;
+  total: number;
 }
 
 /* ── settings ────────────────────────────────────────────────────────── */
@@ -222,6 +229,8 @@ export const ipc = {
     listSamplesInflight.set(key, pending);
     return pending;
   },
+  refreshSampleAvailability: (paths: string[]) =>
+    invoke<number>("refresh_sample_availability", { paths }),
   setFavorite: (id: number, favorite: boolean) =>
     run("set_sample_favorite", { id, favorite }),
   setBpm: (id: number, bpm: number | null) => run("set_sample_bpm", { id, bpm }),

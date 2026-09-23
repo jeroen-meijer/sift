@@ -54,6 +54,8 @@
   "missingSamples": "Missing samples",
   "missingSamplesHint_one": "{{count}} indexed file is not on disk right now.",
   "missingSamplesHint_other": "{{count}} indexed files are not on disk right now.",
+  "onlineOnlyNote": "Online only is not Missing",
+  "onlineOnlyNoteHint": "Dropbox Online only stubs stay in the library with an Online only badge. They are not Missing. Preview, waveforms, and analysis wait until the file is on disk. Restart does not resume analysis. Use Reindex or Analyze.",
   "purgeMissing": "Remove all missing",
   "jitCache": "JIT clip cache",
   "change": "Change…",

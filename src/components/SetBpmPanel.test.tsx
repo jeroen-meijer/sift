@@ -15,6 +15,7 @@ function sample(overrides: Partial<SampleRow> = {}): SampleRow {
     extension: "wav",
     size_bytes: 1000,
     missing: false,
+    availability: "local",
     sample_rate: 44_100,
     bit_depth: 24,
     channels: 2,

@@ -65,6 +65,8 @@ diesel::table! {
         analyzed_at -> Nullable<Text>,
         created_at -> Text,
         updated_at -> Text,
+        availability -> Text,
+        availability_checked_at -> Nullable<Text>,
     }
 }
 

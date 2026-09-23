@@ -54,6 +54,8 @@ pub struct Sample {
     pub analyzed_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub availability: String,
+    pub availability_checked_at: Option<String>,
 }
 
 #[derive(Debug, Insertable)]
@@ -67,6 +69,8 @@ pub struct NewSample<'a> {
     pub size_bytes: Option<i64>,
     pub mtime_ms: Option<i64>,
     pub inode: Option<i64>,
+    pub availability: &'a str,
+    pub availability_checked_at: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable, AsChangeset)]

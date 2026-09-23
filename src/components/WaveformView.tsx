@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { paintWaveLane, syncCanvasSize } from "../lib/drawWaveform";
 import { formatSpan, formatTime } from "../lib/format";
 import type { PeakData, SnapMode, WaveformView as WaveformMode } from "../lib/ipc";
+import { isProfileOn, profileMark } from "../lib/profile";
 import { readSpectralBands } from "../lib/spectralColor";
 import { subscribeThemePaint } from "../theme/subscribeThemePaint";
 
@@ -123,6 +124,7 @@ export function WaveformView({
     const { width, height } = size;
 
     const paint = () => {
+      const t0 = isProfileOn() ? performance.now() : 0;
       const dpr = window.devicePixelRatio || 1;
       const ctx = syncCanvasSize(canvas, width, height, dpr);
       if (!ctx) return;
@@ -160,6 +162,13 @@ export function WaveformView({
         ctx.moveTo(0, laneHeight);
         ctx.lineTo(width, laneHeight);
         ctx.stroke();
+      }
+      if (isProfileOn()) {
+        profileMark(
+          "fe.detail_wave_paint",
+          performance.now() - t0,
+          `w=${String(width)} h=${String(height)} lanes=${String(lanes)} buckets=${String(peaks.bucket_count)}`,
+        );
       }
     };
 

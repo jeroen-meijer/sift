@@ -14,6 +14,7 @@ import {
   type TagNode,
 } from "../lib/ipc";
 import { useSettings } from "../lib/useSettings";
+import { warmProfile } from "../lib/profile";
 import { applyTheme } from "../theme";
 import { groupByFolder } from "../lib/askIndex";
 import { AskIndexToast } from "./AskIndexToast";
@@ -52,6 +53,10 @@ export function App() {
     applyTheme(settings.theme);
   }, [loaded, settings.theme]);
 
+  useEffect(() => {
+    void warmProfile();
+  }, []);
+
   const [view, setView] = useState<View>("library");
   const [stats, setStats] = useState<DbStats>(EMPTY_STATS);
   const [folders, setFolders] = useState<FolderNode[]>([]);
@@ -61,6 +66,7 @@ export function App() {
 
   const [indexStatus, setIndexStatus] = useState<string | undefined>();
   const [analysisBar, setAnalysisBar] = useState<AnalysisBar | null>(null);
+  /** Small set of sample ids mid-analyze (row chrome). Not the full queue. */
   const [analyzingIds, setAnalyzingIds] = useState<Set<number>>(() => new Set());
   const [askPaths, setAskPaths] = useState<string[]>([]);
 
@@ -95,9 +101,13 @@ export function App() {
   /* Backend events: indexing, analysis, watcher. */
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
+    let bumpTimer: ReturnType<typeof setTimeout> | undefined;
     const bump = () => {
-      refreshLibrary();
-      setRefreshToken((n) => n + 1);
+      if (bumpTimer) clearTimeout(bumpTimer);
+      bumpTimer = setTimeout(() => {
+        refreshLibrary();
+        setRefreshToken((n) => n + 1);
+      }, 150);
     };
 
     void listen<IndexProgress>("index-progress", ({ payload }) => {
@@ -109,15 +119,20 @@ export function App() {
       }
     }).then((fn) => unlisteners.push(fn));
 
-    void listen<number[]>("analysis-queue", ({ payload }) => {
-      setAnalyzingIds(new Set(payload));
-      setAnalysisBar({ done: 0, total: payload.length });
+    void listen<{ total: number }>("analysis-queue", ({ payload }) => {
+      setAnalyzingIds(new Set());
+      setAnalysisBar({ done: 0, total: payload.total });
     }).then((fn) => unlisteners.push(fn));
 
     void listen<AnalysisProgress>("analysis-progress", ({ payload }) => {
       setAnalyzingIds((prev) => {
         const next = new Set(prev);
-        next.delete(payload.sample_id);
+        if (payload.sample_id > 0) next.add(payload.sample_id);
+        /* Keep only a few active ids for row chrome. */
+        if (next.size > 8) {
+          const trimmed = [...next].slice(-8);
+          return new Set(trimmed);
+        }
         return next;
       });
       if (payload.remaining === 0) {
@@ -125,7 +140,8 @@ export function App() {
         setAnalyzingIds(new Set());
         bump();
       } else {
-        setAnalysisBar({ done: payload.done, total: payload.done + payload.remaining });
+        /* Shared queue: total can grow mid-run when more locals hydrate. */
+        setAnalysisBar({ done: payload.done, total: payload.total });
       }
     }).then((fn) => unlisteners.push(fn));
 
@@ -136,6 +152,7 @@ export function App() {
     }).then((fn) => unlisteners.push(fn));
 
     return () => {
+      if (bumpTimer) clearTimeout(bumpTimer);
       for (const off of unlisteners) off();
     };
   }, [refreshLibrary, t]);

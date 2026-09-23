@@ -148,6 +148,17 @@ pub fn probe_and_update_sample(
     path: &Path,
 ) -> AppResult<DecodedAudio> {
     let decoded = decode_file(path)?;
+    write_technical_fields(conn, sample_id, path, &decoded)?;
+    Ok(decoded)
+}
+
+/// Persist technical columns from an already-decoded buffer (caller decoded off the DB lock).
+pub fn write_technical_fields(
+    conn: &mut SqliteConnection,
+    sample_id: i64,
+    path: &Path,
+    decoded: &DecodedAudio,
+) -> AppResult<()> {
     let format = path
         .extension()
         .and_then(|e| e.to_str())
@@ -175,8 +186,7 @@ pub fn probe_and_update_sample(
             .set(samples_dsl::bit_depth.eq(b))
             .execute(conn)?;
     }
-
-    Ok(decoded)
+    Ok(())
 }
 
 #[cfg(test)]

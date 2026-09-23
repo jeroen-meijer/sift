@@ -391,8 +391,29 @@ pub fn ensure_peaks(
         ),
     );
 
+    cache_peaks_from_decoded(&paths.peaks_dir, sample_id, &decoded, buckets_row)
+}
+
+/// Write a row peakfile from PCM already in memory (analysis path; no second decode).
+pub fn cache_peaks_from_decoded(
+    peaks_dir: &Path,
+    sample_id: i64,
+    decoded: &DecodedAudio,
+    buckets_row: usize,
+) -> AppResult<PeakData> {
+    let cache = peak_path(peaks_dir, sample_id);
+    let start = std::time::Instant::now();
+    if let Some(cached) = read_peakfile(&cache, Some(buckets_row))? {
+        crate::profile_log::event(
+            "peaks.cache_hit",
+            start.elapsed(),
+            &format!("id={sample_id} buckets={buckets_row}"),
+        );
+        return Ok(cached);
+    }
+
     let gen_start = std::time::Instant::now();
-    let data = generate_peaks(&decoded, buckets_row)?;
+    let data = generate_peaks(decoded, buckets_row)?;
     crate::profile_log::event(
         "peaks.generate",
         gen_start.elapsed(),
@@ -417,10 +438,32 @@ pub fn ensure_peaks(
 /// Default bucket count for row / generic peaks IPC.
 pub const DEFAULT_BUCKETS: usize = 1024;
 
+/// Silent placeholder when bytes are not local (cloud or missing).
+#[must_use]
+pub fn empty_peaks(buckets: usize) -> PeakData {
+    PeakData {
+        channels: 1,
+        sample_rate: 44_100,
+        duration_ms: 0.0,
+        peaks: vec![0.0; buckets.saturating_mul(2)],
+        bucket_count: buckets,
+        colors: vec![0; buckets.saturating_mul(3)],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn empty_peaks_has_zero_duration() {
+        let p = empty_peaks(64);
+        assert_eq!(p.bucket_count, 64);
+        assert_eq!(p.duration_ms, 0.0);
+        assert_eq!(p.peaks.len(), 128);
+        assert_eq!(p.colors.len(), 192);
+    }
 
     fn sine(rate: u32, secs: f32, hz: f32) -> DecodedAudio {
         #[allow(

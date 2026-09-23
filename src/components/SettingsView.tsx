@@ -382,6 +382,11 @@ export function SettingsView({
                   </div>
                 </div>
 
+                <div className="settings-stack">
+                  <div className="settings-row-title">{t("onlineOnlyNote")}</div>
+                  <div className="settings-row-hint">{t("onlineOnlyNoteHint")}</div>
+                </div>
+
                 <Row
                   title={t("missingSamples")}
                   hint={t("missingSamplesHint", { count: stats.missing })}
