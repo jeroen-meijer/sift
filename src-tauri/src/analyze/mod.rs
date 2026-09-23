@@ -904,7 +904,65 @@ pub fn list_analysis_queue_ids(
 }
 
 const ANALYZE_WORKERS: usize = 4;
+/// While the window is focused, only this many analyze workers take jobs.
+const ANALYZE_WORKERS_FOCUSED: usize = 2;
 const PROGRESS_EVERY: u64 = 25;
+
+/// Caps how many analyze workers may take jobs (focus-aware).
+pub struct WorkerGate {
+    allowed: Mutex<usize>,
+    cv: Condvar,
+}
+
+impl WorkerGate {
+    fn new(allowed: usize) -> Self {
+        Self {
+            allowed: Mutex::new(allowed.max(1)),
+            cv: Condvar::new(),
+        }
+    }
+
+    pub fn set_allowed(&self, n: usize) {
+        let mut allowed = self
+            .allowed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *allowed = n.max(1);
+        drop(allowed);
+        self.cv.notify_all();
+    }
+
+    /// Block worker `index` while `index >= allowed`.
+    fn wait_turn(&self, index: usize) {
+        let mut allowed = self
+            .allowed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while index >= *allowed {
+            allowed = self
+                .cv
+                .wait(allowed)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+        drop(allowed);
+    }
+}
+
+fn worker_gate() -> &'static Arc<WorkerGate> {
+    use std::sync::OnceLock;
+    static GATE: OnceLock<Arc<WorkerGate>> = OnceLock::new();
+    GATE.get_or_init(|| Arc::new(WorkerGate::new(ANALYZE_WORKERS_FOCUSED)))
+}
+
+/// Call from the window focus handler: 2 workers while focused, 4 when not.
+pub fn set_analyze_workers_for_focus(focused: bool) {
+    let n = if focused {
+        ANALYZE_WORKERS_FOCUSED
+    } else {
+        ANALYZE_WORKERS
+    };
+    worker_gate().set_allowed(n);
+}
 
 struct AnalysisJob {
     sample_id: i64,
@@ -963,9 +1021,12 @@ fn analysis_runtime(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf) -> &'static
             let progress = Arc::clone(&progress);
             let work = Arc::clone(&work);
             let finished = Arc::clone(&finished);
+            let gate = Arc::clone(worker_gate());
             let _ = std::thread::Builder::new()
                 .name(format!("sift-analyze-{i}"))
-                .spawn(move || analysis_worker(&app, &db, &peaks_dir, &progress, &work, &finished));
+                .spawn(move || {
+                    analysis_worker(&app, &db, &peaks_dir, &progress, &work, &finished, &gate, i);
+                });
         }
         AnalysisRuntime {
             progress,
@@ -975,6 +1036,10 @@ fn analysis_runtime(app: AppHandle, db: Arc<Db>, peaks_dir: PathBuf) -> &'static
     })
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "worker loop needs the shared queue handles and its index"
+)]
 fn analysis_worker(
     app: &AppHandle,
     db: &Db,
@@ -982,8 +1047,12 @@ fn analysis_worker(
     progress: &std::sync::Mutex<QueueProgress>,
     work: &std::sync::Condvar,
     finished: &std::sync::Condvar,
+    gate: &WorkerGate,
+    index: usize,
 ) {
+    let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
     loop {
+        gate.wait_turn(index);
         let job = {
             let mut st = progress
                 .lock()
@@ -1406,6 +1475,22 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(40));
             assert_eq!(done.load(Ordering::SeqCst), 0);
             drop(first);
+        });
+        assert_eq!(done.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn worker_gate_blocks_high_index() {
+        let gate = WorkerGate::new(2);
+        let done = AtomicU64::new(0);
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                gate.wait_turn(3);
+                done.store(1, Ordering::SeqCst);
+            });
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            assert_eq!(done.load(Ordering::SeqCst), 0);
+            gate.set_allowed(4);
         });
         assert_eq!(done.load(Ordering::SeqCst), 1);
     }

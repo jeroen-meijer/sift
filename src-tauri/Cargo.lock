@@ -3536,6 +3536,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
+name = "qos-threads"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee637dc7a0274feb8297b52e821aad13fc9538479e35bc3c16f4fef9d192c2b2"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4078,6 +4087,7 @@ dependencies = [
  "notify-debouncer-full",
  "objc2",
  "objc2-app-kit",
+ "qos-threads",
  "rtrb",
  "serde",
  "serde_json",

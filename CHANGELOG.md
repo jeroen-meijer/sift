@@ -1,5 +1,6 @@
 ## Upcoming
 
+- perf(analyze): Low QoS on analyze/index threads; 2 workers while focused, 4 when not
 - fix(library): arrow keys scroll selection into view; showParent clears filters and reveals the sample
 - feat(library): list the whole library when no folder is selected (limit 25k); center empty state
 - fix(ui): default user-select none; keep path/name in the detail pane selectable
