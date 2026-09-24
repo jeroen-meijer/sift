@@ -66,16 +66,18 @@ pub fn run() {
                         "avail.library_refresh",
                         start.elapsed(),
                         &format!(
-                            "updated={} became_local={}",
+                            "updated={} dates_filled={} became_local={}",
                             refresh.updated,
+                            refresh.dates_filled,
                             refresh.became_local_ids.len()
                         ),
                     );
-                    if refresh.updated > 0 {
-                        // Rows that changed but did not become local (for example
-                        // local → cloud) are rare; a structural refresh covers them.
-                        let only_became_local = u64::try_from(refresh.became_local_ids.len()).ok()
-                            == Some(refresh.updated);
+                    if refresh.updated > 0 || refresh.dates_filled > 0 {
+                        // Date backfill and non-local flips need a full list reload;
+                        // became-local-only can patch by id.
+                        let only_became_local = refresh.dates_filled == 0
+                            && u64::try_from(refresh.became_local_ids.len()).ok()
+                                == Some(refresh.updated);
                         changes.push(
                             &handle,
                             "availability",

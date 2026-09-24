@@ -65,7 +65,14 @@ export const StatusBar = memo(function StatusBar({
               style={indeterminate ? undefined : { width: `${pct}%` }}
             />
           </div>
-          <span className="statusbar-hint">{t("statusProcessing")}</span>
+          <span className="statusbar-hint">
+            {indeterminate
+              ? t("statusProcessingCount", { done: formatCount(analysis.done) })
+              : t("statusProcessingProgress", {
+                  done: formatCount(analysis.done),
+                  total: formatCount(analysis.total),
+                })}
+          </span>
         </div>
       ) : null}
     </footer>
