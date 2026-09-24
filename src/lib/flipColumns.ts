@@ -4,16 +4,16 @@
  */
 
 import { motionCurve, motionMs, prefersReducedMotion } from "../ui/motion";
-import type { ResizableColumn } from "./columnWidths";
+import type { TableColumn } from "./columnWidths";
 
-export type ColRectMap = Map<ResizableColumn, { left: number; right: number }>;
+export type ColRectMap = Map<TableColumn, { left: number; right: number }>;
 
 /** Measure left/right of each `[data-col]` under a root (header or body). */
 export function measureColRects(root: ParentNode): ColRectMap {
   const map: ColRectMap = new Map();
   const nodes = root.querySelectorAll<HTMLElement>("[data-col]");
   for (const el of nodes) {
-    const id = el.dataset.col as ResizableColumn | undefined;
+    const id = el.dataset.col as TableColumn | undefined;
     if (!id || map.has(id)) continue;
     const rect = el.getBoundingClientRect();
     map.set(id, { left: rect.left, right: rect.right });

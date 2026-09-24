@@ -1,6 +1,10 @@
 ## Upcoming
 
-- feat(wave): four-band spectral colors (bass, low-mid, high-mid, treble) so brighter pads can shift hue instead of staying one mid green
+- feat(library): match Splice Desktop's local catalog for BPM, key, and loop/one-shot; Source column with a fixed Splice badge; Date added (macOS) and Date created
+- feat(analyze): peaks-only repairs and catalog enrich without a full decode, so fixing waveforms does not wipe BPM/key/type
+- feat(settings): Refresh metadata and a full-library re-analyze that wipes analysis data first; indexing, availability checks, and Refresh share the bottom-right Processing bar
+- fix(library): BPM 0 means no BPM; Clear BPM sticks so Splice and analyze do not refill it
+- feat(wave): four-band spectral colors (bass, low-mid, high-mid, treble) so brighter pads can shift hue
 - fix(wave): rebuild peakfiles when the on-disk format is older
 - ci: run PR checks on Ubuntu with Bun and Rust caches; pin Bun 1.4.2
 - ci: leave Apple signing identity unset when the secret is empty so unsigned macOS publish works

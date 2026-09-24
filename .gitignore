@@ -32,6 +32,9 @@ testdata/spectral-fixtures/*.ppm
 # Runtime profile sessions (`bun run tauri:profile`)
 logs/
 
+# Local visual QA (e.g. `bun run tool/render-splice-badge.ts`)
+tmp/
+
 # Env
 .env
 .env.*

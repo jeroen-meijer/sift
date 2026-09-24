@@ -23,6 +23,12 @@ function row(id: number, bpm: number | null = null): SampleRow {
     sample_type: null,
     favorite: false,
     tags: [],
+    catalog_source: null,
+    bpm_source: null,
+    key_source: null,
+    sample_type_source: null,
+    date_added_ms: null,
+    date_created_ms: null,
   };
 }
 

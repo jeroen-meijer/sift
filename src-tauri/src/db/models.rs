@@ -56,6 +56,12 @@ pub struct Sample {
     pub updated_at: String,
     pub availability: String,
     pub availability_checked_at: Option<String>,
+    pub catalog_source: Option<String>,
+    pub bpm_source: Option<String>,
+    pub key_source: Option<String>,
+    pub sample_type_source: Option<String>,
+    pub date_added_ms: Option<i64>,
+    pub date_created_ms: Option<i64>,
 }
 
 #[derive(Debug, Insertable)]
@@ -71,6 +77,8 @@ pub struct NewSample<'a> {
     pub inode: Option<i64>,
     pub availability: &'a str,
     pub availability_checked_at: Option<&'a str>,
+    pub date_added_ms: Option<i64>,
+    pub date_created_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable, AsChangeset)]

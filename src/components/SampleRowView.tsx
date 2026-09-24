@@ -1,13 +1,14 @@
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { ResizableColumn } from "../lib/columnWidths";
+import type { TableColumn } from "../lib/columnWidths";
+import { formatShortDate } from "../lib/format";
 import type { SampleRow } from "../lib/ipc";
 import { analysisStore } from "../lib/liveStores";
 import { highlightRanges } from "../lib/searchHighlight";
 import { useStoreSelector } from "../lib/store";
 import { tagPalette } from "../lib/tagColors";
-import { RowPlayIcon, RowStarIcon } from "./RowIcons";
+import { RowPlayIcon, RowSpliceIcon, RowStarIcon } from "./RowIcons";
 import { RowWaveform } from "./RowWaveform";
 
 const EM_DASH = "—";
@@ -48,7 +49,7 @@ interface Props {
   /** `virtual.start` from the virtualizer. */
   top: number;
   template: string;
-  columns: readonly ResizableColumn[];
+  columns: readonly TableColumn[];
   selected: boolean;
   playing: boolean;
   colored: boolean;
@@ -78,7 +79,7 @@ export const SampleRowView = memo(function SampleRowView({
   const { t } = useTranslation("common");
   const analyzing = useStoreSelector(analysisStore, (s) => s.activeIds.has(sample.id));
 
-  const renderCell = (column: ResizableColumn) => {
+  const renderCell = (column: TableColumn) => {
     switch (column) {
       case "name": {
         const { base, ext } = splitFilename(sample.filename);
@@ -98,6 +99,12 @@ export const SampleRowView = memo(function SampleRowView({
           </div>
         );
       }
+      case "source":
+        return (
+          <div key={column} className="col source" data-col={column}>
+            {sample.catalog_source === "splice" ? <RowSpliceIcon size={16} /> : null}
+          </div>
+        );
       case "type":
         return (
           <div key={column} className="col type" data-col={column}>
@@ -114,6 +121,18 @@ export const SampleRowView = memo(function SampleRowView({
         return (
           <div key={column} className="col mono-cell" data-col={column}>
             {sample.key_name ?? EM_DASH}
+          </div>
+        );
+      case "date_added":
+        return (
+          <div key={column} className="col mono-cell" data-col={column}>
+            {formatShortDate(sample.date_added_ms) ?? EM_DASH}
+          </div>
+        );
+      case "date_created":
+        return (
+          <div key={column} className="col mono-cell" data-col={column}>
+            {formatShortDate(sample.date_created_ms) ?? EM_DASH}
           </div>
         );
       case "wave":

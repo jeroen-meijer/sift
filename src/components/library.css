@@ -732,6 +732,30 @@ body.col-reordering * {
   line-height: 1.4;
 }
 
+/* Source column: theme-independent Splice chip (black translucent + white mark). */
+.sample-row .col.source {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 3px;
+  box-sizing: border-box;
+  line-height: 0;
+}
+
+.source-badge-splice {
+  /* Theme-independent: always black translucent chip + white mark. */
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+}
+
 .sample-row .col.type {
   font-size: 11px;
   color: var(--color-text-muted);

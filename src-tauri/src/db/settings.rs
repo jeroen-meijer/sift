@@ -41,15 +41,20 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
         "clips_dir": paths.clips_dir.to_string_lossy(),
         "column_widths": {
             "name": 220,
+            "source": 54,
             "type": 58,
             "bpm": 46,
             "key": 54,
             "wave": 180,
-            "tags": 210
+            "tags": 210,
+            "date_added": 110,
+            "date_created": 110
         },
-        "column_order": ["name", "type", "bpm", "key", "wave", "tags"],
+        "column_order": ["name", "source", "type", "bpm", "key", "wave", "tags", "date_added", "date_created"],
         "theme": "nocturne",
-        "locale": "en"
+        "locale": "en",
+        "splice_enabled": true,
+        "splice_db_path": null
     });
 
     if let Value::Object(map) = defaults {

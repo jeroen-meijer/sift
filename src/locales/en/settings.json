@@ -90,5 +90,18 @@
   "analyzeBackground": "Runs in the background",
   "analyzeN_one": "Analyze {{count}} sample",
   "analyzeN_other": "Analyze {{count}} samples",
-  "bpmRangeShort": "BPM range"
+  "bpmRangeShort": "BPM range",
+  "spliceMetadata": "Use Splice metadata",
+  "spliceMetadataHint": "When Splice Desktop's local catalog is on this machine, prefer its BPM, key, and loop/one-shot over filename and audio guesses.",
+  "spliceStatusLoading": "Looking for Splice catalog…",
+  "spliceStatusOk": "Catalog: {{path}} · {{count}} sounds",
+  "spliceStatusMissing": "Splice catalog not found. Install or open Splice Desktop once, then try again.",
+  "spliceStatusError": "Could not open Splice catalog: {{error}}",
+  "refreshMetadata": "Refresh metadata",
+  "refreshMetadataHint": "Re-match the library to Splice without re-decoding. Fills empty BPM, key, and type when a higher-priority value is not already set.",
+  "reanalyzeLibrary": "Re-analyze entire library",
+  "reanalyzeLibraryHint": "Erases BPM, key, type, auto tags, and waveforms, then analyzes everything again. Favorites and your tags stay.",
+  "reanalyzeLibraryTitle": "Erase analysis data?",
+  "reanalyzeLibraryBody": "This clears BPM, key, type, auto tags, and peakfiles for every sample, including values you edited by hand. Favorites, your tags, and folder roots stay. Analysis then runs again in the background.",
+  "reanalyzeLibraryConfirm": "Erase analysis data"
 }

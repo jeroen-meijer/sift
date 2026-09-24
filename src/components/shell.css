@@ -107,6 +107,21 @@
   transition: width 0.2s ease-out;
 }
 
+.statusbar-bar.indeterminate .statusbar-bar-fill {
+  width: 40%;
+  transition: none;
+  animation: sift-statusbar-indeterminate 1s ease-in-out infinite;
+}
+
+@keyframes sift-statusbar-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
 .statusbar-hint {
   color: var(--color-text-faint);
 }

@@ -7,6 +7,7 @@ import {
   reorderColumn,
   visibleOrderedColumns,
 } from "./columnOrder";
+import { SOURCE_COLUMN_WIDTH, columnGridTemplate, DEFAULT_COLUMN_WIDTHS } from "./columnWidths";
 
 describe("columnOrder", () => {
   it("mergeColumnOrder drops unknowns, dedupes, and appends missing defaults", () => {
@@ -14,10 +15,27 @@ describe("columnOrder", () => {
     expect(mergeColumnOrder(["tags", "name", "bogus", "name"])).toEqual([
       "tags",
       "name",
+      "source",
       "type",
       "bpm",
       "key",
       "wave",
+      "date_added",
+      "date_created",
+    ]);
+  });
+
+  it("includes source and date columns in the default order", () => {
+    expect(DEFAULT_COLUMN_ORDER).toEqual([
+      "name",
+      "source",
+      "type",
+      "bpm",
+      "key",
+      "wave",
+      "tags",
+      "date_added",
+      "date_created",
     ]);
   });
 
@@ -34,8 +52,11 @@ describe("columnOrder", () => {
       "name",
       "key",
       "wave",
+      "source",
+      "date_added",
+      "date_created",
     ]);
-    expect(visibleOrderedColumns(order, new Set(), false)).toEqual([
+    expect(visibleOrderedColumns(order, new Set(["source", "date_added", "date_created"]), false)).toEqual([
       "type",
       "name",
       "bpm",
@@ -46,10 +67,7 @@ describe("columnOrder", () => {
 
   it("dropIndexFromClientX picks the slot from midpoints", () => {
     const visible = ["name", "type", "bpm"] as const;
-    const rects = new Map<
-      "name" | "type" | "bpm",
-      { left: number; right: number }
-    >([
+    const rects = new Map<"name" | "type" | "bpm", { left: number; right: number }>([
       ["name", { left: 0, right: 100 }],
       ["type", { left: 100, right: 160 }],
       ["bpm", { left: 160, right: 220 }],
@@ -64,5 +82,12 @@ describe("columnOrder", () => {
     const next = reorderByVisibleDrop(full, visible, "type", 0);
     expect(next[0]).toBe("type");
     expect(next.indexOf("tags")).toBeGreaterThan(next.indexOf("wave"));
+  });
+});
+
+describe("columnGridTemplate source track", () => {
+  it("uses a fixed px track for source", () => {
+    const template = columnGridTemplate(["name", "source", "type"], DEFAULT_COLUMN_WIDTHS);
+    expect(template).toContain(`${String(SOURCE_COLUMN_WIDTH)}px`);
   });
 });
