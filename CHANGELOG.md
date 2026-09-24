@@ -1,5 +1,8 @@
 ## Upcoming
 
+- fix(library): fill Date added and Date created on launch for samples indexed before those columns existed
+- fix(ui): bring back the X of Y count on the bottom-right Processing bar
+
 ## 0.3.0
 
 - feat(library): match Splice Desktop's local catalog for BPM, key, and loop/one-shot; Source column with a fixed Splice badge; Date added (macOS) and Date created

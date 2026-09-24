@@ -562,6 +562,8 @@ pub fn mark_missing(conn: &mut SqliteConnection, path: &str) -> AppResult<bool> 
 pub struct AvailabilityRefresh {
     /// Rows whose `availability` or `missing` flag changed.
     pub updated: u64,
+    /// Rows whose null Date added / Date created were filled from the filesystem.
+    pub dates_filled: u64,
     /// Ids that moved from non-`local` → `local` (candidates for analyze).
     pub became_local_ids: Vec<i64>,
 }
@@ -676,18 +678,24 @@ fn apply_classified(
 /// Re-stat every sample path (metadata only). For launch backfill after schema add
 /// or while a cloud provider is still hydrating.
 ///
+/// Also fills null `date_added_ms` / `date_created_ms` from the filesystem so
+/// libraries indexed before those columns existed get dates without a reindex.
+///
 /// When `app` is set, drives the bottom-right work bar.
 pub fn refresh_availability_all(
     db: &crate::db::Db,
     app: Option<&tauri::AppHandle>,
 ) -> AppResult<AvailabilityRefresh> {
-    let rows: Vec<(i32, String, String, i32)> = db.with_conn(|conn| {
+    type AvailRow = (i32, String, String, i32, Option<i64>, Option<i64>);
+    let rows: Vec<AvailRow> = db.with_conn(|conn| {
         Ok(samples_dsl::samples
             .select((
                 samples_dsl::id,
                 samples_dsl::path,
                 samples_dsl::availability,
                 samples_dsl::missing,
+                samples_dsl::date_added_ms,
+                samples_dsl::date_created_ms,
             ))
             .load(conn)?)
     })?;
@@ -696,9 +704,30 @@ pub fn refresh_availability_all(
         crate::analyze::work::start(app, total);
     }
     let mut classified = Vec::with_capacity(rows.len());
-    for (i, (id, path, old_avail, old_missing)) in rows.into_iter().enumerate() {
-        let avail = fs_ready::classify_path(std::path::Path::new(&path));
+    let mut date_patches: Vec<(i32, Option<i64>, Option<i64>)> = Vec::new();
+    for (i, (id, path, old_avail, old_missing, old_added, old_created)) in
+        rows.into_iter().enumerate()
+    {
+        let path_ref = std::path::Path::new(&path);
+        let avail = fs_ready::classify_path(path_ref);
         classified.push((id, old_avail, old_missing, avail));
+        if (old_added.is_none() || old_created.is_none())
+            && let Ok(meta) = std::fs::metadata(path_ref)
+        {
+            let added = if old_added.is_none() {
+                crate::fs_dates::date_added_ms(path_ref)
+            } else {
+                old_added
+            };
+            let created = if old_created.is_none() {
+                crate::fs_dates::date_created_ms(&meta)
+            } else {
+                old_created
+            };
+            if added != old_added || created != old_created {
+                date_patches.push((id, added, created));
+            }
+        }
         if let Some(app) = app {
             let done = u64::try_from(i.saturating_add(1)).unwrap_or(u64::MAX);
             if done == total || done.is_multiple_of(50) {
@@ -709,7 +738,37 @@ pub fn refresh_availability_all(
     if let Some(app) = app {
         crate::analyze::work::finish(app, total);
     }
-    apply_classified(db, classified)
+    let mut out = apply_classified(db, classified)?;
+    if !date_patches.is_empty() {
+        let n = apply_date_patches(db, &date_patches)?;
+        out.dates_filled = n;
+    }
+    Ok(out)
+}
+
+/// Write Date added / Date created patches (null → filesystem values).
+fn apply_date_patches(
+    db: &crate::db::Db,
+    patches: &[(i32, Option<i64>, Option<i64>)],
+) -> AppResult<u64> {
+    let mut filled = 0u64;
+    db.with_conn(|conn| {
+        conn.transaction::<_, AppError, _>(|conn| {
+            for &(id, added, created) in patches {
+                let n = diesel::update(samples_dsl::samples.find(id))
+                    .set((
+                        samples_dsl::date_added_ms.eq(added),
+                        samples_dsl::date_created_ms.eq(created),
+                    ))
+                    .execute(conn)?;
+                if n > 0 {
+                    filled = filled.saturating_add(1);
+                }
+            }
+            Ok(())
+        })
+    })?;
+    Ok(filled)
 }
 
 pub fn remove_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<()> {
