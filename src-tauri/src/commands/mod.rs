@@ -71,7 +71,9 @@ pub async fn get_settings(app: AppHandle) -> AppResult<Value> {
 pub async fn set_setting(app: AppHandle, key: String, value: Value) -> AppResult<()> {
     off_main(app.clone(), move |state| {
         let turning_splice_on = key == "splice_enabled" && value.as_bool() == Some(true);
-        state.db.with_conn(|conn| settings::set(conn, &key, &value))?;
+        state
+            .db
+            .with_conn(|conn| settings::set(conn, &key, &value))?;
         if turning_splice_on {
             let status = crate::splice::refresh_catalog_status();
             if let Some(path) = status.path.as_ref() {
@@ -490,7 +492,10 @@ pub async fn analyze_samples(
 
 #[tauri::command]
 pub async fn splice_catalog_status(app: AppHandle) -> AppResult<crate::splice::CatalogStatus> {
-    off_main(app, move |_state| Ok(crate::splice::refresh_catalog_status())).await
+    off_main(app, move |_state| {
+        Ok(crate::splice::refresh_catalog_status())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -518,9 +523,7 @@ pub async fn reanalyze_entire_library(app: AppHandle) -> AppResult<u64> {
                 crate::analyze::AnalyzeMode::Normal,
             );
         }
-        state
-            .changes
-            .push(&app, "reanalyze-library", true, &[]);
+        state.changes.push(&app, "reanalyze-library", true, &[]);
         Ok(n)
     })
     .await

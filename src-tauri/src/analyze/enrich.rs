@@ -7,10 +7,10 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use tauri::{AppHandle, Manager};
 
+use crate::db::Db;
 use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::settings;
 use crate::db::utc_now;
-use crate::db::Db;
 use crate::error::AppResult;
 use crate::ids::{id_from_i64, id_to_i64};
 use crate::meta_source::{MetaSource, should_write};

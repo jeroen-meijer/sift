@@ -171,8 +171,7 @@ fn count_rows(conn: &mut SqliteConnection) -> AppResult<i64> {
         #[diesel(sql_type = Integer)]
         n: i32,
     }
-    let row: CountRow =
-        diesel::sql_query("SELECT COUNT(*) AS n FROM samples").get_result(conn)?;
+    let row: CountRow = diesel::sql_query("SELECT COUNT(*) AS n FROM samples").get_result(conn)?;
     Ok(i64::from(row.n))
 }
 

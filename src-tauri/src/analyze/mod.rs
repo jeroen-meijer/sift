@@ -1,8 +1,8 @@
 //! Background sample analysis: path auto-tags, BPM/key, loop vs one-shot, row peakfiles.
 
 mod enrich;
-pub mod work_ui;
 mod name_meta;
+pub mod work_ui;
 
 pub use enrich::refresh_metadata_all;
 pub use work_ui as work;
@@ -729,10 +729,7 @@ pub fn analyze_sample(
 
     let path_type = path_result.sample_type.clone();
     let audio_type = audio_result.sample_type.clone();
-    let skip_audio_bpm = path_type
-        .as_deref()
-        .or(audio_type.as_deref())
-        == Some("one-shot");
+    let skip_audio_bpm = path_type.as_deref().or(audio_type.as_deref()) == Some("one-shot");
 
     let db_start = Instant::now();
     db.with_conn(|conn| {
@@ -789,11 +786,7 @@ pub fn analyze_sample(
                 MetaSource::Filename,
                 rerun_key,
             ) {
-                Some((
-                    v.clone(),
-                    path_result.key_confidence,
-                    MetaSource::Filename,
-                ))
+                Some((v.clone(), path_result.key_confidence, MetaSource::Filename))
             } else {
                 None
             }

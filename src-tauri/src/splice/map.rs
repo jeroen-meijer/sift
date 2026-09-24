@@ -19,11 +19,7 @@ pub fn map_key(audio_key: Option<&str>, chord_type: Option<&str>) -> Option<Stri
     let root = normalize_root(raw)?;
     let mode = chord_type.map_or("", str::trim);
     let minor = matches!(mode, "minor" | "min" | "m");
-    Some(if minor {
-        format!("{root}m")
-    } else {
-        root
-    })
+    Some(if minor { format!("{root}m") } else { root })
 }
 
 fn normalize_root(raw: &str) -> Option<String> {
@@ -34,11 +30,11 @@ fn normalize_root(raw: &str) -> Option<String> {
         return None;
     }
     let upper = letter.to_ascii_uppercase();
-        match chars.next() {
-            Some('#' | 's') => Some(format!("{upper}#")),
-            Some('b') => flat_to_sharp(upper).map(str::to_string),
-            _ => Some(upper.to_string()),
-        }
+    match chars.next() {
+        Some('#' | 's') => Some(format!("{upper}#")),
+        Some('b') => flat_to_sharp(upper).map(str::to_string),
+        _ => Some(upper.to_string()),
+    }
 }
 
 const fn flat_to_sharp(flat_root: char) -> Option<&'static str> {
