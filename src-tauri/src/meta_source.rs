@@ -126,7 +126,12 @@ mod tests {
             MetaSource::Filename,
             false
         ));
-        assert!(!should_write(false, Some("user"), MetaSource::Splice, false));
+        assert!(!should_write(
+            false,
+            Some("user"),
+            MetaSource::Splice,
+            false
+        ));
     }
 
     #[test]

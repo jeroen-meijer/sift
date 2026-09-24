@@ -642,7 +642,11 @@ mod tests {
         let audio = sine(44_100, 0.5, 70.0);
         let peaks = generate_peaks(&audio, 128).expect("peaks");
         let mid = avg_bands(&peaks.colors, 16, 112);
-        assert_eq!(dominant_band(mid), 0, "70 Hz should be bass-led, got {mid:?}");
+        assert_eq!(
+            dominant_band(mid),
+            0,
+            "70 Hz should be bass-led, got {mid:?}"
+        );
         assert!(
             mid[0] > mid[1] * 1.8 && mid[0] > mid[2] * 1.8 && mid[0] > mid[3] * 1.8,
             "70 Hz should be bass-dominant, got {mid:?}"
@@ -800,8 +804,7 @@ mod tests {
                 eprintln!("skip missing {name}");
                 continue;
             }
-            let peaks =
-                generate_peaks(&decode_file(&path).expect("decode"), 256).expect("peaks");
+            let peaks = generate_peaks(&decode_file(&path).expect("decode"), 256).expect("peaks");
             let avg = avg_bands(&peaks.colors, 0, peaks.bucket_count);
             let sum: f32 = avg.iter().sum::<f32>().max(1.0);
             let lo = avg[1] / sum;

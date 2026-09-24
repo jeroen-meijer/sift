@@ -60,8 +60,8 @@ pub fn run() {
                 .spawn(move || {
                     let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                     let start = std::time::Instant::now();
-                    let refresh =
-                        crate::samples::refresh_availability_all(&db, Some(&handle)).unwrap_or_default();
+                    let refresh = crate::samples::refresh_availability_all(&db, Some(&handle))
+                        .unwrap_or_default();
                     crate::profile_log::event(
                         "avail.library_refresh",
                         start.elapsed(),
