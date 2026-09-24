@@ -16,8 +16,8 @@ import { SPLICE_MARK_PATHS, SPLICE_MARK_VIEWBOX } from "../src/lib/spliceMark.ts
 
 function arg(flag: string, fallback: string): string {
   const i = process.argv.indexOf(flag);
-  if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1]!;
-  return fallback;
+  const next = i >= 0 ? process.argv[i + 1] : undefined;
+  return next && !next.startsWith("--") ? next : fallback;
 }
 
 const out = resolve(arg("--out", "tmp/splice-badge.png"));
