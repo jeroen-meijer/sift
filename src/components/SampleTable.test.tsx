@@ -31,6 +31,12 @@ function sample(overrides: Partial<SampleRow> = {}): SampleRow {
     sample_type: "one-shot",
     favorite: false,
     tags: [{ id: 7, path: "Drums/Kick", color: null }],
+    catalog_source: null,
+    bpm_source: null,
+    key_source: null,
+    sample_type_source: null,
+    date_added_ms: null,
+    date_created_ms: null,
     ...overrides,
   };
 }
@@ -44,6 +50,8 @@ const defaultWidths = {
   key: 54,
   wave: 180,
   tags: 210,
+  date_added: 110,
+  date_created: 110,
 };
 
 function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = {}) {
@@ -86,8 +94,21 @@ describe("SampleTable", () => {
   });
 
   it("renders an em dash for a missing BPM or key, the way the design does", () => {
-    renderTable({ samples: [sample({ bpm: null, key_name: null })] });
+    renderTable({
+      samples: [sample({ bpm: null, key_name: null })],
+      hiddenColumns: new Set(["date_added", "date_created"]),
+    });
     expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("shows the Splice icon when catalog_source is splice", () => {
+    renderTable({ samples: [sample({ catalog_source: "splice" })] });
+    expect(screen.getByRole("img", { name: "Splice" })).toBeVisible();
+  });
+
+  it("omits the Source resize handle", () => {
+    renderTable();
+    expect(screen.queryByRole("button", { name: /Resize Source/i })).toBeNull();
   });
 
   it("marks the sorted column and leaves the others unmarked", () => {

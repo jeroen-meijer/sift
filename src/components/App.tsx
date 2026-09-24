@@ -3,13 +3,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding } from "../lib/bindings";
-import { formatCount } from "../lib/format";
 import {
   ipc,
   type AnalysisProgress,
   type DbStats,
   type FolderNode,
-  type IndexProgress,
   type LibraryChangedPayload,
   type OutputDevice,
   type TagNode,
@@ -52,7 +50,6 @@ const EMPTY_STATS: DbStats = {
 };
 
 export function App() {
-  const { t } = useTranslation("common");
   const { t: tl } = useTranslation("library");
   const { settings, set: setSetting, loaded } = useSettings();
 
@@ -72,7 +69,6 @@ export function App() {
   const [outputDevices, setOutputDevices] = useState<OutputDevice[]>([]);
   const [refreshToken, setRefreshToken] = useState(0);
 
-  const [indexStatus, setIndexStatus] = useState<string | undefined>();
   const [askPaths, setAskPaths] = useState<string[]>([]);
 
   const refreshLibrary = useCallback(() => {
@@ -139,15 +135,6 @@ export function App() {
       });
     };
 
-    void listen<IndexProgress>("index-progress", ({ payload }) => {
-      if (payload.done) {
-        setIndexStatus(undefined);
-        bump();
-      } else {
-        setIndexStatus(t("statusIndexing", { formatted: formatCount(payload.scanned) }));
-      }
-    }).then((fn) => unlisteners.push(fn));
-
     void listen<{ total: number }>("analysis-queue", ({ payload }) => {
       analysisStore.set({ bar: { done: 0, total: payload.total }, activeIds: new Set() });
     }).then((fn) => unlisteners.push(fn));
@@ -192,7 +179,7 @@ export function App() {
       if (progressTimer) clearTimeout(progressTimer);
       for (const off of unlisteners) off();
     };
-  }, [refreshLibrary, t]);
+  }, [refreshLibrary]);
 
   const onAnalysisStart = useCallback(() => {
     const cur = analysisStore.get();
@@ -203,11 +190,10 @@ export function App() {
     void open({ directory: true, multiple: false, title: tl("addFolder") })
       .then((selected) => {
         if (typeof selected !== "string") return;
-        setIndexStatus(t("statusIndexing", { formatted: "0" }));
         return ipc.addRoot(selected).then(refreshLibrary);
       })
       .catch(console.error);
-  }, [refreshLibrary, t, tl]);
+  }, [refreshLibrary, tl]);
 
   const respondAsk = useCallback(
     (paths: string[], index: boolean) => {
@@ -247,7 +233,7 @@ export function App() {
               setView("settings");
             }}
           />
-          <StatusBar rootCount={0} fileCount={0} statusText={indexStatus} />
+          <StatusBar rootCount={0} fileCount={0} />
         </>
       ) : null}
 
@@ -258,7 +244,6 @@ export function App() {
           stats={stats}
           folders={folders}
           tags={tags}
-          statusText={indexStatus}
           refreshToken={refreshToken}
           onRefreshLibrary={refreshLibrary}
           onAddRoot={addRoot}

@@ -67,6 +67,12 @@ diesel::table! {
         updated_at -> Text,
         availability -> Text,
         availability_checked_at -> Nullable<Text>,
+        catalog_source -> Nullable<Text>,
+        bpm_source -> Nullable<Text>,
+        key_source -> Nullable<Text>,
+        sample_type_source -> Nullable<Text>,
+        date_added_ms -> Nullable<BigInt>,
+        date_created_ms -> Nullable<BigInt>,
     }
 }
 

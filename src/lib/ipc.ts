@@ -1,12 +1,11 @@
 /** Every Tauri command Sift calls, with the shapes the Rust side sends back. */
 import { invoke } from "@tauri-apps/api/core";
-import type { ColumnWidths, ResizableColumn } from "./columnWidths";
+import type { ColumnWidths, TableColumn } from "./columnWidths";
 import { DEFAULT_COLUMN_WIDTHS } from "./columnWidths";
 import { DEFAULT_COLUMN_ORDER } from "./columnOrder";
 import { profiled } from "./profile";
 
-export type { ColumnWidths } from "./columnWidths";
-export type { ResizableColumn } from "./columnWidths";
+export type { ColumnWidths, ResizableColumn, TableColumn } from "./columnWidths";
 
 export interface TagChip {
   id: number;
@@ -35,6 +34,13 @@ export interface SampleRow {
   sample_type: string | null;
   favorite: boolean;
   tags: TagChip[];
+  /** `null` or `splice` when matched to Splice Desktop's catalog. */
+  catalog_source: string | null;
+  bpm_source: string | null;
+  key_source: string | null;
+  sample_type_source: string | null;
+  date_added_ms: number | null;
+  date_created_ms: number | null;
 }
 
 export interface FolderNode {
@@ -88,8 +94,24 @@ export interface OutputDevice {
   is_default: boolean;
 }
 
-export type SortColumn = "name" | "type" | "bpm" | "key" | "created_at" | "favorite";
+export type SortColumn =
+  | "name"
+  | "type"
+  | "bpm"
+  | "key"
+  | "date_added"
+  | "date_created"
+  | "created_at"
+  | "favorite";
 export type SortDirection = "asc" | "desc";
+
+export interface SpliceCatalogStatus {
+  path: string | null;
+  row_count: number | null;
+  ok: boolean;
+  error: string | null;
+  splice_folder: string | null;
+}
 
 export interface SampleQuery {
   folder_prefix: string | null;
@@ -116,15 +138,6 @@ export interface CustomAnalysisOpts {
 }
 
 /* ── events ──────────────────────────────────────────────────────────── */
-
-export interface IndexProgress {
-  root_id: number;
-  scanned: number;
-  indexed: number;
-  skipped: number;
-  current_path: string;
-  done: boolean;
-}
 
 export interface AnalysisQueuePayload {
   total: number;
@@ -179,9 +192,13 @@ export interface AppSettings {
   clips_dir: string;
   column_widths: ColumnWidths;
   /** Left→right order of content columns (fav stays pinned). */
-  column_order: ResizableColumn[];
+  column_order: TableColumn[];
   /** Color palette id (`nocturne` | `ink` | `graphite` | `snow`). */
   theme: string;
+  /** Prefer Splice Desktop sounds.db for BPM / key / type when available. */
+  splice_enabled: boolean;
+  /** Last resolved path to sounds.db (auto-detect; no picker in v1). */
+  splice_db_path: string | null;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -208,6 +225,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   column_widths: { ...DEFAULT_COLUMN_WIDTHS },
   column_order: [...DEFAULT_COLUMN_ORDER],
   theme: "nocturne",
+  splice_enabled: true,
+  splice_db_path: null,
 };
 
 /** Commands that return unit on the Rust side. */
@@ -332,6 +351,9 @@ export const ipc = {
 
   analyze: (ids: number[], custom: CustomAnalysisOpts | null) =>
     invoke<number>("analyze_samples", { ids, custom }),
+  spliceCatalogStatus: () => invoke<SpliceCatalogStatus>("splice_catalog_status"),
+  refreshMetadata: () => invoke<number>("refresh_metadata"),
+  reanalyzeEntireLibrary: () => invoke<number>("reanalyze_entire_library"),
   renderClip: (sampleId: number, startSecs: number, endSecs: number) =>
     invoke<string>("render_jit_clip", { sampleId, startSecs, endSecs }),
   clearJitCache: () => run("clear_jit_cache"),

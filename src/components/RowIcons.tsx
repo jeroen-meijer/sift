@@ -5,6 +5,8 @@
  * are the same Phosphor paths (256 × 256 viewBox) as plain SVG.
  */
 
+import { SPLICE_MARK_PATHS, SPLICE_MARK_VIEWBOX } from "../lib/spliceMark";
+
 const STAR_FILL =
   "M234.29,114.85l-45,38.83L203,211.75a16.4,16.4,0,0,1-24.5,17.82L128,198.49,77.47,229.57A16.4,16.4,0,0,1,53,211.75l13.76-58.07-45-38.83A16.46,16.46,0,0,1,31.08,86l59-4.76,22.76-55.08a16.36,16.36,0,0,1,30.27,0l22.75,55.08,59,4.76a16.46,16.46,0,0,1,9.37,28.86Z";
 const STAR_REGULAR =
@@ -44,5 +46,30 @@ export function RowStarIcon({ size, className, filled }: IconProps & { filled: b
     >
       <path d={filled ? STAR_FILL : STAR_REGULAR} />
     </svg>
+  );
+}
+
+/**
+ * Source-column Splice badge: black translucent chip, white mark.
+ * Same colors in every theme so the mark stays recognizable.
+ * Geometry: `src/lib/spliceMark.ts`. Preview: `bun run tool/render-splice-badge.ts`.
+ */
+export function RowSpliceIcon({ size = 16, className }: { size?: number; className?: string }) {
+  const inset = Math.max(2, Math.round(size * 0.12));
+  const icon = Math.max(8, size - inset * 2);
+  return (
+    <span
+      className={className ? `source-badge source-badge-splice ${className}` : "source-badge source-badge-splice"}
+      title="Splice"
+      role="img"
+      aria-label="Splice"
+      style={{ width: size, height: size }}
+    >
+      <svg width={icon} height={icon} viewBox={SPLICE_MARK_VIEWBOX} fill="#fff" aria-hidden>
+        {SPLICE_MARK_PATHS.map((d) => (
+          <path key={d.slice(0, 24)} d={d} />
+        ))}
+      </svg>
+    </span>
   );
 }
