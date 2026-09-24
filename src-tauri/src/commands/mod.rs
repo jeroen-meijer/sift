@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::channel;
 
 use serde_json::{Value, json};
-use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tauri::{AppHandle, Manager, State, Window};
 
 use crate::audio::peaks::{self, DEFAULT_BUCKETS, PeakData};
 use crate::audio::player::{OutputDeviceInfo, SamplePlayType};
@@ -18,6 +18,15 @@ use crate::state::AppState;
 use crate::tags::{self, TagNode};
 use crate::undo::UndoAction;
 use crate::watch;
+
+/// Indeterminate work-bar ticks while walking a root. The caller finishes the
+/// bar once the whole index job returns (so multi-root reindex does not flicker).
+fn tick_index_progress(app: &AppHandle, progress: &IndexProgress) {
+    if progress.done {
+        return;
+    }
+    crate::analyze::work::tick(app, progress.scanned, 0, 0);
+}
 
 #[derive(serde::Serialize)]
 pub struct DbStats {
@@ -60,8 +69,20 @@ pub async fn get_settings(app: AppHandle) -> AppResult<Value> {
 
 #[tauri::command]
 pub async fn set_setting(app: AppHandle, key: String, value: Value) -> AppResult<()> {
-    off_main(app, move |state| {
-        state.db.with_conn(|conn| settings::set(conn, &key, &value))
+    off_main(app.clone(), move |state| {
+        let turning_splice_on = key == "splice_enabled" && value.as_bool() == Some(true);
+        state.db.with_conn(|conn| settings::set(conn, &key, &value))?;
+        if turning_splice_on {
+            let status = crate::splice::refresh_catalog_status();
+            if let Some(path) = status.path.as_ref() {
+                let _ = state.db.with_conn(|conn| {
+                    settings::set(conn, "splice_db_path", &Value::String(path.clone()))
+                });
+            }
+            let n = crate::analyze::refresh_metadata_all(&app, &state.db).unwrap_or(0);
+            let _ = n; // library-changed is emitted inside refresh when rows change
+        }
+        Ok(())
     })
     .await
 }
@@ -125,27 +146,25 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
             .spawn(move || {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 let index_start = std::time::Instant::now();
-                let _ = db.with_conn(|conn| {
-                    indexer::index_root(conn, root_id, |progress| {
-                        crate::profile_log::count_emit("index-progress");
-                        let _ = index_app.emit("index-progress", &progress);
+                crate::analyze::work::start(&index_app, 0);
+                let scanned = db
+                    .with_conn(|conn| {
+                        indexer::index_root(conn, root_id, |progress| {
+                            tick_index_progress(&index_app, &progress);
+                        })
                     })
-                });
+                    .map_or(0, |p| p.scanned);
+                crate::analyze::work::finish(&index_app, scanned);
+                index_app.state::<crate::state::AppState>().changes.push(
+                    &index_app,
+                    "index",
+                    true,
+                    &[],
+                );
                 crate::profile_log::event(
                     "index.root_done",
                     index_start.elapsed(),
                     &format!("id={root_id}"),
-                );
-                let _ = index_app.emit(
-                    "index-progress",
-                    &IndexProgress {
-                        root_id,
-                        scanned: 0,
-                        indexed: 0,
-                        skipped: 0,
-                        current_path: String::new(),
-                        done: true,
-                    },
                 );
                 crate::analyze::enqueue_unanalyzed(index_app, db, peaks_dir);
             });
@@ -205,12 +224,18 @@ pub async fn reindex_root(app: AppHandle, root_id: i64) -> AppResult<()> {
             .name("sift-reindex-root".into())
             .spawn(move || {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
-                let _ = db.with_conn(|conn| {
-                    indexer::index_root(conn, root_id, |progress| {
-                        crate::profile_log::count_emit("index-progress");
-                        let _ = app.emit("index-progress", &progress);
+                crate::analyze::work::start(&app, 0);
+                let scanned = db
+                    .with_conn(|conn| {
+                        indexer::index_root(conn, root_id, |progress| {
+                            tick_index_progress(&app, &progress);
+                        })
                     })
-                });
+                    .map_or(0, |p| p.scanned);
+                crate::analyze::work::finish(&app, scanned);
+                app.state::<crate::state::AppState>()
+                    .changes
+                    .push(&app, "index", true, &[]);
                 crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
             });
         Ok(())
@@ -231,12 +256,20 @@ pub async fn reindex_all(app: AppHandle) -> AppResult<()> {
             .name("sift-reindex-all".into())
             .spawn(move || {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
+                crate::analyze::work::start(&app, 0);
+                let mut scanned = 0u64;
                 let _ = db.with_conn(|conn| {
                     indexer::index_all_roots(conn, |progress| {
-                        crate::profile_log::count_emit("index-progress");
-                        let _ = app.emit("index-progress", &progress);
+                        tick_index_progress(&app, &progress);
+                        if progress.done {
+                            scanned = scanned.saturating_add(progress.scanned);
+                        }
                     })
                 });
+                crate::analyze::work::finish(&app, scanned);
+                app.state::<crate::state::AppState>()
+                    .changes
+                    .push(&app, "index", true, &[]);
                 crate::analyze::enqueue_unanalyzed(app, db, peaks_dir);
             });
         Ok(())
@@ -456,6 +489,44 @@ pub async fn analyze_samples(
 }
 
 #[tauri::command]
+pub async fn splice_catalog_status(app: AppHandle) -> AppResult<crate::splice::CatalogStatus> {
+    off_main(app, move |_state| Ok(crate::splice::refresh_catalog_status())).await
+}
+
+#[tauri::command]
+pub async fn refresh_metadata(app: AppHandle) -> AppResult<u64> {
+    off_main(app.clone(), move |state| {
+        crate::analyze::refresh_metadata_all(&app, &state.db)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn reanalyze_entire_library(app: AppHandle) -> AppResult<u64> {
+    off_main(app.clone(), move |state| {
+        let peaks_dir = state.paths.peaks_dir.clone();
+        let ids = state
+            .db
+            .with_conn(|conn| samples::wipe_analysis_all(conn, &peaks_dir))?;
+        let n = u64::try_from(ids.len()).unwrap_or(u64::MAX);
+        if !ids.is_empty() {
+            crate::analyze::spawn_analysis_batch(
+                app.clone(),
+                state.db.clone(),
+                peaks_dir,
+                ids,
+                crate::analyze::AnalyzeMode::Normal,
+            );
+        }
+        state
+            .changes
+            .push(&app, "reanalyze-library", true, &[]);
+        Ok(n)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn purge_missing(app: AppHandle) -> AppResult<u64> {
     off_main(app, move |state| state.db.with_conn(samples::purge_missing)).await
 }
@@ -473,9 +544,12 @@ pub async fn respond_ask_index(app: AppHandle, paths: Vec<String>, index: bool) 
     off_main(app.clone(), move |state| {
         if index {
             let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+            let total = u64::try_from(path_bufs.len()).unwrap_or(u64::MAX);
+            crate::analyze::work::start(&app, total);
             let n = state
                 .db
                 .with_conn(|conn| indexer::index_paths(conn, &path_bufs))?;
+            crate::analyze::work::finish(&app, n);
             if n > 0 {
                 state.changes.push(&app, "ask-index", true, &[]);
                 crate::analyze::enqueue_unanalyzed(

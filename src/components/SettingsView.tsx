@@ -7,17 +7,19 @@ import {
   PulseIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, SHORTCUT_ROWS, matchesBinding } from "../lib/bindings";
-import { formatBytes } from "../lib/format";
+import { formatBytes, formatCount } from "../lib/format";
 import { hotkeyId, hotkeyLabel } from "../lib/hotkey";
-import type {
-  AppSettings,
-  DbStats,
-  NewFileMode,
-  OutputDevice,
-  WaveformView as WaveformMode,
+import {
+  ipc,
+  type AppSettings,
+  type DbStats,
+  type NewFileMode,
+  type OutputDevice,
+  type SpliceCatalogStatus,
+  type WaveformView as WaveformMode,
 } from "../lib/ipc";
 import {
   THEMES,
@@ -30,6 +32,7 @@ import { PillSelect } from "../ui/PillSelect";
 import { Segmented } from "../ui/Segmented";
 import { Switch } from "../ui/Switch";
 import { BpmRangePicker } from "./BpmRangePicker";
+import { ReanalyzeLibraryDialog } from "./dialogs/ReanalyzeLibraryDialog";
 import { ThemeWavePreview } from "./ThemeWavePreview";
 
 type SectionId = "appearance" | "playback" | "library" | "analysis" | "shortcuts";
@@ -96,11 +99,34 @@ export function SettingsView({
   const [active, setActive] = useState<SectionId>("appearance");
   const [recording, setRecording] = useState(false);
   const [newPattern, setNewPattern] = useState("");
+  const [spliceStatus, setSpliceStatus] = useState<SpliceCatalogStatus | null>(null);
+  const [confirmReanalyze, setConfirmReanalyze] = useState(false);
+  const [refreshingMeta, setRefreshingMeta] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   /** Ignore scroll-spy briefly after a nav click so short last sections stay selected. */
   const pinned = useRef(false);
   const pinTimer = useRef(0);
   const currentTheme = normalizeThemeId(settings.theme);
+
+  const loadSpliceStatus = useCallback(() => {
+    void ipc
+      .spliceCatalogStatus()
+      .then(setSpliceStatus)
+      .catch((err: unknown) => {
+        console.error(err);
+        setSpliceStatus({
+          path: null,
+          row_count: null,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          splice_folder: null,
+        });
+      });
+  }, []);
+
+  useEffect(() => {
+    loadSpliceStatus();
+  }, [loadSpliceStatus, settings.splice_enabled]);
 
   useEffect(() => {
     if (!recording) return;
@@ -418,6 +444,64 @@ export function SettingsView({
                   />
                 </div>
 
+                <Row title={t("spliceMetadata")} hint={t("spliceMetadataHint")}>
+                  <Switch
+                    label={t("spliceMetadata")}
+                    checked={settings.splice_enabled}
+                    onChange={(v) => {
+                      onChange("splice_enabled", v);
+                    }}
+                  />
+                </Row>
+                <div className="settings-stack settings-status-line">
+                  <div className="settings-row-hint mono">
+                    {spliceStatus == null
+                      ? t("spliceStatusLoading")
+                      : spliceStatus.ok
+                        ? t("spliceStatusOk", {
+                            path: spliceStatus.path ?? "",
+                            count: formatCount(spliceStatus.row_count ?? 0),
+                          })
+                        : spliceStatus.error
+                          ? t("spliceStatusError", { error: spliceStatus.error })
+                          : t("spliceStatusMissing")}
+                  </div>
+                </div>
+
+                <Row title={t("refreshMetadata")} hint={t("refreshMetadataHint")}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={!settings.splice_enabled || refreshingMeta}
+                    onClick={() => {
+                      setRefreshingMeta(true);
+                      void ipc
+                        .refreshMetadata()
+                        .then(() => {
+                          loadSpliceStatus();
+                        })
+                        .catch(console.error)
+                        .finally(() => {
+                          setRefreshingMeta(false);
+                        });
+                    }}
+                  >
+                    {t("refreshMetadata")}
+                  </button>
+                </Row>
+
+                <Row title={t("reanalyzeLibrary")} hint={t("reanalyzeLibraryHint")}>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => {
+                      setConfirmReanalyze(true);
+                    }}
+                  >
+                    {t("reanalyzeLibrary")}
+                  </button>
+                </Row>
+
                 <Row title={t("jitCache")} hint={`${stats.clips_dir} · ${formatBytes(stats.clips_bytes)}`}>
                   <div className="settings-button-pair">
                     <button type="button" className="btn btn-secondary btn-sm" onClick={onChangeCacheDir}>
@@ -503,6 +587,18 @@ export function SettingsView({
           </div>
         </div>
       </div>
+
+      {confirmReanalyze ? (
+        <ReanalyzeLibraryDialog
+          onCancel={() => {
+            setConfirmReanalyze(false);
+          }}
+          onConfirm={() => {
+            setConfirmReanalyze(false);
+            void ipc.reanalyzeEntireLibrary().catch(console.error);
+          }}
+        />
+      ) : null}
     </Dialog>
   );
 }

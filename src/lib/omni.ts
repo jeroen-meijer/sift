@@ -19,9 +19,24 @@ export const EMPTY_OMNI: OmniState = {
 };
 
 /** Columns the picker can hide. Name and Waveform are controlled elsewhere. */
-export type OptionalColumn = "type" | "bpm" | "key" | "tags";
+export type OptionalColumn =
+  | "source"
+  | "type"
+  | "bpm"
+  | "key"
+  | "tags"
+  | "date_added"
+  | "date_created";
 
-export const OPTIONAL_COLUMNS: OptionalColumn[] = ["type", "bpm", "key", "tags"];
+export const OPTIONAL_COLUMNS: OptionalColumn[] = [
+  "source",
+  "type",
+  "bpm",
+  "key",
+  "tags",
+  "date_added",
+  "date_created",
+];
 
 export function omniHasQuery(value: OmniState): boolean {
   return (

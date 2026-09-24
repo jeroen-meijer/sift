@@ -43,6 +43,9 @@ diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.38.2", features = ["bundled"] }
 moodbar-analysis = "0.7.1"
 qos-threads = "0.1.3"
+sha2 = "0.11.0"
+hex = "0.4.3"
+tempfile = "3"
 
 # macOS only: used to check AppKit still has a live mouse event before handing a
 # drag to the plugin, which aborts the process on a NULL drag session.
@@ -70,7 +73,8 @@ panic = "abort"
 strip = true
 
 [lints.rust]
-unsafe_code = "forbid"
+# Denied (not forbid) so platform date-added helpers can use a tiny getattrlist FFI.
+unsafe_code = "deny"
 
 [lints.clippy]
 # https://www.namtao.com/rust-toolkit-2026/ (same deny set as chat-search)

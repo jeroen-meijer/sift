@@ -44,6 +44,12 @@ pub struct SampleDto {
     pub sample_type: Option<String>,
     pub favorite: bool,
     pub tags: Vec<TagChip>,
+    pub catalog_source: Option<String>,
+    pub bpm_source: Option<String>,
+    pub key_source: Option<String>,
+    pub sample_type_source: Option<String>,
+    pub date_added_ms: Option<i64>,
+    pub date_created_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -87,11 +93,18 @@ fn sample_to_dto(s: Sample) -> SampleDto {
         channels: s.channels.map(id_to_i64),
         duration_ms: s.duration_ms,
         format: s.format,
-        bpm: s.bpm,
+        // BPM ≤ 0 is "no BPM" (same as null).
+        bpm: s.bpm.filter(|b| *b > 0.0),
         key_name: s.key_name,
         sample_type: s.sample_type,
         favorite: s.favorite != 0,
         tags: Vec::new(),
+        catalog_source: s.catalog_source,
+        bpm_source: s.bpm_source,
+        key_source: s.key_source,
+        sample_type_source: s.sample_type_source,
+        date_added_ms: s.date_added_ms,
+        date_created_ms: s.date_created_ms,
     }
 }
 
@@ -137,6 +150,20 @@ fn order_sql(sort_column: &str, sort_direction: &str) -> &'static str {
                 "created_at DESC"
             } else {
                 "created_at ASC"
+            }
+        }
+        "date_added" => {
+            if desc {
+                "date_added_ms DESC NULLS LAST"
+            } else {
+                "date_added_ms ASC NULLS LAST"
+            }
+        }
+        "date_created" => {
+            if desc {
+                "date_created_ms DESC NULLS LAST"
+            } else {
+                "date_created_ms ASC NULLS LAST"
             }
         }
         "favorite" => {
@@ -648,7 +675,12 @@ fn apply_classified(
 
 /// Re-stat every sample path (metadata only). For launch backfill after schema add
 /// or while a cloud provider is still hydrating.
-pub fn refresh_availability_all(db: &crate::db::Db) -> AppResult<AvailabilityRefresh> {
+///
+/// When `app` is set, drives the bottom-right work bar.
+pub fn refresh_availability_all(
+    db: &crate::db::Db,
+    app: Option<&tauri::AppHandle>,
+) -> AppResult<AvailabilityRefresh> {
     let rows: Vec<(i32, String, String, i32)> = db.with_conn(|conn| {
         Ok(samples_dsl::samples
             .select((
@@ -659,7 +691,25 @@ pub fn refresh_availability_all(db: &crate::db::Db) -> AppResult<AvailabilityRef
             ))
             .load(conn)?)
     })?;
-    apply_classified(db, classify_rows(rows))
+    let total = u64::try_from(rows.len()).unwrap_or(u64::MAX);
+    if let Some(app) = app {
+        crate::analyze::work::start(app, total);
+    }
+    let mut classified = Vec::with_capacity(rows.len());
+    for (i, (id, path, old_avail, old_missing)) in rows.into_iter().enumerate() {
+        let avail = fs_ready::classify_path(std::path::Path::new(&path));
+        classified.push((id, old_avail, old_missing, avail));
+        if let Some(app) = app {
+            let done = u64::try_from(i.saturating_add(1)).unwrap_or(u64::MAX);
+            if done == total || done.is_multiple_of(50) {
+                crate::analyze::work::tick(app, done, total, id_to_i64(id));
+            }
+        }
+    }
+    if let Some(app) = app {
+        crate::analyze::work::finish(app, total);
+    }
+    apply_classified(db, classified)
 }
 
 pub fn remove_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<()> {
@@ -758,6 +808,8 @@ pub fn refresh_technical(db: &crate::db::Db, path: &str) -> AppResult<Option<Tec
     };
     #[cfg(not(unix))]
     let inode: Option<i64> = None;
+    let date_created = crate::fs_dates::date_created_ms(&meta);
+    let date_added = crate::fs_dates::date_added_ms(path_buf);
     let avail = fs_ready::classify_meta(&meta);
     let now = utc_now();
     let missing_flag = i32::from(avail == Availability::Missing);
@@ -771,6 +823,8 @@ pub fn refresh_technical(db: &crate::db::Db, path: &str) -> AppResult<Option<Tec
                     samples_dsl::missing.eq(missing_flag),
                     samples_dsl::availability.eq(avail.as_str()),
                     samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+                    samples_dsl::date_added_ms.eq(date_added),
+                    samples_dsl::date_created_ms.eq(date_created),
                 ))
                 .execute(conn)?;
             Ok(())
@@ -792,6 +846,8 @@ pub fn refresh_technical(db: &crate::db::Db, path: &str) -> AppResult<Option<Tec
                 samples_dsl::missing.eq(missing_flag),
                 samples_dsl::availability.eq(avail.as_str()),
                 samples_dsl::availability_checked_at.eq(Some(now.as_str())),
+                samples_dsl::date_added_ms.eq(date_added),
+                samples_dsl::date_created_ms.eq(date_created),
                 samples_dsl::updated_at.eq(now.as_str()),
             ))
             .execute(conn)?;
@@ -808,9 +864,13 @@ pub fn refresh_technical(db: &crate::db::Db, path: &str) -> AppResult<Option<Tec
 }
 
 pub fn set_sample_bpm(conn: &mut SqliteConnection, id: i64, bpm: Option<f64>) -> AppResult<()> {
+    // 0 and negatives mean "no BPM" (clear). Clearing is a user choice.
+    let bpm = bpm.filter(|b| *b > 0.0);
     let n = diesel::update(samples_dsl::samples.find(id_from_i64(id)?))
         .set((
             samples_dsl::bpm.eq(bpm),
+            samples_dsl::bpm_source.eq(Some("user")),
+            samples_dsl::bpm_confidence.eq(Some(1.0)),
             samples_dsl::updated_at.eq(utc_now()),
         ))
         .execute(conn)?;
@@ -824,6 +884,8 @@ pub fn set_sample_key(conn: &mut SqliteConnection, id: i64, key: Option<&str>) -
     let n = diesel::update(samples_dsl::samples.find(id_from_i64(id)?))
         .set((
             samples_dsl::key_name.eq(key),
+            samples_dsl::key_source.eq(key.map(|_| "user")),
+            samples_dsl::key_confidence.eq(key.map(|_| 1.0)),
             samples_dsl::updated_at.eq(utc_now()),
         ))
         .execute(conn)?;
@@ -841,6 +903,7 @@ pub fn set_sample_type(
     let n = diesel::update(samples_dsl::samples.find(id_from_i64(id)?))
         .set((
             samples_dsl::sample_type.eq(sample_type),
+            samples_dsl::sample_type_source.eq(sample_type.map(|_| "user")),
             samples_dsl::updated_at.eq(utc_now()),
         ))
         .execute(conn)?;
@@ -848,6 +911,52 @@ pub fn set_sample_type(
         return Err(crate::error::AppError::msg("sample not found"));
     }
     Ok(())
+}
+
+/// Wipe creative analysis fields for the whole library (nuclear reset).
+/// Keeps favorites, user tags, tag rejects, roots, and UI prefs.
+/// Returns ids of local samples that should be re-queued for full analyze.
+pub fn wipe_analysis_all(
+    conn: &mut SqliteConnection,
+    peaks_dir: &std::path::Path,
+) -> AppResult<Vec<i64>> {
+    use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
+    use std::fs;
+
+    diesel::update(samples_dsl::samples)
+        .set((
+            samples_dsl::bpm.eq(Option::<f64>::None),
+            samples_dsl::bpm_confidence.eq(Option::<f64>::None),
+            samples_dsl::key_name.eq(Option::<String>::None),
+            samples_dsl::key_confidence.eq(Option::<f64>::None),
+            samples_dsl::sample_type.eq(Option::<String>::None),
+            samples_dsl::catalog_source.eq(Option::<String>::None),
+            samples_dsl::bpm_source.eq(Option::<String>::None),
+            samples_dsl::key_source.eq(Option::<String>::None),
+            samples_dsl::sample_type_source.eq(Option::<String>::None),
+            samples_dsl::analyzed_at.eq(Option::<String>::None),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
+
+    diesel::delete(sample_tags_dsl::sample_tags.filter(sample_tags_dsl::source.eq("auto")))
+        .execute(conn)?;
+
+    if peaks_dir.is_dir() {
+        for entry in fs::read_dir(peaks_dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("peaks") {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+
+    let ids: Vec<i32> = samples_dsl::samples
+        .filter(samples_dsl::missing.eq(0))
+        .filter(samples_dsl::availability.eq(Availability::Local.as_str()))
+        .select(samples_dsl::id)
+        .load(conn)?;
+    Ok(ids.into_iter().map(id_to_i64).collect())
 }
 
 /// `(favorite, bpm, key_name, sample_type)` as stored for one sample.

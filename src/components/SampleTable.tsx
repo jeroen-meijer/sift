@@ -10,8 +10,10 @@ import { useTranslation } from "react-i18next";
 import {
   clampColumnWidth,
   columnGridTemplate,
+  isResizableColumn,
   type ColumnWidths,
   type ResizableColumn,
+  type TableColumn,
 } from "../lib/columnWidths";
 import {
   dropIndexFromClientX,
@@ -52,9 +54,9 @@ const DEFAULT_WAVE_WIDTH = 120;
 /** Movement past this (css px) turns a header press into a column reorder. */
 const REORDER_THRESHOLD_PX = 5;
 
-const SORTABLE = new Set<ResizableColumn>(["name", "type", "bpm", "key"]);
+const SORTABLE = new Set<TableColumn>(["name", "type", "bpm", "key", "date_added", "date_created"]);
 
-function ordersEqual(a: readonly ResizableColumn[], b: readonly ResizableColumn[]): boolean {
+function ordersEqual(a: readonly TableColumn[], b: readonly TableColumn[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) return false;
@@ -73,7 +75,7 @@ interface Props {
   coloredWaveforms: boolean;
   hiddenColumns: Set<OptionalColumn>;
   columnWidths: ColumnWidths;
-  columnOrder: ResizableColumn[];
+  columnOrder: TableColumn[];
   sortColumn: SortColumn;
   sortDirection: SortDirection;
   highlightText: string;
@@ -85,7 +87,7 @@ interface Props {
   onToggleFavorite: (id: number, favorite: boolean) => void;
   onSort: (column: SortColumn) => void;
   onColumnWidthsChange: (widths: ColumnWidths) => void;
-  onColumnOrderChange: (order: ResizableColumn[]) => void;
+  onColumnOrderChange: (order: TableColumn[]) => void;
   onOpenMenu: (x: number, y: number, sample: SampleRow) => void;
   onDragSelected: () => void;
   onScrubRow: (sample: SampleRow, fraction: number) => void;
@@ -131,7 +133,7 @@ export const SampleTable = memo(function SampleTable({
     startWidth: number;
   } | null>(null);
   const reorderRef = useRef<{
-    column: ResizableColumn;
+    column: TableColumn;
     startX: number;
     active: boolean;
     sortable: boolean;
@@ -142,8 +144,8 @@ export const SampleTable = memo(function SampleTable({
   orderRef.current = columnOrder;
   const flipBeforeRef = useRef<Map<HTMLElement, number> | null>(null);
 
-  const [draftOrder, setDraftOrder] = useState<ResizableColumn[] | null>(null);
-  const draftOrderRef = useRef<ResizableColumn[] | null>(null);
+  const [draftOrder, setDraftOrder] = useState<TableColumn[] | null>(null);
+  const draftOrderRef = useRef<TableColumn[] | null>(null);
   draftOrderRef.current = draftOrder;
   const effectiveOrder = draftOrder ?? mergeColumnOrder(columnOrder);
   const columns = visibleOrderedColumns(effectiveOrder, hiddenColumns, showWaveforms);
@@ -448,7 +450,7 @@ export const SampleTable = memo(function SampleTable({
     document.body.classList.add("col-resizing");
   };
 
-  const startReorder = (column: ResizableColumn, e: React.PointerEvent) => {
+  const startReorder = (column: TableColumn, e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
     reorderRef.current = {
@@ -459,10 +461,12 @@ export const SampleTable = memo(function SampleTable({
     };
   };
 
-  const columnLabel = (column: ResizableColumn): string => {
+  const columnLabel = (column: TableColumn): string => {
     switch (column) {
       case "name":
         return t("colName");
+      case "source":
+        return t("colSource");
       case "type":
         return t("colType");
       case "bpm":
@@ -473,13 +477,18 @@ export const SampleTable = memo(function SampleTable({
         return t("colWaveform");
       case "tags":
         return t("colTags");
+      case "date_added":
+        return t("colDateAdded");
+      case "date_created":
+        return t("colDateCreated");
     }
   };
 
-  const renderHeader = (column: ResizableColumn) => {
+  const renderHeader = (column: TableColumn) => {
     const label = columnLabel(column);
     const sortable = SORTABLE.has(column);
     const active = sortable && sortColumn === column;
+    const resizable = isResizableColumn(column);
     return (
       <div key={column} className="col-header" data-col={column}>
         {sortable ? (
@@ -514,15 +523,17 @@ export const SampleTable = memo(function SampleTable({
             {label}
           </span>
         )}
-        <button
-          type="button"
-          className="col-resize"
-          tabIndex={-1}
-          aria-label={t("resizeColumn", { column: label })}
-          onPointerDown={(e) => {
-            startResize(column, e);
-          }}
-        />
+        {resizable ? (
+          <button
+            type="button"
+            className="col-resize"
+            tabIndex={-1}
+            aria-label={t("resizeColumn", { column: label })}
+            onPointerDown={(e) => {
+              startResize(column, e);
+            }}
+          />
+        ) : null}
       </div>
     );
   };

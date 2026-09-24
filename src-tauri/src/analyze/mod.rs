@@ -1,6 +1,11 @@
 //! Background sample analysis: path auto-tags, BPM/key, loop vs one-shot, row peakfiles.
 
+mod enrich;
+pub mod work_ui;
 mod name_meta;
+
+pub use enrich::refresh_metadata_all;
+pub use work_ui as work;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -11,7 +16,7 @@ use std::time::Instant;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 use crate::state::AppState;
 
@@ -27,6 +32,7 @@ use crate::db::{Db, settings, utc_now};
 use crate::error::{AppError, AppResult};
 use crate::fs_ready::Availability;
 use crate::ids::{f64_to_f32, id_from_i64, id_to_i64};
+use crate::meta_source::{MetaSource, should_write};
 
 const BPM_CONF_MIN: f64 = 0.08;
 const KEY_CONF_MIN: f64 = 0.25;
@@ -579,13 +585,22 @@ struct SampleRow {
     path: String,
     missing: bool,
     availability: String,
+    analyzed_at: Option<String>,
     bpm: Option<f64>,
     key_name: Option<String>,
     sample_type: Option<String>,
+    bpm_source: Option<String>,
+    key_source: Option<String>,
+    sample_type_source: Option<String>,
 }
 
 /// Analyze one sample. Decode outside the DB mutex; only short writes hold the lock.
 /// Also writes the row peakfile from the same PCM (analysis includes waveforms).
+///
+/// Stages:
+/// - Always runs non-decode Splice enrich first (when enabled).
+/// - Peaks-only when Normal mode and `analyzed_at` is already set (stale peakfile).
+/// - Full creative otherwise (filename / audio with source precedence).
 pub fn analyze_sample(
     db: &Db,
     peaks_dir: &Path,
@@ -597,6 +612,9 @@ pub fn analyze_sample(
     let seq = ANALYZE_SEQ.fetch_add(1, Ordering::Relaxed);
     let detail = seq.is_multiple_of(ANALYZE_DETAIL_EVERY);
 
+    // Catalog enrich before decode so empty fields fill without peaks work.
+    let _ = db.with_conn(|conn| enrich::enrich_sample(conn, sample_id, false));
+
     let row = db
         .with_conn(|conn| load_sample_row(conn, sample_id))?
         .ok_or_else(|| AppError::msg("sample not found"))?;
@@ -605,26 +623,25 @@ pub fn analyze_sample(
     }
     let path = Path::new(&row.path);
 
+    let peaks_only = matches!(mode, AnalyzeMode::Normal) && row.analyzed_at.is_some();
+
     let stat_start = Instant::now();
     let exists = path.exists();
     if detail {
         crate::profile_log::event(
             "analyze.stat",
             stat_start.elapsed(),
-            &format!("id={sample_id} exists={exists}"),
+            &format!("id={sample_id} exists={exists} peaks_only={peaks_only}"),
         );
     }
     if !exists {
         return Ok(());
     }
 
-    // Decode off the DB lock (Dropbox may hydrate here when the file is local).
     let decode_start = Instant::now();
     let Ok(opened) = open_audio(path) else {
         return Ok(());
     };
-    // Reserve expected PCM (+ mono) from the shared budget so several mid-length
-    // files can decode in parallel, but a huge file still runs alone.
     let reserve_bytes = estimate_pcm_bytes(&opened);
     let _pcm_permit = ANALYZE_PCM.reserve(reserve_bytes);
     let Ok(pcm) = decode_all(opened) else {
@@ -643,10 +660,7 @@ pub fn analyze_sample(
         );
     }
 
-    // One mono downmix, shared by the peakfile colors and the analyzers.
     let mono = to_mono(&pcm);
-
-    // Peakfile from the same buffer so browse/scroll does not decode again.
     let peaks_start = Instant::now();
     match peaks::cache_peaks_from_decoded_with_mono(
         peaks_dir,
@@ -673,9 +687,26 @@ pub fn analyze_sample(
         }
     }
 
-    // Interleaved PCM is not needed past this point.
     let tech = pcm.tech();
     drop(pcm);
+
+    if peaks_only {
+        let db_start = Instant::now();
+        db.with_conn(|conn| write_technical_info(conn, sample_id, path, &tech))?;
+        if detail {
+            crate::profile_log::event(
+                "analyze.db_write",
+                db_start.elapsed(),
+                &format!("id={sample_id} peaks_only=1"),
+            );
+        }
+        crate::profile_log::event(
+            "analyze.sample",
+            total.elapsed(),
+            &format!("id={sample_id} peaks_only=1"),
+        );
+        return Ok(());
+    }
 
     let (bpm_min, bpm_max) = bpm_range;
     let heur_start = Instant::now();
@@ -696,43 +727,12 @@ pub fn analyze_sample(
         AnalyzeMode::Custom(c) => (c.overwrite_tags, c.rerun_bpm, c.rerun_key, c.rerun_type),
     };
 
-    let detected_type = path_result
-        .sample_type
-        .clone()
-        .or_else(|| audio_result.sample_type.clone());
-
-    /* Filename BPM/key beat weak audio guesses (pack names are usually right).
-     * One-shots with no tempo in the name skip audio BPM (clicks/hits often
-     * get a nonsense tempo from the DSP). Loops still fall back to audio. */
-    let bpm = path_result.bpm.or_else(|| {
-        if detected_type.as_deref() == Some("one-shot") {
-            None
-        } else {
-            audio_result.bpm
-        }
-    });
-    let bpm_confidence = if path_result.bpm.is_some() {
-        path_result.bpm_confidence
-    } else if detected_type.as_deref() == Some("one-shot") {
-        None
-    } else {
-        audio_result.bpm_confidence
-    };
-    let key_name = path_result
-        .key_name
-        .clone()
-        .or_else(|| audio_result.key_name.clone());
-    let key_confidence = if path_result.key_name.is_some() {
-        path_result.key_confidence
-    } else {
-        audio_result.key_confidence
-    };
-
-    /* Filename hits always win (even over a prior weak audio guess). Empty
-     * fields still fill from audio when the name has nothing. */
-    let write_bpm = row.bpm.is_none() || rerun_bpm || path_result.bpm.is_some();
-    let write_key = row.key_name.is_none() || rerun_key || path_result.key_name.is_some();
-    let write_type = row.sample_type.is_none() || rerun_type;
+    let path_type = path_result.sample_type.clone();
+    let audio_type = audio_result.sample_type.clone();
+    let skip_audio_bpm = path_type
+        .as_deref()
+        .or(audio_type.as_deref())
+        == Some("one-shot");
 
     let db_start = Instant::now();
     db.with_conn(|conn| {
@@ -741,33 +741,117 @@ pub fn analyze_sample(
         let now = utc_now();
         let id = id_from_i64(sample_id)?;
 
-        if write_bpm {
-            if let Some(v) = bpm {
-                diesel::update(samples_dsl::samples.find(id))
-                    .set(samples_dsl::bpm.eq(v))
-                    .execute(conn)?;
+        // BPM: filename > audio (one-shots skip audio tempo). ≤ 0 is empty.
+        let bpm_empty = row.bpm.is_none_or(|b| b <= 0.0);
+        let bpm_candidate = if let Some(v) = path_result.bpm.filter(|b| *b > 0.0) {
+            if should_write(
+                bpm_empty,
+                row.bpm_source.as_deref(),
+                MetaSource::Filename,
+                rerun_bpm,
+            ) {
+                Some((v, path_result.bpm_confidence, MetaSource::Filename))
+            } else {
+                None
             }
-            if let Some(v) = bpm_confidence {
-                diesel::update(samples_dsl::samples.find(id))
-                    .set(samples_dsl::bpm_confidence.eq(v))
-                    .execute(conn)?;
+        } else if !skip_audio_bpm {
+            if let Some(v) = audio_result.bpm.filter(|b| *b > 0.0) {
+                if should_write(
+                    bpm_empty,
+                    row.bpm_source.as_deref(),
+                    MetaSource::Audio,
+                    rerun_bpm,
+                ) {
+                    Some((v, audio_result.bpm_confidence, MetaSource::Audio))
+                } else {
+                    None
+                }
+            } else {
+                None
             }
-        }
-        if write_key {
-            if let Some(ref v) = key_name {
-                diesel::update(samples_dsl::samples.find(id))
-                    .set(samples_dsl::key_name.eq(v))
-                    .execute(conn)?;
-            }
-            if let Some(v) = key_confidence {
-                diesel::update(samples_dsl::samples.find(id))
-                    .set(samples_dsl::key_confidence.eq(v))
-                    .execute(conn)?;
-            }
-        }
-        if write_type && let Some(ref v) = detected_type {
+        } else {
+            None
+        };
+        if let Some((v, conf, src)) = bpm_candidate {
             diesel::update(samples_dsl::samples.find(id))
-                .set(samples_dsl::sample_type.eq(v))
+                .set((
+                    samples_dsl::bpm.eq(v),
+                    samples_dsl::bpm_confidence.eq(conf),
+                    samples_dsl::bpm_source.eq(src.as_str()),
+                ))
+                .execute(conn)?;
+        }
+
+        let key_candidate = if let Some(ref v) = path_result.key_name {
+            if should_write(
+                row.key_name.is_none(),
+                row.key_source.as_deref(),
+                MetaSource::Filename,
+                rerun_key,
+            ) {
+                Some((
+                    v.clone(),
+                    path_result.key_confidence,
+                    MetaSource::Filename,
+                ))
+            } else {
+                None
+            }
+        } else if let Some(ref v) = audio_result.key_name {
+            if should_write(
+                row.key_name.is_none(),
+                row.key_source.as_deref(),
+                MetaSource::Audio,
+                rerun_key,
+            ) {
+                Some((v.clone(), audio_result.key_confidence, MetaSource::Audio))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some((v, conf, src)) = key_candidate {
+            diesel::update(samples_dsl::samples.find(id))
+                .set((
+                    samples_dsl::key_name.eq(v),
+                    samples_dsl::key_confidence.eq(conf),
+                    samples_dsl::key_source.eq(src.as_str()),
+                ))
+                .execute(conn)?;
+        }
+
+        let type_candidate = if let Some(ref v) = path_type {
+            if should_write(
+                row.sample_type.is_none(),
+                row.sample_type_source.as_deref(),
+                MetaSource::Filename,
+                rerun_type,
+            ) {
+                Some((v.clone(), MetaSource::Filename))
+            } else {
+                None
+            }
+        } else if let Some(ref v) = audio_type {
+            if should_write(
+                row.sample_type.is_none(),
+                row.sample_type_source.as_deref(),
+                MetaSource::Audio,
+                rerun_type,
+            ) {
+                Some((v.clone(), MetaSource::Audio))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some((v, src)) = type_candidate {
+            diesel::update(samples_dsl::samples.find(id))
+                .set((
+                    samples_dsl::sample_type.eq(v),
+                    samples_dsl::sample_type_source.eq(src.as_str()),
+                ))
                 .execute(conn)?;
         }
 
@@ -875,7 +959,11 @@ type SampleRowTuple = (
     String,
     i32,
     String,
+    Option<String>,
     Option<f64>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
     Option<String>,
     Option<String>,
 );
@@ -887,20 +975,39 @@ fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<Sam
             samples_dsl::path,
             samples_dsl::missing,
             samples_dsl::availability,
+            samples_dsl::analyzed_at,
             samples_dsl::bpm,
             samples_dsl::key_name,
             samples_dsl::sample_type,
+            samples_dsl::bpm_source,
+            samples_dsl::key_source,
+            samples_dsl::sample_type_source,
         ))
         .first(conn)
         .optional()?;
     Ok(row.map(
-        |(path, missing, availability, bpm, key_name, sample_type)| SampleRow {
+        |(
             path,
-            missing: missing != 0,
+            missing,
             availability,
+            analyzed_at,
             bpm,
             key_name,
             sample_type,
+            bpm_source,
+            key_source,
+            sample_type_source,
+        )| SampleRow {
+            path,
+            missing: missing != 0,
+            availability,
+            analyzed_at,
+            bpm,
+            key_name,
+            sample_type,
+            bpm_source,
+            key_source,
+            sample_type_source,
         },
     ))
 }
@@ -1134,9 +1241,8 @@ fn analysis_worker(
                 .is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(250));
         if should_emit {
             st.last_emit = Some(Instant::now());
-            crate::profile_log::count_emit("analysis-progress");
-            let _ = app.emit(
-                "analysis-progress",
+            work::update(
+                app,
                 &AnalysisProgress {
                     sample_id: job.sample_id,
                     done,
@@ -1243,16 +1349,11 @@ fn enqueue_jobs(
             std::time::Duration::ZERO,
             &format!("n={}", st.total()),
         );
-        crate::profile_log::count_emit("analysis-queue");
-        let _ = app.emit(
-            "analysis-queue",
-            &AnalysisQueuePayload { total: st.total() },
-        );
+        work::start(&app, st.total());
     }
     st.last_emit = Some(Instant::now());
-    crate::profile_log::count_emit("analysis-progress");
-    let _ = app.emit(
-        "analysis-progress",
+    work::update(
+        &app,
         &AnalysisProgress {
             sample_id: 0,
             done: st.done,

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding, primaryModHeld, shiftHeld as isShiftHeld } from "../lib/bindings";
 import { bpmFromBeats } from "../lib/bpm";
-import { mergeColumnWidths, type ColumnWidths, type ResizableColumn } from "../lib/columnWidths";
+import { mergeColumnWidths, type ColumnWidths, type TableColumn } from "../lib/columnWidths";
 import { mergeColumnOrder } from "../lib/columnOrder";
 import { matchesHotkey } from "../lib/hotkey";
 import {
@@ -58,7 +58,6 @@ interface Props {
   stats: DbStats;
   folders: FolderNode[];
   tags: TagNode[];
-  statusText: string | undefined;
   /** Bumped by the shell whenever the library changed underneath us. */
   refreshToken: number;
   onRefreshLibrary: () => void;
@@ -73,7 +72,6 @@ export function LibraryView({
   stats,
   folders,
   tags,
-  statusText,
   refreshToken,
   onRefreshLibrary,
   onAddRoot,
@@ -88,7 +86,12 @@ export function LibraryView({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [focusedId, setFocusedId] = useState<number | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [hiddenColumns, setHiddenColumns] = useState<Set<OptionalColumn>>(() => new Set());
+  const [hiddenColumns, setHiddenColumns] = useState<Set<OptionalColumn>>(() => {
+    /* Date added is macOS-only; hide by default elsewhere. */
+    const isMac =
+      typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    return isMac ? new Set() : new Set<OptionalColumn>(["date_added"]);
+  });
   const [peaks, setPeaks] = useState<PeakData | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -884,7 +887,15 @@ export function LibraryView({
     });
   });
   const columnLabels = useMemo(
-    () => ({ type: t("colType"), bpm: t("colBpm"), key: t("colKey"), tags: t("colTags") }),
+    () => ({
+      source: t("colSource"),
+      type: t("colType"),
+      bpm: t("colBpm"),
+      key: t("colKey"),
+      tags: t("colTags"),
+      date_added: t("colDateAdded"),
+      date_created: t("colDateCreated"),
+    }),
     [t],
   );
   const columnWidths = useMemo(
@@ -919,7 +930,7 @@ export function LibraryView({
   const onColumnWidthsChange = useStableCallback((widths: ColumnWidths) => {
     onSettingChange("column_widths", widths);
   });
-  const onColumnOrderChange = useStableCallback((order: ResizableColumn[]) => {
+  const onColumnOrderChange = useStableCallback((order: TableColumn[]) => {
     onSettingChange("column_order", order);
   });
   const onOpenMenu = useStableCallback((x: number, y: number, sample: SampleRow) => {
@@ -1111,7 +1122,6 @@ export function LibraryView({
         fileCount={stats.samples}
         shownCount={samples.length}
         filtered={filtered}
-        statusText={statusText}
       />
 
       {menu ? (
