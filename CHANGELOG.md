@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.3.1
+
 - fix(library): fill Date added and Date created on launch for samples indexed before those columns existed
 - fix(ui): bring back the X of Y count on the bottom-right Processing bar
 
