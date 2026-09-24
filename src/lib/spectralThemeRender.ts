@@ -2,8 +2,10 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BAND_COUNT,
   blendSpectralRgb,
   parseCssColor,
+  type BandWeights,
   type Rgb,
   type SpectralBandColors,
 } from "./spectralColor";
@@ -14,22 +16,24 @@ const FIXTURES = join(
   "../../testdata/spectral-fixtures",
 );
 
-/** Nocturne (and friends) band hues used by canvas paint. */
+/** Theme band hues used by canvas paint. */
 export function themeBands(id: ThemeId): SpectralBandColors {
   const hex = THEME_INFO[id].waveBands;
   const fallback: SpectralBandColors = {
     bass: [255, 61, 138],
-    mid: [46, 232, 154],
+    lowMid: [46, 232, 154],
+    highMid: [64, 200, 232],
     treble: [139, 124, 255],
   };
   return {
     bass: parseCssColor(hex.bass) ?? fallback.bass,
-    mid: parseCssColor(hex.mid) ?? fallback.mid,
+    lowMid: parseCssColor(hex.lowMid) ?? fallback.lowMid,
+    highMid: parseCssColor(hex.highMid) ?? fallback.highMid,
     treble: parseCssColor(hex.treble) ?? fallback.treble,
   };
 }
 
-/** Parse a P3 PPM of Classic moodbar weights (bass→R, mid→G, treble→B). */
+/** Parse a P3 PPM of the first three band weights packed as R/G/B. */
 export function parseClassicPpm(text: string): { width: number; colors: number[] } {
   const tokens = text.trim().split(/\s+/);
   if (tokens[0] !== "P3") throw new Error("expected P3 ppm");
@@ -38,16 +42,22 @@ export function parseClassicPpm(text: string): { width: number; colors: number[]
   const max = Number(tokens[3]);
   if (!width || !height || max !== 255) throw new Error("bad ppm header");
   const nums = tokens.slice(4).map(Number);
-  /* One row is enough; Classic fixtures repeat the same strip. */
-  const colors = nums.slice(0, width * 3);
-  if (colors.length < width * 3) throw new Error("short ppm body");
+  const packed = nums.slice(0, width * 3);
+  if (packed.length < width * 3) throw new Error("short ppm body");
+  /* Expand R/G/B → bass/lowMid/0/treble for theme mapping. */
+  const colors: number[] = [];
+  for (let i = 0; i < width; i++) {
+    colors.push(packed[i * 3] ?? 0, packed[i * 3 + 1] ?? 0, 0, packed[i * 3 + 2] ?? 0);
+  }
   return { width, colors };
 }
 
 export interface ThemedStripStats {
   width: number;
-  /** Buckets where mid theme hue clearly wins (greenish). */
+  /** Buckets where low-mid theme hue clearly wins (greenish). */
   midLed: number;
+  /** Buckets where high-mid theme hue clearly wins (cyan). */
+  highMidLed: number;
   /** Buckets where treble theme hue clearly wins (violet). */
   trebleLed: number;
   /** Buckets where bass theme hue clearly wins (pink). */
@@ -57,29 +67,32 @@ export interface ThemedStripStats {
   pixels: Rgb[];
 }
 
-/** Theme-map Classic weights and measure diversity. */
+/** Theme-map four-band weights and measure diversity. */
 export function themeClassicStrip(
-  classicColors: number[],
+  bandColors: number[],
   bands: SpectralBandColors,
 ): ThemedStripStats {
-  const width = Math.floor(classicColors.length / 3);
+  const width = Math.floor(bandColors.length / BAND_COUNT);
   const pixels: Rgb[] = [];
   let midLed = 0;
+  let highMidLed = 0;
   let trebleLed = 0;
   let bassLed = 0;
   let adj = 0;
   for (let i = 0; i < width; i++) {
-    const w: Rgb = [
-      classicColors[i * 3] ?? 0,
-      classicColors[i * 3 + 1] ?? 0,
-      classicColors[i * 3 + 2] ?? 0,
+    const ci = i * BAND_COUNT;
+    const w: BandWeights = [
+      bandColors[ci] ?? 0,
+      bandColors[ci + 1] ?? 0,
+      bandColors[ci + 2] ?? 0,
+      bandColors[ci + 3] ?? 0,
     ];
     const rgb = blendSpectralRgb(w, bands);
     pixels.push(rgb);
     const [r, g, b] = rgb;
-    /* Pink (bass+treble) counts as bass-led for neuro-style fixtures. */
     if (r > 140 && b > 100 && g < Math.min(r, b) + 40) bassLed += 1;
-    else if (g > b + 15 && g > r + 15) midLed += 1;
+    else if (g > b + 15 && g > r + 15 && g > 140) midLed += 1;
+    else if (b > 140 && g > 120 && r < 110) highMidLed += 1;
     else if (b > g + 10 && b >= r - 20) trebleLed += 1;
     else if (r > g + 20 && r > b + 10) bassLed += 1;
     if (i > 0) {
@@ -91,6 +104,7 @@ export function themeClassicStrip(
   return {
     width,
     midLed,
+    highMidLed,
     trebleLed,
     bassLed,
     meanAdjacentDelta: width > 1 ? adj / (width - 1) : 0,

@@ -17,7 +17,7 @@ interface Props {
   /** A worker is analyzing this sample right now. */
   analyzing: boolean;
   selected: boolean;
-  /** Bass→red / mid→green / treble→blue from peak colors. */
+  /** Bass / low-mid / high-mid / treble from peak colors. */
   colored: boolean;
   /** This row is the one playing. */
   playing: boolean;

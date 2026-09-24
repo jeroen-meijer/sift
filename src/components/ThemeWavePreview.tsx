@@ -10,12 +10,14 @@ function bandsForTheme(id: ThemeId): SpectralBandColors {
   const hex = THEME_INFO[id].waveBands;
   const fallback: SpectralBandColors = {
     bass: [255, 61, 138],
-    mid: [46, 232, 154],
-    treble: [78, 184, 255],
+    lowMid: [46, 232, 154],
+    highMid: [64, 200, 232],
+    treble: [139, 124, 255],
   };
   return {
     bass: parseCssColor(hex.bass) ?? fallback.bass,
-    mid: parseCssColor(hex.mid) ?? fallback.mid,
+    lowMid: parseCssColor(hex.lowMid) ?? fallback.lowMid,
+    highMid: parseCssColor(hex.highMid) ?? fallback.highMid,
     treble: parseCssColor(hex.treble) ?? fallback.treble,
   };
 }

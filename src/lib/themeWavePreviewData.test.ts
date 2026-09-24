@@ -5,13 +5,13 @@ describe("buildThemePreviewLane", () => {
   it("emits overlapping band weights, not a pure left-to-right rainbow", () => {
     const lane = buildThemePreviewLane();
     expect(lane.bucketCount).toBeGreaterThan(64);
-    expect(lane.colors.length).toBe(lane.bucketCount * 3);
+    expect(lane.colors.length).toBe(lane.bucketCount * 4);
 
-    /* ~t=0.3 neuro body: bass + treble high (pink), mid lower. */
+    /* ~t=0.3 neuro body: bass + treble high (pink), mids lower. */
     const body = Math.floor(0.3 * (lane.bucketCount - 1));
-    const br = lane.colors[body * 3] ?? 0;
-    const bg = lane.colors[body * 3 + 1] ?? 0;
-    const bb = lane.colors[body * 3 + 2] ?? 0;
+    const br = lane.colors[body * 4] ?? 0;
+    const bg = lane.colors[body * 4 + 1] ?? 0;
+    const bb = lane.colors[body * 4 + 3] ?? 0;
     expect(br).toBeGreaterThan(100);
     expect(bb).toBeGreaterThan(80);
     expect(bg).toBeLessThan(br);
