@@ -73,7 +73,7 @@ export interface PeakData {
   duration_ms: number;
   bucket_count: number;
   peaks: number[];
-  /** Flat RGB triples (`bucket_count * 3`): bass→R, mid→G, treble→B. */
+  /** Flat band weights (`bucket_count * 4`): bass, low-mid, high-mid, treble. */
   colors: number[];
 }
 

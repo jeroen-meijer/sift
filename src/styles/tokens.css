@@ -99,6 +99,8 @@
 @property --color-row-wave { syntax: "<color>"; inherits: true; initial-value: #6a6d80; }
 @property --color-row-wave-sel { syntax: "<color>"; inherits: true; initial-value: #b9b0f0; }
 @property --color-wave-bass { syntax: "<color>"; inherits: true; initial-value: #ff3d8a; }
+@property --color-wave-low-mid { syntax: "<color>"; inherits: true; initial-value: #2ee89a; }
+@property --color-wave-high-mid { syntax: "<color>"; inherits: true; initial-value: #40c8e8; }
 @property --color-wave-mid { syntax: "<color>"; inherits: true; initial-value: #2ee89a; }
 @property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #8b7cff; }
 
@@ -166,6 +168,8 @@ html.theme-lerp {
     --color-row-wave var(--motion-theme) var(--motion-ease),
     --color-row-wave-sel var(--motion-theme) var(--motion-ease),
     --color-wave-bass var(--motion-theme) var(--motion-ease),
+    --color-wave-low-mid var(--motion-theme) var(--motion-ease),
+    --color-wave-high-mid var(--motion-theme) var(--motion-ease),
     --color-wave-mid var(--motion-theme) var(--motion-ease),
     --color-wave-treble var(--motion-theme) var(--motion-ease);
 }
@@ -250,6 +254,8 @@ html.theme-lerp {
   --color-row-wave-sel: #b9b0f0;
   /* Spectral bands: saturated enough to read on slate chrome. */
   --color-wave-bass: #ff3d8a;
+  --color-wave-low-mid: #2ee89a;
+  --color-wave-high-mid: #40c8e8;
   --color-wave-mid: #2ee89a;
   --color-wave-treble: #8b7cff;
 }
@@ -325,6 +331,8 @@ html.theme-lerp {
   --color-row-wave: #5d6a7d;
   --color-row-wave-sel: #c9aefd;
   --color-wave-bass: #ff2d7b;
+  --color-wave-low-mid: #1dff9a;
+  --color-wave-high-mid: #3ec4f0;
   --color-wave-mid: #1dff9a;
   --color-wave-treble: #9a7dff;
 }
@@ -400,6 +408,8 @@ html.theme-lerp {
   --color-row-wave: #5c5c5c;
   --color-row-wave-sel: #c4c4c4;
   --color-wave-bass: #ff4a4a;
+  --color-wave-low-mid: #4ade80;
+  --color-wave-high-mid: #38bdf8;
   --color-wave-mid: #4ade80;
   --color-wave-treble: #8b9cf7;
 }
@@ -476,6 +486,8 @@ html.theme-lerp {
   --color-row-wave-sel: #2188ff;
   /* Darker saturated bands so they hold on white chrome. */
   --color-wave-bass: #cf222e;
+  --color-wave-low-mid: #1a7f37;
+  --color-wave-high-mid: #0969da;
   --color-wave-mid: #1a7f37;
   --color-wave-treble: #5b4db8;
 }

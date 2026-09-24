@@ -42,19 +42,23 @@ export function buildThemePreviewLane(): WaveLanePeaks {
 
     let bass =
       (0.75 * wHit + 0.95 * wBody + 0.7 * wGrowl + 0.12 * wTail) / wSum;
-    let mid =
-      (0.55 * wHit + 0.18 * wBody + 0.75 * wGrowl + 0.28 * wTail) / wSum;
+    let lowMid =
+      (0.4 * wHit + 0.22 * wBody + 0.55 * wGrowl + 0.2 * wTail) / wSum;
+    let highMid =
+      (0.45 * wHit + 0.12 * wBody + 0.55 * wGrowl + 0.35 * wTail) / wSum;
     let treble =
       (0.95 * wHit + 0.7 * wBody + 0.28 * wGrowl + 0.92 * wTail) / wSum;
 
     bass = Math.min(1, Math.max(0, bass + (n - 0.5) * 0.22));
-    mid = Math.min(1, Math.max(0, mid + (hash01(i + 17) - 0.5) * 0.18));
+    lowMid = Math.min(1, Math.max(0, lowMid + (hash01(i + 17) - 0.5) * 0.18));
+    highMid = Math.min(1, Math.max(0, highMid + (hash01(i + 29) - 0.5) * 0.16));
     treble = Math.min(1, Math.max(0, treble + (hash01(i + 41) - 0.5) * 0.2));
 
-    const sum = bass + mid + treble || 1;
+    const sum = bass + lowMid + highMid + treble || 1;
     colors.push(
       Math.round((bass / sum) * 255),
-      Math.round((mid / sum) * 255),
+      Math.round((lowMid / sum) * 255),
+      Math.round((highMid / sum) * 255),
       Math.round((treble / sum) * 255),
     );
   }
