@@ -27,6 +27,12 @@ function sample(overrides: Partial<SampleRow> = {}): SampleRow {
     sample_type: "loop",
     favorite: false,
     tags: [],
+    catalog_source: null,
+    bpm_source: null,
+    key_source: null,
+    sample_type_source: null,
+    date_added_ms: null,
+    date_created_ms: null,
     ...overrides,
   };
 }

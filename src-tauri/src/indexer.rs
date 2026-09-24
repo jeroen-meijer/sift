@@ -14,6 +14,7 @@ use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::settings;
 use crate::db::utc_now;
 use crate::error::{AppError, AppResult};
+use crate::fs_dates;
 use crate::fs_ready::{self, Availability};
 use crate::ids::{id_from_i64, id_to_i64};
 
@@ -132,6 +133,8 @@ pub fn index_root(
         let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
         let mtime = mtime_ms(&meta);
         let inode = inode_of(&meta);
+        let date_created = fs_dates::date_created_ms(&meta);
+        let date_added = fs_dates::date_added_ms(path);
         let avail = fs_ready::classify_meta(&meta);
         let avail_s = avail.as_str();
         let checked = utc_now();
@@ -155,6 +158,8 @@ pub fn index_root(
                         samples_dsl::availability.eq(avail_s),
                         samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
                         samples_dsl::root_id.eq(root_id_i32),
+                        samples_dsl::date_added_ms.eq(date_added),
+                        samples_dsl::date_created_ms.eq(date_created),
                     ))
                     .execute(conn)?;
             }
@@ -171,6 +176,8 @@ pub fn index_root(
                         samples_dsl::missing.eq(missing_flag),
                         samples_dsl::availability.eq(avail_s),
                         samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
+                        samples_dsl::date_added_ms.eq(date_added),
+                        samples_dsl::date_created_ms.eq(date_created),
                         samples_dsl::updated_at.eq(utc_now()),
                     ))
                     .execute(conn)?;
@@ -189,6 +196,8 @@ pub fn index_root(
                         inode,
                         availability: avail_s,
                         availability_checked_at: Some(checked.as_str()),
+                        date_added_ms: date_added,
+                        date_created_ms: date_created,
                     })
                     .execute(conn)?;
                 indexed = indexed.saturating_add(1);
@@ -300,6 +309,8 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
     let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
     let mtime = mtime_ms(&meta);
     let inode = inode_of(&meta);
+    let date_created = fs_dates::date_created_ms(&meta);
+    let date_added = fs_dates::date_added_ms(path);
     let root_id_i32 = id_from_i64(root_id)?;
     let avail = fs_ready::classify_meta(&meta);
     let avail_s = avail.as_str();
@@ -324,6 +335,8 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
                     samples_dsl::availability.eq(avail_s),
                     samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
                     samples_dsl::root_id.eq(root_id_i32),
+                    samples_dsl::date_added_ms.eq(date_added),
+                    samples_dsl::date_created_ms.eq(date_created),
                 ))
                 .execute(conn)?;
             Ok(false)
@@ -341,6 +354,8 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
                     samples_dsl::missing.eq(missing_flag),
                     samples_dsl::availability.eq(avail_s),
                     samples_dsl::availability_checked_at.eq(Some(checked.as_str())),
+                    samples_dsl::date_added_ms.eq(date_added),
+                    samples_dsl::date_created_ms.eq(date_created),
                     samples_dsl::updated_at.eq(utc_now()),
                 ))
                 .execute(conn)?;
@@ -359,6 +374,8 @@ pub fn upsert_sample(conn: &mut SqliteConnection, root_id: i64, path: &Path) -> 
                     inode,
                     availability: avail_s,
                     availability_checked_at: Some(checked.as_str()),
+                    date_added_ms: date_added,
+                    date_created_ms: date_created,
                 })
                 .execute(conn)?;
             Ok(true)

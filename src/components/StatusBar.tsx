@@ -14,19 +14,18 @@ interface Props {
   shownCount?: number | undefined;
   /** True while the omni bar holds a query, which switches the count to "N results". */
   filtered?: boolean;
-  statusText?: string | undefined;
 }
 
-/** Analysis progress comes from `analysisStore`, so progress ticks re-render only this bar. */
+/** Work progress comes from `analysisStore`, so ticks re-render only this bar. */
 export const StatusBar = memo(function StatusBar({
   rootCount,
   fileCount,
   shownCount,
   filtered = false,
-  statusText,
 }: Props) {
   const { t } = useTranslation("common");
   const analysis = useStoreSelector(analysisStore, (s) => s.bar);
+  const indeterminate = analysis?.total === 0;
   const pct =
     analysis && analysis.total > 0
       ? Math.min(100, Math.round((analysis.done / analysis.total) * 100))
@@ -56,25 +55,17 @@ export const StatusBar = memo(function StatusBar({
             formatted: formatCount(fileCount),
           })}
         </span>
-        {statusText && !analysis ? (
-          <>
-            <span aria-hidden>·</span>
-            <span>{statusText}</span>
-          </>
-        ) : null}
       </div>
       {analysis ? (
         <div className="statusbar-analysis">
           <CircleNotchIcon size={12} className="statusbar-spin" />
-          <div className="statusbar-bar" aria-hidden>
-            <div className="statusbar-bar-fill" style={{ width: `${pct}%` }} />
+          <div className={`statusbar-bar${indeterminate ? " indeterminate" : ""}`} aria-hidden>
+            <div
+              className="statusbar-bar-fill"
+              style={indeterminate ? undefined : { width: `${pct}%` }}
+            />
           </div>
-          <span className="statusbar-hint">
-            {t("statusAnalyzingProgress", {
-              done: formatCount(analysis.done),
-              total: formatCount(analysis.total),
-            })}
-          </span>
+          <span className="statusbar-hint">{t("statusProcessing")}</span>
         </div>
       ) : null}
     </footer>

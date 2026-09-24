@@ -1,31 +1,34 @@
 import type { OptionalColumn } from "./omni";
-import type { ResizableColumn } from "./columnWidths";
+import type { TableColumn } from "./columnWidths";
 
 /** Default left→right order for content columns (fav stays pinned outside). */
-export const DEFAULT_COLUMN_ORDER: readonly ResizableColumn[] = [
+export const DEFAULT_COLUMN_ORDER: readonly TableColumn[] = [
   "name",
+  "source",
   "type",
   "bpm",
   "key",
   "wave",
   "tags",
+  "date_added",
+  "date_created",
 ];
 
 const ORDER_SET = new Set<string>(DEFAULT_COLUMN_ORDER);
 
-function isResizableColumn(value: unknown): value is ResizableColumn {
+function isTableColumn(value: unknown): value is TableColumn {
   return typeof value === "string" && ORDER_SET.has(value);
 }
 
 /** Validate stored order: known ids only, no dupes, append any missing defaults. */
 export function mergeColumnOrder(
   stored: readonly unknown[] | null | undefined,
-): ResizableColumn[] {
-  const next: ResizableColumn[] = [];
-  const seen = new Set<ResizableColumn>();
+): TableColumn[] {
+  const next: TableColumn[] = [];
+  const seen = new Set<TableColumn>();
   if (Array.isArray(stored)) {
     for (const item of stored) {
-      if (!isResizableColumn(item) || seen.has(item)) continue;
+      if (!isTableColumn(item) || seen.has(item)) continue;
       next.push(item);
       seen.add(item);
     }
@@ -38,10 +41,10 @@ export function mergeColumnOrder(
 
 /** Move `fromId` so it lands at `toIndex` in the full order array. */
 export function reorderColumn(
-  order: readonly ResizableColumn[],
-  fromId: ResizableColumn,
+  order: readonly TableColumn[],
+  fromId: TableColumn,
   toIndex: number,
-): ResizableColumn[] {
+): TableColumn[] {
   const from = order.indexOf(fromId);
   if (from < 0) return [...order];
   const clamped = Math.max(0, Math.min(order.length - 1, toIndex));
@@ -58,10 +61,10 @@ export function reorderColumn(
  * column (when waveforms are off) are filtered out; order of the rest is kept.
  */
 export function visibleOrderedColumns(
-  order: readonly ResizableColumn[],
+  order: readonly TableColumn[],
   hidden: ReadonlySet<OptionalColumn>,
   showWaveforms: boolean,
-): ResizableColumn[] {
+): TableColumn[] {
   const merged = mergeColumnOrder(order);
   return merged.filter((column) => {
     if (column === "wave") return showWaveforms;
@@ -75,10 +78,10 @@ export function visibleOrderedColumns(
  * the other columns (how many we've passed).
  */
 export function dropIndexFromClientX(
-  visible: readonly ResizableColumn[],
-  dragged: ResizableColumn,
+  visible: readonly TableColumn[],
+  dragged: TableColumn,
   clientX: number,
-  rects: ReadonlyMap<ResizableColumn, { left: number; right: number }>,
+  rects: ReadonlyMap<TableColumn, { left: number; right: number }>,
 ): number {
   if (!visible.includes(dragged) || visible.length === 0) return 0;
   let passed = 0;
@@ -94,11 +97,11 @@ export function dropIndexFromClientX(
 
 /** Apply a visible-list drop onto the full persisted order. */
 export function reorderByVisibleDrop(
-  fullOrder: readonly ResizableColumn[],
-  visible: readonly ResizableColumn[],
-  dragged: ResizableColumn,
+  fullOrder: readonly TableColumn[],
+  visible: readonly TableColumn[],
+  dragged: TableColumn,
   visibleToIndex: number,
-): ResizableColumn[] {
+): TableColumn[] {
   const without = fullOrder.filter((c) => c !== dragged);
   const visibleWithout = visible.filter((c) => c !== dragged);
   const clamped = Math.max(0, Math.min(visibleWithout.length, visibleToIndex));

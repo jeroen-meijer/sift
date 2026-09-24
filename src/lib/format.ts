@@ -30,6 +30,12 @@ export function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/** Short locale date from epoch ms, or null when the value is missing. */
+export function formatShortDate(ms: number | null | undefined): string | null {
+  if (ms == null || !Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleDateString();
+}
+
 /** Beats between two times at `bpm`, or null when the sample has no BPM. */
 export function beatsBetween(startSecs: number, endSecs: number, bpm: number | null): number | null {
   if (bpm == null || bpm <= 0) return null;

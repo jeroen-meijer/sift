@@ -3,6 +3,7 @@ import { createStore } from "./store";
 
 export interface AnalysisBar {
   done: number;
+  /** When 0, the bar is indeterminate (spinner + count only). */
   total: number;
 }
 

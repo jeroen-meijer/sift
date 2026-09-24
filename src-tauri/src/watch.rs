@@ -250,9 +250,12 @@ fn handle_events(
                 .collect();
             let _ = app.emit("ask-index", AskIndexPayload { paths });
         } else {
+            let total = u64::try_from(new_files.len()).unwrap_or(u64::MAX);
+            crate::analyze::work::start(app, total);
             let indexed = shared
                 .db
                 .with_conn(|conn| indexer::index_paths(conn, &new_files))?;
+            crate::analyze::work::finish(app, indexed);
             if indexed > 0 {
                 structural = true;
                 crate::analyze::enqueue_unanalyzed(
