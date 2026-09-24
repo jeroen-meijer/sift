@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.3.0
+
 - feat(library): match Splice Desktop's local catalog for BPM, key, and loop/one-shot; Source column with a fixed Splice badge; Date added (macOS) and Date created
 - feat(analyze): peaks-only repairs and catalog enrich without a full decode, so fixing waveforms does not wipe BPM/key/type
 - feat(settings): Refresh metadata and a full-library re-analyze that wipes analysis data first; indexing, availability checks, and Refresh share the bottom-right Processing bar
