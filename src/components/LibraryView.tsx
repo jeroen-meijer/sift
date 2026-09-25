@@ -46,7 +46,7 @@ const MIN_CLIP_SECS = 0.01;
 /** Neighbors longer than this are not decoded ahead of time. */
 const PREFETCH_MAX_DURATION_MS = 30_000;
 
-/** First successful list after process start (boot timeline). */
+/** First successful list_samples after process start (boot profile mark). */
 let firstListBootLogged = false;
 
 type Dialog =

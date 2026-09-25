@@ -1,10 +1,10 @@
 /** Frontend profiling helpers, gated by Rust `SIFT_PROFILE=1`.
  *
- * Marks are fire-and-forget (batched) so they do not serialize the IPC queue
- * the way an awaited `profile_mark` after every `get_peaks` did.
+ * Marks are fire-and-forget (batched) so they do not block the IPC queue the
+ * way an awaited `profile_mark` after every `get_peaks` used to.
  *
- * Boot timeline: [`bootMark`] uses ms since this module first evaluated
- * (`boot.fe.*`). Pair with Rust `boot.*` milestones in the same log file.
+ * Boot timeline: [`bootMark`] records ms since this module first loaded
+ * (`boot.fe.*`). Match those against Rust `boot.*` lines in the same log.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -12,7 +12,7 @@ import { useLayoutEffect } from "react";
 
 let enabled: boolean | null = null;
 
-/** Approx. FE script start (`performance.now()` at first import). */
+/** `performance.now()` at first import of this module (approx. script start). */
 const feEpoch = performance.now();
 
 interface PendingMark {
@@ -56,15 +56,15 @@ export async function warmProfile(): Promise<boolean> {
 }
 
 /**
- * Startup milestone: `ms` is elapsed since FE module load.
- * Names should be `boot.fe.*` (or pass a short suffix; `boot.` is prefixed when missing).
+ * Boot milestone. `ms` is time since FE module load.
+ * Prefer names like `boot.fe.*`; a bare suffix gets a `boot.` prefix.
  */
 export function bootMark(name: string, detail?: string): void {
   const full = name.startsWith("boot.") ? name : `boot.${name}`;
   enqueueMark(full, performance.now() - feEpoch, detail);
 }
 
-/** Time one async boot step (duration of the step, not since epoch). */
+/** Duration of one async boot step (not time since epoch). */
 export async function bootProfiled<T>(
   name: string,
   detail: string,
@@ -86,7 +86,7 @@ function logBootNavigation(): void {
     const entries = performance.getEntriesByType("navigation");
     const nav = entries[0];
     if (!(nav instanceof PerformanceNavigationTiming)) return;
-    /* Values are already ms since timeOrigin (= page start in the webview). */
+    /* NavigationTiming values are ms since timeOrigin (page start in the webview). */
     enqueueMark("boot.fe.nav_response", nav.responseEnd, `transfer=${String(nav.transferSize)}`);
     enqueueMark("boot.fe.nav_dom_interactive", nav.domInteractive, "");
     enqueueMark("boot.fe.nav_dom_content", nav.domContentLoadedEventEnd, "");

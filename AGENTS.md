@@ -67,7 +67,7 @@ bun run version:set 0.2.0
 - Detailed timings: `cargo bench --bench audio_hotpath` (decode, peaks, JIT clip, path tokens, heuristic BPM/key)
 - UI micro: `bun run bench`
 - Interactive release profile: `bun run tauri:profile` then use the app; read `logs/sift-profile.log` (IPC + peaks cache hit/miss + FE round-trips)
-- Startup: same log; filter `boot.` — Rust milestones are ms since process start, `boot.fe.*` are ms since webview script load. Key gates: `boot.app_state_init`, `boot.page_load_finished`, `boot.fe.ready`, `boot.fe.first_list`
+- Startup: same log; filter `boot.`. Rust milestones are ms since process start; `boot.fe.*` are ms since webview script load. Useful gates: `boot.app_state_init`, `boot.page_load_finished`, `boot.fe.stats_ready`, `boot.fe.ready`, `boot.fe.first_list`. Watch cost shows as `watch.register` (background).
 
 ## Conventions
 

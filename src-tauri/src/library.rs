@@ -31,6 +31,9 @@ pub struct FolderNode {
     pub sample_count: i64,
 }
 
+/// Nested folder tree after the window is up. Keep in sync with FE `FOLDER_TREE_FULL_DEPTH`.
+pub const FOLDER_TREE_FULL_DEPTH: u32 = 6;
+
 pub fn list_roots(conn: &mut SqliteConnection) -> AppResult<Vec<RootDto>> {
     let rows: Vec<(i32, String, Option<String>)> = roots_dsl::roots
         .select((roots_dsl::id, roots_dsl::path, roots_dsl::label))
@@ -249,7 +252,7 @@ fn cmp_tree_paths(a: &str, b: &str) -> std::cmp::Ordering {
 
 #[cfg(test)]
 mod tests {
-    use super::{depth_under_root, folder_tree};
+    use super::{FOLDER_TREE_FULL_DEPTH, depth_under_root, folder_tree};
     use crate::db::schema::roots::dsl as roots_dsl;
     use crate::db::schema::samples::dsl as samples_dsl;
     use diesel::prelude::*;
@@ -284,7 +287,7 @@ mod tests {
         insert_sample(&mut conn, root_id, "/lib/drums/snare.wav");
         insert_sample(&mut conn, root_id, "/lib/fx/rise.wav");
 
-        let nodes = folder_tree(&mut conn, 6).unwrap();
+        let nodes = folder_tree(&mut conn, FOLDER_TREE_FULL_DEPTH).unwrap();
         let count = |path: &str| {
             nodes
                 .iter()
@@ -330,7 +333,7 @@ mod tests {
         insert_sample(&mut conn, root_id, "/lib/avant/sub/a.wav");
         insert_sample(&mut conn, root_id, "/lib/blackout/b.wav");
 
-        let paths: Vec<_> = folder_tree(&mut conn, 6)
+        let paths: Vec<_> = folder_tree(&mut conn, FOLDER_TREE_FULL_DEPTH)
             .unwrap()
             .into_iter()
             .map(|n| n.path)
@@ -361,7 +364,7 @@ mod tests {
         insert_sample(&mut conn, root_id, "/lib/FX/Risers/b.wav");
         insert_sample(&mut conn, root_id, "/lib/FX One Shots/c.wav");
 
-        let paths: Vec<_> = folder_tree(&mut conn, 6)
+        let paths: Vec<_> = folder_tree(&mut conn, FOLDER_TREE_FULL_DEPTH)
             .unwrap()
             .into_iter()
             .map(|n| n.path)

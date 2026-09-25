@@ -98,7 +98,8 @@ pub async fn set_setting(app: AppHandle, key: String, value: Value) -> AppResult
 pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
     off_main(app, move |state| {
         crate::profile_log::time("ipc.db_stats", "", || {
-            state.db.with_conn(|conn| {
+            let clips_dir = state.clips_dir();
+            let (roots, samples, missing, tags, data_dir) = state.db.with_conn(|conn| {
                 use crate::db::schema::roots::dsl as roots_dsl;
                 use crate::db::schema::samples::dsl as samples_dsl;
                 use crate::db::schema::tags::dsl as tags_dsl;
@@ -112,16 +113,24 @@ pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
                     .select(count_star())
                     .first(conn)?;
                 let tags: i64 = tags_dsl::tags.select(count_star()).first(conn)?;
-                let clips_dir = state.clips_dir();
-                Ok(DbStats {
+                Ok((
                     roots,
                     samples,
                     missing,
                     tags,
-                    data_dir: state.paths.data_dir.to_string_lossy().into_owned(),
-                    clips_bytes: jit::cache_size(&clips_dir),
-                    clips_dir: clips_dir.to_string_lossy().into_owned(),
-                })
+                    state.paths.data_dir.to_string_lossy().into_owned(),
+                ))
+            })?;
+            // Directory walk stays outside the DB lock.
+            let clips_bytes = jit::cache_size(&clips_dir);
+            Ok(DbStats {
+                roots,
+                samples,
+                missing,
+                tags,
+                data_dir,
+                clips_bytes,
+                clips_dir: clips_dir.to_string_lossy().into_owned(),
             })
         })
     })
@@ -140,13 +149,11 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
         let root = state.db.with_conn(|conn| library::add_root(conn, &path))?;
         let root_id = root.id;
         let db = state.db.clone();
-        // Do not block IPC on recursive FSEvents registration.
-        let watch_app = app.clone();
-        let watch_shared = state.watch_shared.clone();
-        let watch_guard = Arc::clone(&state.watch_guard);
-        std::thread::spawn(move || {
-            watch::restart(&watch_app, &watch_shared, &watch_guard);
-        });
+        watch::restart_in_background(
+            app.clone(),
+            state.watch_shared.clone(),
+            Arc::clone(&state.watch_guard),
+        );
         crate::profile_log::event("ipc.add_root", total.elapsed(), &format!("id={root_id}"));
         let index_app = app;
         let peaks_dir = state.paths.peaks_dir.clone();
@@ -188,12 +195,11 @@ pub async fn remove_root(app: AppHandle, root_id: i64) -> AppResult<()> {
         state
             .db
             .with_conn(|conn| library::remove_root(conn, root_id))?;
-        // Recursive FSEvents registration can take seconds on big roots.
-        let watch_shared = state.watch_shared.clone();
-        let watch_guard = Arc::clone(&state.watch_guard);
-        std::thread::spawn(move || {
-            watch::restart(&app, &watch_shared, &watch_guard);
-        });
+        watch::restart_in_background(
+            app,
+            state.watch_shared.clone(),
+            Arc::clone(&state.watch_guard),
+        );
         Ok(())
     })
     .await
@@ -202,7 +208,7 @@ pub async fn remove_root(app: AppHandle, root_id: i64) -> AppResult<()> {
 #[tauri::command]
 pub async fn folder_tree(app: AppHandle, max_depth: Option<u32>) -> AppResult<Vec<FolderNode>> {
     off_main(app, move |state| {
-        let depth = max_depth.unwrap_or(6);
+        let depth = max_depth.unwrap_or(library::FOLDER_TREE_FULL_DEPTH);
         crate::profile_log::time("ipc.folder_tree", &format!("depth={depth}"), || {
             state.db.with_conn(|conn| library::folder_tree(conn, depth))
         })

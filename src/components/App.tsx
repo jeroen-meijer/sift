@@ -14,10 +14,11 @@ import {
 } from "../lib/ipc";
 import { analysisStore, rowChangesStore } from "../lib/liveStores";
 import { invalidateRowPeaks } from "../lib/rowPeaks";
+import { loadLibrary } from "../lib/loadLibrary";
 import { revealMainWindow } from "../lib/revealWindow";
 import { shellMode } from "../lib/shellMode";
 import { useSettings } from "../lib/useSettings";
-import { bootMark, bootProfiled, warmProfile } from "../lib/profile";
+import { bootMark, warmProfile } from "../lib/profile";
 import { applyTheme } from "../theme";
 import { groupByFolder } from "../lib/askIndex";
 import { AskIndexToast } from "./AskIndexToast";
@@ -56,7 +57,7 @@ export function App() {
   const { settings, set: setSetting, loaded } = useSettings();
 
   const [view, setView] = useState<View>("library");
-  /** null until the first db_stats round-trip; do not treat as empty roots. */
+  /** null until the first db_stats round-trip. Not the same as zero roots. */
   const [stats, setStats] = useState<DbStats | null>(null);
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [tags, setTags] = useState<TagNode[]>([]);
@@ -73,7 +74,7 @@ export function App() {
     bootMark("fe.theme_applied", settings.theme);
   }, [loaded, settings.theme]);
 
-  /* Hide-until-ready: window starts with visible:false (tauri.conf). */
+  /* Window starts hidden (tauri.conf visible:false). Show after shellMode leaves boot. */
   useLayoutEffect(() => {
     if (mode === "boot") return;
     bootMark("fe.ready", `mode=${mode}`);
@@ -85,27 +86,16 @@ export function App() {
   }, []);
 
   const refreshLibrary = useCallback(() => {
-    const t0 = performance.now();
-    void Promise.all([
-      bootProfiled("fe.ipc_db_stats", "", () => ipc.dbStats()),
-      bootProfiled("fe.ipc_folder_tree", "", () => ipc.folderTree()),
-      bootProfiled("fe.ipc_list_tags", "", () => ipc.listTags()),
-    ])
-      .then(([nextStats, tree, tagTree]) => {
-        setStats(nextStats);
-        setFolders(tree);
-        setTags(tagTree);
-        bootMark(
-          "fe.library_refresh",
-          `roots=${String(nextStats.roots)} folders=${String(tree.length)} tags=${String(tagTree.length)} span_ms=${(performance.now() - t0).toFixed(1)}`,
-        );
-      })
-      .catch((err: unknown) => {
-        console.error(err);
-        /* Still leave boot so the window can show (empty or last known). */
-        setStats((prev) => prev ?? EMPTY_STATS);
-        bootMark("fe.library_refresh_failed", "");
-      });
+    void loadLibrary({
+      setStats,
+      setFolders,
+      setTags,
+    }).catch((err: unknown) => {
+      console.error(err);
+      /* Still leave boot so a failed load can show first-run or last known stats. */
+      setStats((prev) => prev ?? EMPTY_STATS);
+      bootMark("fe.library_refresh_failed", "");
+    });
   }, []);
 
   useEffect(() => {

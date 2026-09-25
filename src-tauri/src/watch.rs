@@ -322,3 +322,18 @@ pub fn restart(app: &AppHandle, shared: &Arc<WatchShared>, guard_slot: &Mutex<Op
         &format!("roots={n_roots}"),
     );
 }
+
+/// Run [`restart`] on a background thread. Recursive watches can take seconds
+/// on large roots, so this must not run on the IPC or setup path. Shared by
+/// boot, `add_root`, and `remove_root`.
+pub fn restart_in_background(
+    app: AppHandle,
+    shared: Arc<WatchShared>,
+    guard_slot: Arc<Mutex<Option<WatchGuard>>>,
+) {
+    let _ = std::thread::Builder::new()
+        .name("sift-watch-restart".into())
+        .spawn(move || {
+            restart(&app, &shared, &guard_slot);
+        });
+}

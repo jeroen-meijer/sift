@@ -1,6 +1,7 @@
 ## Upcoming
 
-- fix: fix white flash and wrong initial screen at startup, caused by showing the window before theme and library roots were ready
+- fix(ui): wait for theme and library roots before showing the window, so launch no longer flashes white or a fake first-run screen
+- perf(boot): improve startup time by starting folder watch in the background and loading the sidebar after stats (locally ~70% faster, now ~0.7s)
 
 ## 0.3.1
 
