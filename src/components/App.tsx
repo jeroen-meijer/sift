@@ -28,6 +28,8 @@ import { SettingsView } from "./SettingsView";
 import { StatusBar } from "./StatusBar";
 import { TagManagerView } from "./TagManagerView";
 import { TitleBar } from "./TitleBar";
+import { UpdateAvailableDialog } from "./dialogs/UpdateAvailableDialog";
+import { checkForAppUpdate, type AvailableUpdate } from "../lib/updates";
 import "../styles/base.css";
 import "../ui/ui.css";
 import "./shell.css";
@@ -65,6 +67,7 @@ export function App() {
   const [refreshToken, setRefreshToken] = useState(0);
 
   const [askPaths, setAskPaths] = useState<string[]>([]);
+  const [launchUpdate, setLaunchUpdate] = useState<AvailableUpdate | null>(null);
 
   const mode = shellMode(loaded, stats);
 
@@ -84,6 +87,19 @@ export function App() {
   useEffect(() => {
     void warmProfile();
   }, []);
+
+  /* After the shell leaves boot: check for updates (no-op in dev / offline). */
+  useEffect(() => {
+    if (mode === "boot") return;
+    let cancelled = false;
+    void checkForAppUpdate().then((outcome) => {
+      if (cancelled || outcome.kind !== "available") return;
+      setLaunchUpdate(outcome.available);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   const refreshLibrary = useCallback(() => {
     void loadLibrary({
@@ -322,6 +338,15 @@ export function App() {
           onRespond={respondAsk}
           onDismiss={() => {
             setAskPaths([]);
+          }}
+        />
+      ) : null}
+
+      {launchUpdate != null ? (
+        <UpdateAvailableDialog
+          available={launchUpdate}
+          onDismiss={() => {
+            setLaunchUpdate(null);
           }}
         />
       ) : null}

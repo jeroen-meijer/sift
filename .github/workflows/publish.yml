@@ -4,6 +4,7 @@ name: Publish Release
 # (./tool/prepare_release.sh), or via workflow_dispatch retry.
 # Optional: squash-merge of a release-labeled PR (prepare_release.sh --pr).
 # Do not trigger on tag push: the pipeline creates the version tag after success.
+# Each release ships hand installers, updater payloads (.sig / .app.tar.gz), and latest.json.
 on:
   push:
     branches: [main]
@@ -98,6 +99,8 @@ jobs:
 
       - name: Build Tauri app
         env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Only pass these when secrets exist. An empty APPLE_SIGNING_IDENTITY
           # makes Tauri run `codesign` with identity "" and fail the bundle.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -106,6 +109,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "error: TAURI_SIGNING_PRIVATE_KEY secret is required for updater signatures" >&2
+            exit 1
+          fi
           if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
             unset APPLE_SIGNING_IDENTITY
           fi
@@ -117,30 +124,9 @@ jobs:
           fi
           bun run tauri build
 
-      - name: Collect macOS installer artifacts
-        if: runner.os == 'macOS'
+      - name: Stage release assets
         shell: bash
-        run: |
-          mkdir -p release-assets
-          find src-tauri/target/release/bundle -type f \( -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.zip' \) -exec cp {} release-assets/ \;
-          ls -la release-assets/
-
-      - name: Collect Windows installer artifacts
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          mkdir -p release-assets
-          find src-tauri/target/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -exec cp {} release-assets/ \;
-          ls -la release-assets/
-
-      - name: Require at least one installer
-        shell: bash
-        run: |
-          if [ -z "$(ls -A release-assets 2>/dev/null)" ]; then
-            echo "No desktop bundles found"
-            find src-tauri/target/release/bundle -type f 2>/dev/null || true
-            exit 1
-          fi
+        run: ./tool/stage_release_assets.sh src-tauri/target/release/bundle release-assets
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
@@ -160,6 +146,9 @@ jobs:
           ref: ${{ needs.verify-release.outputs.sha }}
           fetch-depth: 0
 
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun-deps
+
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
@@ -172,17 +161,14 @@ jobs:
           name: desktop-Windows
           path: release-assets
 
-      - name: Create release and upload assets
+      - name: Finish GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ needs.verify-release.outputs.version }}"
-          SHA="${{ needs.verify-release.outputs.sha }}"
-          gh release create "$VERSION" \
-            --target "$SHA" \
-            --title "$VERSION" \
-            --generate-notes \
-            release-assets/*
+          bun tool/finish_github_release.ts \
+            --version "${{ needs.verify-release.outputs.version }}" \
+            --sha "${{ needs.verify-release.outputs.sha }}" \
+            --assets-dir release-assets
 
   tag-release:
     name: Tag release commit

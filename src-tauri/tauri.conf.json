@@ -32,6 +32,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -43,5 +44,13 @@
     "category": "Music",
     "shortDescription": "Local sample manager",
     "longDescription": "Browse, audition, tag, and drag local audio samples into a DAW."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNUJBMEY4NDVDQzVDRjIKUldUeVhNeEYrS0JicXR3ZGdqellRUUtZYkdleWZHdzFJYWoweFgyN0ZNUmVCSDV1MDBYT3VsMksK",
+      "endpoints": [
+        "https://github.com/jeroen-meijer/sift/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

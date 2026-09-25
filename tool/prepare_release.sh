@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # Prepare a release: rewrite CHANGELOG, sync versions, commit, push to main
-# (default) so Publish Release builds macOS + Windows installers.
+# (default) so Publish Release builds macOS + Windows installers, updater
+# files, and latest.json.
 #
 # Usage:
 #   ./tool/prepare_release.sh <x.y.z>        # commit on main and push (triggers publish)
@@ -111,12 +112,12 @@ if [ "$MODE" = "pr" ]; then
     --label "$RELEASE_LABEL" \
     --body "Prepare release **${VERSION}**: changelog section and synced \`package.json\` / Tauri metadata.
 
-Merge with **squash** after CI passes. Merging this PR (with the \`${RELEASE_LABEL}\` label) builds desktop installers, creates a GitHub release, and tags \`main\` with \`${VERSION}\`.
+Merge with **squash** after CI passes. Merging this PR (with the \`${RELEASE_LABEL}\` label) builds desktop installers, updater files, \`latest.json\`, creates a GitHub release, and tags \`main\` with \`${VERSION}\`.
 
 To retry a failed publish: Actions → **Publish Release** → **Run workflow** with version \`${VERSION}\`."
   echo "Opened release PR (label: ${RELEASE_LABEL})."
 else
   git push origin main
-  echo "Pushed release prepare to main. Publish Release should build macOS + Windows installers for ${VERSION}."
+  echo "Pushed release prepare to main. Publish Release should build installers and updater files for ${VERSION}."
   echo "Retry: Actions → Publish Release → Run workflow → ${VERSION}"
 fi
