@@ -26,8 +26,7 @@ use sift_lib::perf::{
 use tempfile::tempdir;
 
 fn band_probe() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../testdata/spectral-fixtures/band-probe.wav")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/spectral-fixtures/band-probe.wav")
 }
 
 fn require_fixture() -> PathBuf {
