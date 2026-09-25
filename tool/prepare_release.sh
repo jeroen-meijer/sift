@@ -82,6 +82,10 @@ fi
 
 bun tool/sync-version.ts "$VERSION"
 
+# sync-version only rewrites Cargo.toml; refresh the lock package stanza so
+# `cargo … --locked` (preflight / CI) does not fail on the release commit.
+(cd src-tauri && cargo update -p sift)
+
 if ! bun run lint; then
   echo "error: bun run lint failed; fix issues and retry." >&2
   exit 1
@@ -97,11 +101,7 @@ if ! bun run build; then
   exit 1
 fi
 
-git add "$CHANGELOG_PATH" "$PACKAGE_PATH" src-tauri/tauri.conf.json src-tauri/Cargo.toml
-# Cargo.lock may change if the version bump touches the package stanza only. Add it when dirty.
-if git status --porcelain -- src-tauri/Cargo.lock | grep -q .; then
-  git add src-tauri/Cargo.toml src-tauri/Cargo.lock
-fi
+git add "$CHANGELOG_PATH" "$PACKAGE_PATH" src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
 
 git commit -m "chore: prepare release ${VERSION}"
 
