@@ -1,0 +1,59 @@
+// Structural markdown lint for headings, code fences, and lists.
+//
+// Pair with `bun run docs:check` (`tool/check-docs.py`). That script owns
+// internal links and anchors, no-frontmatter, kebab-case names, and path
+// hygiene. This file owns fence, heading, and list shape only.
+//
+// Rules off or relaxed, and why:
+//   MD013 line-length: prose stays unwrapped on purpose. Hard wrapping would
+//     turn every edit into a reflow diff.
+//   MD028 no-blanks-blockquote: GitHub alert callouts (`> [!NOTE]`) use
+//     adjacent blockquotes with a blank line between them.
+//   MD029 ol-prefix: gap docs and research keep continuous numbering across
+//     headings. The parser treats each section as a new list.
+//   MD041 first-line-h1: CHANGELOG starts with `## Upcoming` on purpose
+//     (see AGENTS.md). Other files already open with `#`.
+//   MD060 table-column-style: tables use compact `|a|b|` pipes on purpose.
+//   MD033 inline HTML: README uses a little raw HTML for the brand header
+//     and badges. Allowed elements are listed below.
+{
+  "globs": [
+    "*.md",
+    "docs/**/*.md",
+    "assets/**/*.md"
+  ],
+  "ignores": [
+    "**/node_modules/**",
+    "src-tauri/target/**",
+    "docs/design/_ds/**"
+  ],
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD028": false,
+    "MD029": false,
+    "MD041": false,
+    "MD060": false,
+    "MD033": {
+      "allowed_elements": [
+        "p",
+        "table",
+        "tr",
+        "td",
+        "img",
+        "a",
+        "br",
+        "font",
+        "b",
+        "strong",
+        "em",
+        "sup",
+        "sub",
+        "picture",
+        "source",
+        "details",
+        "summary"
+      ]
+    }
+  }
+}

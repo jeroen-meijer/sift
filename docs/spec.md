@@ -132,18 +132,18 @@ Priority: Must · Should · Open · Later
 - Must: Multi-select like Finder/Explorer: Shift = range; ⌘ (macOS) / Ctrl (Windows) = additive toggle.
 - Must: Drag multi-selection as multiple full files when the drop target accepts them.
 - Must: Context menu starts with Open, and includes all of:
- - Open (first): open with the OS default app for that file type
- - Favorite / unfavorite
- - Add/remove tags
- - Set type (loop/one-shot)
- - Set BPM
- - Set key
- - Show only files from parent folder: set the omni folder chip to this sample's parent directory (recursive, same as folder-browser click)
- - Reveal in Finder (macOS) / Reveal in File Explorer (Windows)
- - Copy path
- - Copy filename
- - Re-analyze (normal, forced)
- - Custom analysis…
+  - Open (first): open with the OS default app for that file type
+  - Favorite / unfavorite
+  - Add/remove tags
+  - Set type (loop/one-shot)
+  - Set BPM
+  - Set key
+  - Show only files from parent folder: set the omni folder chip to this sample's parent directory (recursive, same as folder-browser click)
+  - Reveal in Finder (macOS) / Reveal in File Explorer (Windows)
+  - Copy path
+  - Copy filename
+  - Re-analyze (normal, forced)
+  - Custom analysis…
 - Should: Menu chrome/grouping is design's; the items above are required for v1.
 - Out of v1 for this menu: clear/reset waveform selection.
 - Must: Sort is user-changeable and persists (active column + direction, or default).
@@ -225,12 +225,12 @@ Drag origin decides the payload:
 - Must: Auto-apply suggested tags into the tag taxonomy where possible. User can edit afterward like any tags.
 - Must: Removing an auto-applied tag is a sticky rejection. Normal re-analyze must not put it back.
 - Must: Two modes:
- - Normal re-analyze (context menu / batch): always force-runs on the selected samples, even if mtime/size are unchanged. Refreshes technical info and non-overridden auto fields; does not re-apply rejected tags; does not overwrite user tag choices.
- - Custom analysis: context menu; runs on all selected samples; always force-runs. Dialog checkboxes for this run:
- - Overwrite tags (re-suggest and replace tags, including previously rejected)
- - Re-run BPM
- - Re-run key
- - Re-run loop vs one-shot
+  - Normal re-analyze (context menu / batch): always force-runs on the selected samples, even if mtime/size are unchanged. Refreshes technical info and non-overridden auto fields; does not re-apply rejected tags; does not overwrite user tag choices.
+  - Custom analysis: context menu; runs on all selected samples; always force-runs. Dialog checkboxes for this run:
+  - Overwrite tags (re-suggest and replace tags, including previously rejected)
+  - Re-run BPM
+  - Re-run key
+  - Re-run loop vs one-shot
 - Must: BPM analysis range (Rekordbox-style): persisted setting that constrains detected BPM to a chosen min-max band so half-tempo misreads are less likely. Adjustable in Settings and in the Custom analysis dialog; those controls are linked (changing either updates the same persisted value). Used by auto analysis and by manual/custom analysis when BPM is (re)run. Ship presets including at least: ~60-150, ~68-135, ~70-180, ~90-180, ~98-195 (exact integers tunable in implementation). Default for new installs: ~70-180.
 - Must: Show analysis progress (per sample and/or globally) without a blocking modal.
 - Should: Re-analyze a sample or folder (normal mode, forced).
@@ -288,8 +288,8 @@ Drag origin decides the payload:
 - Must: Modification check is cheap: on event, compare indexed mtime + size (+ inode when available). Re-analyze only if those differ. No per-event content hashing. No full-library content scans for this.
 - Must: Debounce noisy events (e.g. Dropbox sync/hydration). Never freeze the UI.
 - Must: Setting for new-file handling with two modes:
- - Auto-index (default), with an optional notification toggle
- - Ask before indexing: non-blocking prompt with Index / Skip, plus Index all / Skip all when multiple new files arrive together
+  - Auto-index (default), with an optional notification toggle
+  - Ask before indexing: non-blocking prompt with Index / Skip, plus Index all / Skip all when multiple new files arrive together
 - Must: Indexing/analysis progress is visible and non-blocking (exact chrome is design's).
 - Must: After modify re-analyze: keep all user overrides (BPM, key, tags, type, etc.); refresh technical file info only (sample rate, bit depth, channels, duration, format, mtime/size, and similar). Do not overwrite creative metadata with new auto-detection.
 - Fallback (only if watch fails performance later): scan on launch + manual refresh. Do not ship both modes in v1.
@@ -332,7 +332,7 @@ Drag origin decides the payload:
 - Safety: Never modify or delete user audio without an explicit confirmed action. Metadata never writes into source files in v1.
 - Privacy: Local-first; no account for core use.
 - Reliability: Crash/force-quit must not corrupt the library index; analysis can resume.
-- v1 quality bar: Complete Must coverage of this spec plus the Claude Design surfaces, usable for daily dogfood on your library. Analysis, fuzzy search, and watch edge cases may be imperfect. Ship Must coverage, then tune from dogfood.
+- v1 quality bar: Complete Must coverage of this spec plus the Claude Design surfaces, usable day to day on a local library. Analysis, fuzzy search, and watch edge cases may be imperfect. Ship Must coverage, then tune from use.
 - Implementation bias: Prefer maintained Rust crates and existing React packages when they fit (audio I/O, decode, FS watch, SQLite, BPM/key, table virtualization, i18n). Custom code for product glue and UI chrome; avoid reimplementing OS integration or DSP that a crate already does well.
 
 ---

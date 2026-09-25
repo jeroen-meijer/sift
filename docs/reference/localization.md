@@ -6,8 +6,8 @@ Stack notes: [tech-stack.md](tech-stack.md).
 ## Stack
 
 - **i18next** + **react-i18next**
-- Init: [`src/i18n/index.ts`](../src/i18n/index.ts)
-- Sources: [`src/locales/<lang>/<namespace>.json`](../src/locales/en/)
+- Init: [`src/i18n/index.ts`](../../src/i18n/index.ts)
+- Sources: [`src/locales/<lang>/<namespace>.json`](../../src/locales/en/)
 - v1 ships **English only** (`en`). Adding a language is new JSON files under
   `src/locales/<lang>/` plus wiring in `src/i18n/index.ts`. No in-app language
   picker yet.

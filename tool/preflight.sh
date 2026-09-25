@@ -2,9 +2,11 @@
 # Same checks as .github/workflows/ci.yml, on this machine, before you push.
 # Usage (repo root): ./tool/preflight.sh
 #
-# Runs: rustfmt check, clippy (-D warnings), nextest, eslint, tsc, vitest.
+# Runs: rustfmt check, clippy (-D warnings), nextest, eslint, tsc, vitest,
+# docs check (internal links + markdownlint).
 # Does not cross-compile for Linux. Code under cfg(not(target_os = "macos"))
 # still only gets Clippy on CI. Keep those stubs as const fn with no logic.
+# External http(s) link check is manual: bun run docs:links
 
 set -eu
 
@@ -31,6 +33,7 @@ run "cargo nextest" sh -c 'cd src-tauri && cargo nextest run --locked --all-feat
 run "bun lint" bun run lint
 run "bun typecheck" bun run typecheck
 run "bun test" bun run test
+run "docs:check" bun run docs:check
 
 if [ "$fail" -ne 0 ]; then
   echo "preflight failed" >&2

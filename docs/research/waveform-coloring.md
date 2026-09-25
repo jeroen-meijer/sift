@@ -155,11 +155,11 @@ clicks to know which tone), then a 40→16 kHz chirp:
 | 11 | 12000 | top |
 | end | chirp 40→16k | continuous sweep |
 
-**Replay in MiniMeters:** Waveform Color Mode → Multiband (not Color Map).
-Play through the device MiniMeters is listening to (or MiniMeters Server in a
-DAW). Screenshot or screen-record while it plays; optionally open the same
-file in Sift and compare. Pure tones should read as one solid band color;
-where color flips between adjacent tones ≈ MiniMeters' crossovers.
+**Replay in MiniMeters:** set Waveform Color Mode to Multiband (not Color Map).
+Play through the device MiniMeters is listening to, or through MiniMeters Server
+in a DAW. Screenshot or screen-record while it plays; you can open the same file
+in Sift and compare. Pure tones should read as one solid band color. Where color
+flips between adjacent tones is roughly where MiniMeters' crossovers sit.
 
 Probe completed 2026-09-25 (see MiniMeters section above). Sift four-band cuts
 today: **200 / 1500 / 6000 Hz**.
@@ -180,7 +180,7 @@ today: **200 / 1500 / 6000 Hz**.
 1. Decide product goal: MiniMeters parity (3-band ~250/2k) vs pad differentiation
    (keep four bands). Those pull in opposite directions.
 2. If keeping four bands: optional retune of the mid/high edges after more
-   dogfood; do not chase MM’s early blue unless we drop a band.
+   day-to-day use; do not chase MM's early blue unless we drop a band.
 3. Centroid tint inside the winning band if within-file pad motion still feels flat.
 4. Keep Multiband and Color Map as separate mental models; do not mix amp into
    spectral hue by default.

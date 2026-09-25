@@ -457,7 +457,7 @@
             <i class="ph ph-folder-plus" style="font-size:17px;color:#b5abfc;flex:none;margin-top:1px"></i>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:500;margin-bottom:3px">412 new files appeared</div>
-              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b8d9a;margin-bottom:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/Users/alex/Samples/Packs/Drums/Breaks</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b8d9a;margin-bottom:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/Samples/Packs/Drums/Breaks</div>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn btn-primary" style="font-size:12px;padding:4px 11px">Index</button>
                 <button class="btn btn-secondary" style="font-size:12px;padding:4px 11px">Skip</button>
@@ -846,7 +846,7 @@ class Component extends DCLogic {
   }
 
   DATA() {
-    const P = '/Users/alex/Samples/Packs';
+    const P = '/Samples/Packs';
     return [
       { n: '808_sub_hit_A.wav', t: 'one-shot', b: '', k: 'A', g: ['Drums/Kick/808'], f: true, p: P + '/Drums/Kicks' },
       { n: 'bass_wobble_140_F#.wav', t: 'loop', b: '140', k: 'F# min', g: ['Synths/Bass'], p: P + '/Synths/Bass' },
@@ -981,7 +981,7 @@ class Component extends DCLogic {
       icon: 'ph ph-folder'
     }, opts || {});
     const tree = [
-      T('/Users/alex/Samples/Packs', 0, '', { plain: false, root: true }),
+      T('/Samples/Packs', 0, '', { plain: false, root: true }),
       T('Drums', 1, '1,204'),
       T('Breaks', 2, '96'),
       T('Claps', 2, '142'),

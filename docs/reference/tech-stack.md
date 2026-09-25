@@ -82,7 +82,7 @@ Fallback plan: keep the Rust core crates (`audio`, `index`, `analyze`, `watch`) 
 
 Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is still the default choice for Sift. Notes call out where the ecosystem moved or where a spike may swap one crate.
 
-**Rust (src-tauri or a workspace of crates)**
+### Rust (src-tauri or a workspace of crates)
 
 | Concern | Primary pick | Notes (2026) |
 |---------|--------------|--------------|
@@ -97,7 +97,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 | UI ↔ audio queues | **`rtrb`** (SPSC realtime) and/or `crossbeam` | Still the usual pair. Prefer `rtrb` (or equivalent wait-free ring) on the audio path; `crossbeam` channels for non-RT worker messaging. |
 | BPM / key / type | Behind `trait Analyzer` | Do **not** hard-lock yet. Candidates: pure-Rust **`stratum-dsp`** (BPM + key, DJ-oriented, no FFI; evaluate on one-shots/loops, not only full tracks), **`aubio`** Rust bindings (tempo/onset/pitch; C dep; no key), or a later subprocess. Loop vs one-shot may stay heuristic/custom. |
 
-**Frontend**
+### Frontend
 
 - React 19 + TypeScript + Vite (loudline-aligned)
 - Virtualized table (e.g. TanStack Virtual) for large result sets
@@ -106,7 +106,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 - i18n: `i18next` + `react-i18next`. Playbook: [localization.md](localization.md). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
 - Theming: CSS variables (or a small token module) owned by `src/themes/<name>.css` (or equivalent). Components reference `var(--…)` / token names only. v1 ships one dark theme file; new themes are new files + a registry entry.
 
-**What not to swap casually**
+### What not to swap casually
 
 - Do not replace `cpal` with Web Audio for preview.
 - Do not replace Symphonia with a grab-bag of per-format crates unless Symphonia fails a format you must support.
@@ -167,9 +167,9 @@ Rules:
 - Prefer maintained crates and React packages when the use case fits (decode, devices, watch, DB, virtualization, i18n, BPM/key). Write glue and product UI; do not reimplement mature DSP or OS integration.
 - Auto-tags v1: filename/path token → [default-taxonomy.md](default-taxonomy.md). BPM/key via crate (`stratum-dsp` first spike); unknown/low-confidence OK.
 - Claude Design exports (Project HTML zip + screens) are the visual target. SPEC wins when behavior conflicts.
-- v1 bar: complete Must surfaces you can dogfood; imperfect analysis/search/watch edges are acceptable until you tune.
+- v1 bar: Must surfaces that work for day-to-day use; imperfect analysis, search, and watch edges are fine until later tuning.
 - App icon / logo: [`assets/brand/`](../../assets/brand/README.md); generated platform files in `src-tauri/icons/`.
-- Delivery: build until the Must surfaces run end to end; tune after you dogfood.
+- Delivery: build until the Must surfaces run end to end; tune after day-to-day use.
 
 ## Spike before locking (1-2 days)
 
@@ -179,7 +179,7 @@ Default assumption: spikes pass. Still run the three checks below on this Mac be
 2. **Row waveforms:** Scroll thousands of peakfile rows without main-thread stalls.
 3. **Drag → DAW:** Local WAV (and JIT path) into a DAW installed on this machine.
 
-Windows: validate before calling Windows support done; macOS-first is OK for the first dogfood build.
+Windows: validate before calling Windows support done; macOS-first is fine for the first day-to-day build.
 
 Pass → continue. Fail on (3) or scrubbing feel → evaluate egui shell with the same Rust core.
 
@@ -187,13 +187,13 @@ Pass → continue. Fail on (3) or scrubbing feel → evaluate egui shell with th
 
 ## Loudline: reuse vs discard
 
-**Reuse**
+### Reuse
 
 - Tauri 2 project layout, version sync scripts, installer CI habits
 - React + Vite + Bun toolchain
 - Desktop open-file / drop-onto-window patterns (as *input* to the library, not as the analysis engine)
 
-**Discard for Sift**
+### Discard for Sift
 
 - `OfflineAudioContext` / `AudioContext` decode and preview as the engine
 - `loudness-worklet` (different product; LUFS is not a Sift v1 feature)

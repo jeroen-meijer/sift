@@ -33,25 +33,6 @@ export function themeBands(id: ThemeId): SpectralBandColors {
   };
 }
 
-/** Parse a P3 PPM of the first three band weights packed as R/G/B. */
-export function parseClassicPpm(text: string): { width: number; colors: number[] } {
-  const tokens = text.trim().split(/\s+/);
-  if (tokens[0] !== "P3") throw new Error("expected P3 ppm");
-  const width = Number(tokens[1]);
-  const height = Number(tokens[2]);
-  const max = Number(tokens[3]);
-  if (!width || !height || max !== 255) throw new Error("bad ppm header");
-  const nums = tokens.slice(4).map(Number);
-  const packed = nums.slice(0, width * 3);
-  if (packed.length < width * 3) throw new Error("short ppm body");
-  /* Expand R/G/B → bass/lowMid/0/treble for theme mapping. */
-  const colors: number[] = [];
-  for (let i = 0; i < width; i++) {
-    colors.push(packed[i * 3] ?? 0, packed[i * 3 + 1] ?? 0, 0, packed[i * 3 + 2] ?? 0);
-  }
-  return { width, colors };
-}
-
 export interface ThemedStripStats {
   width: number;
   /** Buckets where low-mid theme hue clearly wins (greenish). */
@@ -112,7 +93,7 @@ export function themeClassicStrip(
   };
 }
 
-/** Write a P3 PPM strip (and path) for visual inspection. */
+/** Write a P3 PPM strip for local visual inspection (gitignored). */
 export function writeThemedPpm(
   filename: string,
   pixels: readonly Rgb[],
@@ -131,8 +112,4 @@ export function writeThemedPpm(
   const path = join(FIXTURES, filename);
   writeFileSync(path, `${lines.join("\n")}\n`);
   return path;
-}
-
-export function fixturesDir(): string {
-  return FIXTURES;
 }

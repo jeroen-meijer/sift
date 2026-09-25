@@ -56,7 +56,7 @@ jobs:
         run: cargo nextest run --locked --all-features
 
   frontend:
-    name: eslint · tsc · vitest
+    name: eslint · tsc · vitest · docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,3 +72,6 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Docs
+        run: bun run docs:check

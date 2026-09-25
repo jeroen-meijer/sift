@@ -16,11 +16,11 @@ How Sift docs are laid out, named, and maintained. Agents and humans follow this
 
 App icon and logo sources: [`assets/brand/`](../assets/brand/README.md). Generated platform icons: `src-tauri/icons/`.
 
-Root of the repo keeps only `README.md` (users), `AGENTS.md` (agents/contributors), and `CHANGELOG.md`. Do not add other root markdown except `LICENSE`, `CONTRIBUTING.md`, or `SECURITY.md` if those files are added later.
+Root of the repo keeps user-facing and contributor markdown only: `README.md`, `AGENTS.md`, `CHANGELOG.md`, `LICENSE`, `CONTRIBUTING.md`, and `SECURITY.md`. Do not add other root markdown.
 
 ## Naming
 
-- Under `docs/`: `kebab-case.md` only.
+- Under `docs/`: `kebab-case.md` (dots allowed in versioned names such as `v1.1-gaps.md`).
 - Folder indexes: `README.md`.
 - No YAML or TOML frontmatter. The human title is the file's `#` heading.
 - Do not leave `foo-v2.md` beside `foo.md`. Replace the old file or merge into it.
@@ -66,6 +66,25 @@ Durable means it would still matter next week to a cold agent. One-off task tips
 ## Prefer clean end state
 
 For code and docs changes, follow [Prefer clean end state](../AGENTS.md#prefer-clean-end-state) in AGENTS.md. Do not leave half-migrated trees, rename shims, or bolted-on sections.
+
+## Lint and validate
+
+After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run:
+
+```bash
+bun run docs:check
+```
+
+That gate is also part of `bun run preflight` and CI. It runs two checks:
+
+1. [`tool/check-docs.py`](../tool/check-docs.py): internal links and heading anchors, no YAML frontmatter under `docs/`, kebab-case filenames (see [Naming](#naming)), and path hygiene from [Repo hygiene](#repo-hygiene).
+2. `markdownlint-cli2`: code-fence languages, heading and list shape. Config: [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc).
+
+External http(s) links are a separate, optional check (needs the network, and some sites block scripted requests):
+
+```bash
+bun run docs:links
+```
 
 ## Root README
 

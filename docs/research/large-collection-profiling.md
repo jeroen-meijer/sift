@@ -104,24 +104,24 @@ What the log shows:
 
 | # | Cause | Where |
 | --- | --- | --- |
-| 1 | All commands sync, so they run on the main thread | [commands/mod.rs](../src-tauri/src/commands/mod.rs) |
-| 1a | `folder_tree` loads all 20k `(root_id, parent_path, path)` rows; `path` unused | [library.rs:118](../src-tauri/src/library.rs#L118) |
-| 1b | `refresh_availability_for_paths` runs `stat` inside `with_conn` | [samples.rs:535](../src-tauri/src/samples.rs#L535) |
-| 1c | `prefetch_decode` decodes 4 files while holding the `decode_cache` lock | [commands/mod.rs:534](../src-tauri/src/commands/mod.rs#L534) |
-| 1d | Profile log: unbuffered write + `flush()` + `eprintln!` per line, one mutex shared with 4 workers | [profile_log.rs:80](../src-tauri/src/profile_log.rs#L80) |
-| 1e | One `Mutex<SqliteConnection>` for UI reads, 4 workers and the watcher | [db/mod.rs:80](../src-tauri/src/db/mod.rs#L80) |
-| 2 | `analysis-progress` handler sets state in `App` | [App.tsx:127](../src/components/App.tsx#L127) |
-| 2a | `setPlayhead` on every rAF in `LibraryView` | [LibraryView.tsx:297](../src/components/LibraryView.tsx#L297) |
-| 2b | `library-changed` calls `bump()`, which refetches stats, tree, tags, full list | [App.tsx:104](../src/components/App.tsx#L104) |
-| 2c | Every favorite / BPM / key / tag edit calls `reload`, which refetches list and tree | [LibraryView.tsx](../src/components/LibraryView.tsx) `toggleFavorite`, `runAction`, `setBpmOn` |
-| 2d | `FolderSidebar` renders all 2 817 folders, not memoized | [FolderSidebar.tsx](../src/components/FolderSidebar.tsx) |
-| 3 | Row keyed by index; canvas unmounted whenever peaks are null; `clientWidth` + 2 × `getComputedStyle` per paint | [SampleTable.tsx](../src/components/SampleTable.tsx), [RowWaveform.tsx:61](../src/components/RowWaveform.tsx#L61) |
-| 3a | Prefetch effect builds `new Map(samples.map(...))` over the whole list on every range change | [SampleTable.tsx:229](../src/components/SampleTable.tsx#L229) |
-| 3b | `PeakData` sent as JSON, ~50 KB per row, stored as JS `number[]` | [peaks.rs:32](../src-tauri/src/audio/peaks.rs#L32), [ipc.ts:70](../src/lib/ipc.ts#L70) |
-| 4 | `decode_file` grows `Vec<f32>` with no reserve | [decode.rs:98](../src-tauri/src/audio/decode.rs#L98) |
-| 4a | Mono copies: `detect_loop_or_oneshot`, `HeuristicAnalyzer`, `mix_to_mono` (peaks), plus stratum's own `samples.to_vec()` | [analyze/mod.rs:262](../src-tauri/src/analyze/mod.rs#L262), [peaks.rs](../src-tauri/src/audio/peaks.rs) |
+| 1 | All commands sync, so they run on the main thread | [commands/mod.rs](../../src-tauri/src/commands/mod.rs) |
+| 1a | `folder_tree` loads all 20k `(root_id, parent_path, path)` rows; `path` unused | [library.rs:118](../../src-tauri/src/library.rs#L118) |
+| 1b | `refresh_availability_for_paths` runs `stat` inside `with_conn` | [samples.rs:535](../../src-tauri/src/samples.rs#L535) |
+| 1c | `prefetch_decode` decodes 4 files while holding the `decode_cache` lock | [commands/mod.rs:534](../../src-tauri/src/commands/mod.rs#L534) |
+| 1d | Profile log: unbuffered write + `flush()` + `eprintln!` per line, one mutex shared with 4 workers | [profile_log.rs:80](../../src-tauri/src/profile_log.rs#L80) |
+| 1e | One `Mutex<SqliteConnection>` for UI reads, 4 workers and the watcher | [db/mod.rs:80](../../src-tauri/src/db/mod.rs#L80) |
+| 2 | `analysis-progress` handler sets state in `App` | [App.tsx:127](../../src/components/App.tsx#L127) |
+| 2a | `setPlayhead` on every rAF in `LibraryView` | [LibraryView.tsx:297](../../src/components/LibraryView.tsx#L297) |
+| 2b | `library-changed` calls `bump()`, which refetches stats, tree, tags, full list | [App.tsx:104](../../src/components/App.tsx#L104) |
+| 2c | Every favorite / BPM / key / tag edit calls `reload`, which refetches list and tree | [LibraryView.tsx](../../src/components/LibraryView.tsx) `toggleFavorite`, `runAction`, `setBpmOn` |
+| 2d | `FolderSidebar` renders all 2 817 folders, not memoized | [FolderSidebar.tsx](../../src/components/FolderSidebar.tsx) |
+| 3 | Row keyed by index; canvas unmounted whenever peaks are null; `clientWidth` + 2 × `getComputedStyle` per paint | [SampleTable.tsx](../../src/components/SampleTable.tsx), [RowWaveform.tsx:61](../../src/components/RowWaveform.tsx#L61) |
+| 3a | Prefetch effect builds `new Map(samples.map(...))` over the whole list on every range change | [SampleTable.tsx:229](../../src/components/SampleTable.tsx#L229) |
+| 3b | `PeakData` sent as JSON, ~50 KB per row, stored as JS `number[]` | [peaks.rs:32](../../src-tauri/src/audio/peaks.rs#L32), [ipc.ts:70](../../src/lib/ipc.ts#L70) |
+| 4 | `decode_file` grows `Vec<f32>` with no reserve | [decode.rs:98](../../src-tauri/src/audio/decode.rs#L98) |
+| 4a | Mono copies: `detect_loop_or_oneshot`, `HeuristicAnalyzer`, `mix_to_mono` (peaks), plus stratum's own `samples.to_vec()` | [analyze/mod.rs:262](../../src-tauri/src/analyze/mod.rs#L262), [peaks.rs](../../src-tauri/src/audio/peaks.rs) |
 | 4b | stratum-dsp STFT over the full file (38 min ≈ 196k frames × 1 025 bins × 4 B ≈ 800 MB) | `stratum_dsp::analyze_audio` |
-| 4c | `DecodeCache` capped at 16 entries, not bytes | [decode_cache.rs:15](../src-tauri/src/audio/decode_cache.rs#L15) |
+| 4c | `DecodeCache` capped at 16 entries, not bytes | [decode_cache.rs:15](../../src-tauri/src/audio/decode_cache.rs#L15) |
 
 ---
 
@@ -524,15 +524,16 @@ export const playheadStore = createStore<number | null>(null);
  ```
 
  In the row, `.row-wave-playhead` sits inside a full-width wrapper that gets translated; `.row-wave-played` becomes a full-width element scaled with `transform: scaleX(f)` and `transform-origin: left` (a second small hook or a `mode` argument). In `library.css`, replace `will-change: left` with `will-change: transform`.
+
 - `DetailPane` / `WaveformView`: replace the `playheadSecs` prop with the same subscription. If `WaveformView` draws the playhead on its canvas, move it to a separate absolutely positioned DOM line (or overlay canvas) driven by the hook, so the main wave canvas never repaints per frame.
 
 **Step 4: memoize the big children.**
 
 - `export const FolderSidebar = memo(function FolderSidebar(...) { ... })`. Same for `SampleTable`, `DetailPane`, `StatusBar`, `OmniSearch`.
 - In `LibraryView`, every prop passed to those must be stable:
- - Inline arrow props become `useStableCallback(...)`: `onSelectFolder`, `onSelectTag`, `onRemoveRoot`, `onHoverPreview`, `onSort`, `onColumnWidthsChange`, `onColumnOrderChange`, `onOpenMenu`, `onScrubRow`, and every `DetailPane` and `OmniSearch` callback.
- - `columnWidths={mergeColumnWidths(settings.column_widths)}` and `columnOrder={mergeColumnOrder(...)}` become `useMemo` on the settings value.
- - `columnLabels={{...}}` for `OmniSearch` becomes `useMemo` on `t`.
+  - Inline arrow props become `useStableCallback(...)`: `onSelectFolder`, `onSelectTag`, `onRemoveRoot`, `onHoverPreview`, `onSort`, `onColumnWidthsChange`, `onColumnOrderChange`, `onOpenMenu`, `onScrubRow`, and every `DetailPane` and `OmniSearch` callback.
+  - `columnWidths={mergeColumnWidths(settings.column_widths)}` and `columnOrder={mergeColumnOrder(...)}` become `useMemo` on the settings value.
+  - `columnLabels={{...}}` for `OmniSearch` becomes `useMemo` on `t`.
 - New `SampleRowView = memo(...)` in `SampleRowView.tsx`, extracted from the row JSX in `SampleTable`. Props: `sample`, `index`, `top` (the `virtual.start`), `template`, `columns`, `selected`, `playing`, `showWaveforms`, `colored`, `highlightText`, `waveWidth` (A7), plus stable callbacks that take the sample (`onSelect(sample, e)`, `onOpenMenu`, `onToggleFavorite`, `onScrub`, `onHoverPreview`, `onDragStart`). `SampleTable` passes `selectedIds.has(sample.id)` as the boolean `selected`, never the Set.
 
 **Tests:**
@@ -714,8 +715,8 @@ Put one `Arc<ChangeCoalescer>` in `AppState` and pass it into `WatchShared`. Rep
 
 - New Rust command `get_samples(ids: Vec<i64>) -> Vec<SampleDto>`: off main, `WHERE id IN (...)` in chunks of 500, same DTO and tag join as `list_samples`.
 - `App.tsx` `library-changed` handler:
- - `structural`: refresh stats + tree + tags and bump the list token, as today.
- - otherwise: write the ids to a `rowChangesStore` (from A4's `createStore`). `LibraryView` subscribes, intersects the ids with its current rows, and if any match calls `ipc.getSamples(matching)` and patches those rows. Refresh `db_stats` at most every 10 s. The tree is not touched.
+  - `structural`: refresh stats + tree + tags and bump the list token, as today.
+  - otherwise: write the ids to a `rowChangesStore` (from A4's `createStore`). `LibraryView` subscribes, intersects the ids with its current rows, and if any match calls `ipc.getSamples(matching)` and patches those rows. Refresh `db_stats` at most every 10 s. The tree is not touched.
 - Remove the `analysis-progress` path that calls `bump()` when `remaining === 0`. The per-sample ids already patch rows.
 - Edits (`toggleFavorite`, type, BPM, key, tags, undo/redo): after the IPC resolves, patch the affected rows with `getSamples(ids)` instead of `reload()`. For favorite, flip the row first (optimistic), then reconcile with the fetched row. `reload()` stays only for root add/remove, purge missing and remove sample.
 - Keep object identity for untouched rows so memoized rows skip rendering:
@@ -1204,7 +1205,7 @@ Each item here is larger or riskier. Do one only when its trigger fires.
 
 **Trigger:** after Phase A, `fe.row_wave_paint` still shows paints over 16 ms, and A7 Step 1 showed canvas creation (not layout) as the cost.
 
-An absolutely positioned canvas over the wave column inside `.sample-table-body`, sized to the viewport, redrawn in one rAF for the visible range on scroll, resize or peak arrival. Rows keep an empty `.col.wave` cell for hover, scrub and playhead overlays. 
+An absolutely positioned canvas over the wave column inside `.sample-table-body`, sized to the viewport, redrawn in one rAF for the visible range on scroll, resize or peak arrival. Rows keep an empty `.col.wave` cell for hover, scrub and playhead overlays.
 
 ---
 

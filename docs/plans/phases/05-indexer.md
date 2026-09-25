@@ -21,6 +21,7 @@ Recursively index audio files under each root into SQLite with progress events; 
 - Insert/update `samples` with path, filename, size, mtime, inode if available; technical fields nullable until analysis
 - Background indexing (tokio); emit progress events; UI status bar / non-blocking progress
 - Re-index root on add; command to re-scan
+
 ### Out of scope
 
 - Continuous watch (Phase 14)

@@ -16,7 +16,9 @@ Applies to Rust, TypeScript, tests, docs, scripts, and agent instruction files i
 
 ## Documentation
 
-Obey [docs/README.md](docs/README.md) for layout, kebab-case naming, no frontmatter, single source of truth, repo hygiene, and persisting durable preferences without being asked. Do not invent parallel trees or dump new markdown at the repo root. Root [README.md](README.md) stays user-facing.
+Obey [docs/README.md](docs/README.md) for layout, naming, no frontmatter, single source of truth, repo hygiene, lint gates, and persisting durable preferences without being asked. Do not invent parallel trees or dump new markdown at the repo root. Root [README.md](README.md) stays user-facing.
+
+After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run `bun run docs:check` before you finish. Details: [Lint and validate](docs/README.md#lint-and-validate).
 
 ## Settled tooling
 
@@ -34,8 +36,9 @@ Obey [docs/README.md](docs/README.md) for layout, kebab-case naming, no frontmat
 | Frontend types | `tsc --noEmit` (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) |
 | Frontend tests | Vitest (`src/**/*.{test,spec}.{ts,tsx}`) |
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
+| Docs lint | `markdownlint-cli2` (`.markdownlint-cli2.jsonc`) + `tool/check-docs.py` via `bun run docs:check` |
 | Package manager | Bun |
-| CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest); Bun+Rust caches; publish on macOS/Windows |
+| CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest · docs:check); Bun+Rust caches; publish on macOS/Windows |
 | Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (installers + updater + `latest.json`) |
 
 ## Commands
@@ -56,6 +59,7 @@ bun run lint
 bun run typecheck
 bun run test
 bun run bench
+bun run docs:check
 bun run build
 bun run tauri:dev
 bun run tauri:profile
@@ -70,7 +74,7 @@ Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`. Watch C
 
 `.vscode/settings.json` runs rust-analyzer Clippy with `-D warnings` and rustfmt on save. Reload the window if diagnostics look stale.
 
-`bun run preflight` runs the same checks as CI on this machine (fmt, clippy, nextest, eslint, tsc, vitest). Run it before push when you changed Rust, frontend, or CI config. It does not compile `cfg(not(target_os = "macos"))` code, so keep those stubs tiny (`const fn`, no real logic). CI still catches ubuntu-only Clippy.
+`bun run preflight` runs the same checks as CI on this machine (fmt, clippy, nextest, eslint, tsc, vitest, docs:check). Run it before push when you changed Rust, frontend, docs, or CI config. It does not compile `cfg(not(target_os = "macos"))` code, so keep those stubs tiny (`const fn`, no real logic). CI still catches ubuntu-only Clippy.
 
 App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 

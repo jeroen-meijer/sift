@@ -2,7 +2,7 @@
 
 Shipped starter tree for new installs. Users can rename, add, move, and delete via tag management. Colors are suggestions; inherit from parent when unset.
 
-Mapped from common sample-pack language and the Claude Design sample data. Tunable after you dogfood.
+Mapped from common sample-pack language and the Claude Design sample data. Adjust after day-to-day use on a large library.
 
 | Path | Suggested color | Notes |
 |------|-----------------|-------|
