@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.4.1
+
 - fix(macos): ship a precompiled Liquid Glass `Assets.car` so macOS builds no longer die in `actool`
 
 ## 0.4.0
