@@ -2,12 +2,18 @@
  *
  * Marks are fire-and-forget (batched) so they do not serialize the IPC queue
  * the way an awaited `profile_mark` after every `get_peaks` did.
+ *
+ * Boot timeline: [`bootMark`] uses ms since this module first evaluated
+ * (`boot.fe.*`). Pair with Rust `boot.*` milestones in the same log file.
  */
 
 import { invoke } from "@tauri-apps/api/core";
 import { useLayoutEffect } from "react";
 
 let enabled: boolean | null = null;
+
+/** Approx. FE script start (`performance.now()` at first import). */
+const feEpoch = performance.now();
 
 interface PendingMark {
   name: string;
@@ -19,6 +25,7 @@ const buffer: PendingMark[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 let observersStarted = false;
 let rafId = 0;
+let navLogged = false;
 
 /** True when the Rust side was started with `SIFT_PROFILE=1`. */
 export async function profileEnabled(): Promise<boolean> {
@@ -41,8 +48,52 @@ export function isProfileOn(): boolean {
 /** Resolve enabled flag and start frame / longtask observers. Call once from App. */
 export async function warmProfile(): Promise<boolean> {
   const on = await profileEnabled();
-  if (on) startFeProfilers();
+  if (on) {
+    startFeProfilers();
+    logBootNavigation();
+  }
   return on;
+}
+
+/**
+ * Startup milestone: `ms` is elapsed since FE module load.
+ * Names should be `boot.fe.*` (or pass a short suffix; `boot.` is prefixed when missing).
+ */
+export function bootMark(name: string, detail?: string): void {
+  const full = name.startsWith("boot.") ? name : `boot.${name}`;
+  enqueueMark(full, performance.now() - feEpoch, detail);
+}
+
+/** Time one async boot step (duration of the step, not since epoch). */
+export async function bootProfiled<T>(
+  name: string,
+  detail: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const full = name.startsWith("boot.") ? name : `boot.${name}`;
+  const t0 = performance.now();
+  try {
+    return await run();
+  } finally {
+    enqueueMark(full, performance.now() - t0, detail);
+  }
+}
+
+function logBootNavigation(): void {
+  if (navLogged) return;
+  navLogged = true;
+  try {
+    const entries = performance.getEntriesByType("navigation");
+    const nav = entries[0];
+    if (!(nav instanceof PerformanceNavigationTiming)) return;
+    /* Values are already ms since timeOrigin (= page start in the webview). */
+    enqueueMark("boot.fe.nav_response", nav.responseEnd, `transfer=${String(nav.transferSize)}`);
+    enqueueMark("boot.fe.nav_dom_interactive", nav.domInteractive, "");
+    enqueueMark("boot.fe.nav_dom_content", nav.domContentLoadedEventEnd, "");
+    enqueueMark("boot.fe.nav_load", nav.loadEventEnd, "");
+  } catch {
+    /* ignore */
+  }
 }
 
 function enqueueMark(name: string, ms: number, detail?: string): void {
@@ -157,6 +208,7 @@ export function __stopFeProfilersForTests(): void {
   if (rafId) cancelAnimationFrame(rafId);
   rafId = 0;
   observersStarted = false;
+  navLogged = false;
   if (flushTimer != null) {
     clearTimeout(flushTimer);
     flushTimer = undefined;

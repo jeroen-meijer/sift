@@ -20,7 +20,7 @@ import {
 import { playheadStore, rowChangesStore } from "../lib/liveStores";
 import { patchRows } from "../lib/patchRows";
 import { getRowPeaks } from "../lib/rowPeaks";
-import { isProfileOn, profileEvent, profileMark, useRenderTiming } from "../lib/profile";
+import { bootMark, isProfileOn, profileEvent, profileMark, useRenderTiming } from "../lib/profile";
 import { useStableCallback } from "../lib/useStableCallback";
 import { DetailPane } from "./DetailPane";
 import { FolderSidebar } from "./FolderSidebar";
@@ -45,6 +45,9 @@ const CLIP_RENDER_DEBOUNCE_MS = 250;
 const MIN_CLIP_SECS = 0.01;
 /** Neighbors longer than this are not decoded ahead of time. */
 const PREFETCH_MAX_DURATION_MS = 30_000;
+
+/** First successful list after process start (boot timeline). */
+let firstListBootLogged = false;
 
 type Dialog =
   | { kind: "removeRoot"; node: FolderNode }
@@ -192,6 +195,10 @@ export function LibraryView({
       });
       const applyAt = performance.now();
       setSamples(rows);
+      if (!firstListBootLogged) {
+        firstListBootLogged = true;
+        bootMark("fe.first_list", `n=${String(rows.length)} ipc_ms=${(applyAt - t0).toFixed(1)}`);
+      }
       if (isProfileOn()) {
         /* Round trip of the list IPC (Rust time is `ipc.list_samples`). */
         profileMark(

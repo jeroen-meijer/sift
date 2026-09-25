@@ -1,5 +1,7 @@
 ## Upcoming
 
+- fix: fix white flash and wrong initial screen at startup, caused by showing the window before theme and library roots were ready
+
 ## 0.3.1
 
 - fix(library): fill Date added and Date created on launch for samples indexed before those columns existed

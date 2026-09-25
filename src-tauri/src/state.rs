@@ -30,8 +30,8 @@ pub struct AppState {
 
 impl AppState {
     pub fn init() -> AppResult<Self> {
-        let paths = AppPaths::resolve()?;
-        let db = Arc::new(Db::open(&paths)?);
+        let paths = crate::profile_log::time("boot.paths_resolve", "", AppPaths::resolve)?;
+        let db = crate::profile_log::time("boot.db_open", "", || Db::open(&paths).map(Arc::new))?;
         let changes = Arc::new(ChangeCoalescer::default());
         let watch_shared = Arc::new(WatchShared::new(
             Arc::clone(&db),
@@ -42,30 +42,32 @@ impl AppState {
         let mut clips_dir = paths.clips_dir.clone();
         let mut player = PlayerEngine::new();
         // Seed player prefs from settings when present.
-        let _ = db.with_conn(|conn| {
-            use crate::db::settings;
-            if let Some(v) = settings::get(conn, "preview_gain_db")?
-                && let Some(db_val) = v.as_f64()
-            {
-                player.set_gain_db(crate::ids::f64_to_f32(db_val));
-            }
-            if let Some(v) = settings::get(conn, "loop_preview")?
-                && let Some(on) = v.as_bool()
-            {
-                player.set_loop_preview(on);
-            }
-            if let Some(v) = settings::get(conn, "output_device")?
-                && let Some(id) = v.as_str()
-            {
-                let _ = player.set_device(id);
-            }
-            if let Some(v) = settings::get(conn, "clips_dir")?
-                && let Some(dir) = v.as_str()
-                && !dir.is_empty()
-            {
-                clips_dir = PathBuf::from(dir);
-            }
-            Ok(())
+        crate::profile_log::time("boot.player_seed", "", || {
+            let _ = db.with_conn(|conn| {
+                use crate::db::settings;
+                if let Some(v) = settings::get(conn, "preview_gain_db")?
+                    && let Some(db_val) = v.as_f64()
+                {
+                    player.set_gain_db(crate::ids::f64_to_f32(db_val));
+                }
+                if let Some(v) = settings::get(conn, "loop_preview")?
+                    && let Some(on) = v.as_bool()
+                {
+                    player.set_loop_preview(on);
+                }
+                if let Some(v) = settings::get(conn, "output_device")?
+                    && let Some(id) = v.as_str()
+                {
+                    let _ = player.set_device(id);
+                }
+                if let Some(v) = settings::get(conn, "clips_dir")?
+                    && let Some(dir) = v.as_str()
+                    && !dir.is_empty()
+                {
+                    clips_dir = PathBuf::from(dir);
+                }
+                Ok(())
+            });
         });
 
         Ok(Self {

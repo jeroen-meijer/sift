@@ -64,7 +64,12 @@ fn is_current_play(latest: &AtomicU64, seq: u64) -> bool {
 
 #[tauri::command]
 pub async fn get_settings(app: AppHandle) -> AppResult<Value> {
-    off_main(app, move |state| state.db.with_conn(settings::get_all)).await
+    off_main(app, move |state| {
+        crate::profile_log::time("ipc.get_settings", "", || {
+            state.db.with_conn(settings::get_all)
+        })
+    })
+    .await
 }
 
 #[tauri::command]
@@ -92,29 +97,31 @@ pub async fn set_setting(app: AppHandle, key: String, value: Value) -> AppResult
 #[tauri::command]
 pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
     off_main(app, move |state| {
-        state.db.with_conn(|conn| {
-            use crate::db::schema::roots::dsl as roots_dsl;
-            use crate::db::schema::samples::dsl as samples_dsl;
-            use crate::db::schema::tags::dsl as tags_dsl;
-            use diesel::dsl::count_star;
-            use diesel::prelude::*;
+        crate::profile_log::time("ipc.db_stats", "", || {
+            state.db.with_conn(|conn| {
+                use crate::db::schema::roots::dsl as roots_dsl;
+                use crate::db::schema::samples::dsl as samples_dsl;
+                use crate::db::schema::tags::dsl as tags_dsl;
+                use diesel::dsl::count_star;
+                use diesel::prelude::*;
 
-            let roots: i64 = roots_dsl::roots.select(count_star()).first(conn)?;
-            let samples: i64 = samples_dsl::samples.select(count_star()).first(conn)?;
-            let missing: i64 = samples_dsl::samples
-                .filter(samples_dsl::missing.ne(0))
-                .select(count_star())
-                .first(conn)?;
-            let tags: i64 = tags_dsl::tags.select(count_star()).first(conn)?;
-            let clips_dir = state.clips_dir();
-            Ok(DbStats {
-                roots,
-                samples,
-                missing,
-                tags,
-                data_dir: state.paths.data_dir.to_string_lossy().into_owned(),
-                clips_bytes: jit::cache_size(&clips_dir),
-                clips_dir: clips_dir.to_string_lossy().into_owned(),
+                let roots: i64 = roots_dsl::roots.select(count_star()).first(conn)?;
+                let samples: i64 = samples_dsl::samples.select(count_star()).first(conn)?;
+                let missing: i64 = samples_dsl::samples
+                    .filter(samples_dsl::missing.ne(0))
+                    .select(count_star())
+                    .first(conn)?;
+                let tags: i64 = tags_dsl::tags.select(count_star()).first(conn)?;
+                let clips_dir = state.clips_dir();
+                Ok(DbStats {
+                    roots,
+                    samples,
+                    missing,
+                    tags,
+                    data_dir: state.paths.data_dir.to_string_lossy().into_owned(),
+                    clips_bytes: jit::cache_size(&clips_dir),
+                    clips_dir: clips_dir.to_string_lossy().into_owned(),
+                })
             })
         })
     })
@@ -896,7 +903,10 @@ pub async fn set_loop_preview(app: AppHandle, on: bool) -> AppResult<()> {
 
 #[tauri::command]
 pub async fn list_tags(app: AppHandle) -> AppResult<Vec<TagNode>> {
-    off_main(app, move |state| state.db.with_conn(tags::list_tags)).await
+    off_main(app, move |state| {
+        crate::profile_log::time("ipc.list_tags", "", || state.db.with_conn(tags::list_tags))
+    })
+    .await
 }
 
 #[tauri::command]
