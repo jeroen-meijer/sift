@@ -29,8 +29,8 @@ export function TitleBar({ onSettings, onTags }: Props) {
         <button
           type="button"
           className="btn-icon"
-          title={t("settings")}
-          aria-label={t("settings")}
+          title={t("chrome.settings")}
+          aria-label={t("chrome.settings")}
           onClick={onSettings}
         >
           <GearIcon size={15} />
@@ -38,8 +38,8 @@ export function TitleBar({ onSettings, onTags }: Props) {
         <button
           type="button"
           className="btn-icon"
-          title={t("tagManagement")}
-          aria-label={t("tagManagement")}
+          title={t("chrome.tagManagement")}
+          aria-label={t("chrome.tagManagement")}
           onClick={onTags}
         >
           <TagIcon size={15} />

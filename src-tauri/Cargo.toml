@@ -46,6 +46,8 @@ qos-threads = "0.1.3"
 sha2 = "0.11.0"
 hex = "0.4.3"
 tempfile = "3"
+tauri-plugin-updater = "2.12.0"
+tauri-plugin-process = "2.3.1"
 
 # macOS only: used to check AppKit still has a live mouse event before handing a
 # drag to the plugin, which aborts the process on a NULL drag session.
@@ -77,7 +79,7 @@ strip = true
 unsafe_code = "deny"
 
 [lints.clippy]
-# https://www.namtao.com/rust-toolkit-2026/ (same deny set as chat-search)
+# https://www.namtao.com/rust-toolkit-2026/
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 # App crate: Tauri lib is not a published public API.

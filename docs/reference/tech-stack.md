@@ -1,6 +1,6 @@
 # Sift tech stack
 
-Working recommendation for implementing [SPEC.md](../SPEC.md). Not a locked ADR until a spike confirms the three risks below. Last updated: 2026-09-22.
+Working recommendation for implementing [spec.md](../spec.md). Not a locked ADR until a spike confirms the three risks below. Last updated: 2026-09-22.
 
 Related: [loudline](https://github.com/jeroen-meijer/loudline) (same author) is Tauri 2 + React with audio in the WebView. Sift reuses that shell. Audio stays in Rust.
 
@@ -103,7 +103,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 - Virtualized table (e.g. TanStack Virtual) for large result sets
 - Canvas (or WebGL) waveform views driven by peak buffers from Rust
 - Bun for scripts
-- i18n: `i18next` + `react-i18next` (same as loudline). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
+- i18n: `i18next` + `react-i18next`. Playbook: [localization.md](localization.md). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
 - Theming: CSS variables (or a small token module) owned by `src/themes/<name>.css` (or equivalent). Components reference `var(--…)` / token names only. v1 ships one dark theme file; new themes are new files + a registry entry.
 
 **What not to swap casually**
@@ -116,7 +116,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 
 ## Locales and themes (editability)
 
-Product rules: [SPEC.md](../SPEC.md) §4.13-4.14. Layout goal: a non-author can add a language or tweak colors without opening React components.
+Product rules: [spec.md](../spec.md) §4.13-4.14. Layout goal: a non-author can add a language or tweak colors without opening React components.
 
 Suggested tree (names flexible; keep the split):
 
@@ -165,7 +165,7 @@ Rules:
 ## Implementation bias
 
 - Prefer maintained crates and React packages when the use case fits (decode, devices, watch, DB, virtualization, i18n, BPM/key). Write glue and product UI; do not reimplement mature DSP or OS integration.
-- Auto-tags v1: filename/path token → [DEFAULT_TAXONOMY.md](DEFAULT_TAXONOMY.md). BPM/key via crate (`stratum-dsp` first spike); unknown/low-confidence OK.
+- Auto-tags v1: filename/path token → [default-taxonomy.md](default-taxonomy.md). BPM/key via crate (`stratum-dsp` first spike); unknown/low-confidence OK.
 - Claude Design exports (Project HTML zip + screens) are the visual target. SPEC wins when behavior conflicts.
 - v1 bar: complete Must surfaces you can dogfood; imperfect analysis/search/watch edges are acceptable until you tune.
 - Icons: mock/design assets fine until a real brand pass.
@@ -222,5 +222,5 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 | 2026-09-22 | Crate currency pass: keep cpal/symphonia/rusqlite/notify/hound; Opus via libopus adapter; analysis still behind trait (`stratum-dsp` candidate) |
 | 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72-Q75) |
 | 2026-09-22 | Index DB: Diesel + embedded migrations (replace rusqlite hand SQL) |
-| 2026-09-22 | Tooling: chat-search namtao clippy/nextest/bacon; ESLint strictTypeChecked + Vitest |
+| 2026-09-22 | Tooling: namtao clippy/nextest/bacon; ESLint strictTypeChecked + Vitest |
 | 2026-09-22 | Perf: Criterion `audio_hotpath` benches + soft `perf_*` budget tests; Vitest bench |

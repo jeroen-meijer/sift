@@ -13,26 +13,26 @@ export function FirstLaunch({ onAddFolder, onPreferences }: Props) {
   return (
     <div className="first-launch">
       <aside className="sidebar">
-        <div className="sidebar-title kicker">{t("library")}</div>
-        <div className="sidebar-empty">{t("noRoots")}</div>
+        <div className="sidebar-title kicker">{t("sidebar.title")}</div>
+        <div className="sidebar-empty">{t("sidebar.noRoots")}</div>
       </aside>
       <section className="first-launch-main">
         <div className="first-launch-card">
           <div className="first-launch-icon">
             <WaveformIcon size={28} />
           </div>
-          <h1>{t("firstLaunchTitle")}</h1>
-          <p>{t("firstLaunchBody")}</p>
+          <h1>{t("firstLaunch.title")}</h1>
+          <p>{t("firstLaunch.body")}</p>
           <div className="first-launch-actions">
             <button type="button" className="btn btn-primary" onClick={onAddFolder}>
               <FolderPlusIcon size={15} />
-              {t("addFolder")}
+              {t("sidebar.addFolder")}
             </button>
             <button type="button" className="btn btn-secondary" onClick={onPreferences}>
-              {tc("preferences")}
+              {tc("chrome.preferences")}
             </button>
           </div>
-          <div className="first-launch-hint rule">{t("firstLaunchHint")}</div>
+          <div className="first-launch-hint rule">{t("firstLaunch.hint")}</div>
         </div>
       </section>
     </div>

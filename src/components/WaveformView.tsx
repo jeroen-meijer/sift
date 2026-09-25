@@ -286,8 +286,8 @@ export function WaveformView({
     ? (() => {
         const secs = (selection.end - selection.start).toFixed(2);
         const span = formatSpan(selection.start, selection.end, bpm);
-        if (span) return t(clipReady ? "clipHint" : "clipPending", { span, secs });
-        return t(clipReady ? "clipHintNoBpm" : "clipPendingNoBpm", { secs });
+        if (span) return t(clipReady ? "waveform.clipHint" : "waveform.clipPending", { span, secs });
+        return t(clipReady ? "waveform.clipHintNoBpm" : "waveform.clipPendingNoBpm", { secs });
       })()
     : null;
 
@@ -315,7 +315,7 @@ export function WaveformView({
       >
         {gridStyle ? <div className="wave-grid" style={gridStyle} aria-hidden /> : null}
 
-        <canvas ref={canvasRef} className="wave-canvas" aria-label={t("waveform")} />
+        <canvas ref={canvasRef} className="wave-canvas" aria-label={t("waveform.label")} />
 
         <span className="wave-lane-label" style={{ top: 5 }} aria-hidden>
           {lanes === 2 ? "L" : "M"}
@@ -355,7 +355,7 @@ export function WaveformView({
               className="wave-handle"
               role="slider"
               tabIndex={0}
-              aria-label={t("selectionStart")}
+              aria-label={t("waveform.selectionStart")}
               aria-valuenow={selection.start}
               aria-valuemin={0}
               aria-valuemax={duration}
@@ -373,7 +373,7 @@ export function WaveformView({
               className="wave-handle"
               role="slider"
               tabIndex={0}
-              aria-label={t("selectionEnd")}
+              aria-label={t("waveform.selectionEnd")}
               aria-valuenow={selection.end}
               aria-valuemin={0}
               aria-valuemax={duration}

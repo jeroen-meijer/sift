@@ -323,4 +323,4 @@ Send back: full path(s) to `sounds.db`, `settings.json` (especially `splice_fold
 
 Useful columns: `local_path`, `file_hash`, `filename`, `audio_key`, `bpm`, `chord_type`, `sample_type`, `tags`, `pack_uuid`. Sibling `settings.json` has `splice_folder`. WAL files appear while the app is running.
 
-Dev machine reference: user `jeremysoda`, folder under Dropbox `…/Producing/samples/Studio`, proto at `/Applications/Splice.app/Contents/Resources/app/proto/app.proto`.
+Proto lives at `/Applications/Splice.app/Contents/Resources/app/proto/app.proto` when Splice is installed in the default macOS location.

@@ -1,7 +1,7 @@
 import { Trans, useTranslation } from "react-i18next";
 import type { CustomAnalysisOpts } from "../../lib/ipc";
 import { Checkbox } from "../../ui/Checkbox";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 import { BpmRangePicker } from "../BpmRangePicker";
 
 interface Props {
@@ -29,12 +29,12 @@ export function CustomAnalysisDialog({
   const { t: tc } = useTranslation("common");
 
   return (
-    <Dialog width={492} label={t("customAnalysis")} onClose={onCancel}>
-      <h2 className="dialog-title dialog-title-lg">{t("customAnalysis")}</h2>
+    <Dialog width={492} label={t("analysis.custom.title")} onClose={onCancel}>
+      <h2 className="dialog-title dialog-title-lg">{t("analysis.custom.title")}</h2>
       <p className="dialog-body dialog-body-spaced">
         <Trans
           t={t}
-          i18nKey="customAnalysisBody"
+          i18nKey="analysis.custom.body"
           count={count}
           components={[<strong key="count" />]}
         />
@@ -47,7 +47,7 @@ export function CustomAnalysisDialog({
             onOptsChange({ ...opts, rerun_bpm });
           }}
         >
-          {t("rerunBpm")}
+          {t("analysis.custom.rerunBpm")}
         </Checkbox>
         <Checkbox
           checked={opts.rerun_key}
@@ -55,7 +55,7 @@ export function CustomAnalysisDialog({
             onOptsChange({ ...opts, rerun_key });
           }}
         >
-          {t("rerunKey")}
+          {t("analysis.custom.rerunKey")}
         </Checkbox>
         <Checkbox
           checked={opts.rerun_type}
@@ -63,35 +63,37 @@ export function CustomAnalysisDialog({
             onOptsChange({ ...opts, rerun_type });
           }}
         >
-          {t("rerunType")}
+          {t("analysis.custom.rerunType")}
         </Checkbox>
         <Checkbox
           checked={opts.overwrite_tags}
-          hint={t("overwriteTagsHint")}
+          hint={t("analysis.custom.overwriteTags.hint")}
           onChange={(overwrite_tags) => {
             onOptsChange({ ...opts, overwrite_tags });
           }}
         >
-          {t("overwriteTags")}
+          {t("analysis.custom.overwriteTags.label")}
         </Checkbox>
       </div>
 
       <div className="dialog-panel">
         <div className="dialog-panel-head">
-          <span className="kicker">{t("bpmRangeShort")}</span>
-          <span className="dialog-panel-note">{t("bpmRangeShared")}</span>
+          <span className="kicker">{t("analysis.bpmRange.short")}</span>
+          <span className="dialog-panel-note">{t("analysis.bpmRange.shared")}</span>
         </div>
         <BpmRangePicker min={bpmMin} max={bpmMax} onChange={onBpmRangeChange} withSlider />
       </div>
 
       <div className="dialog-actions">
-        <span className="dialog-note">{t("analyzeBackground")}</span>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-primary" onClick={onRun} disabled={count === 0}>
-          {t("analyzeN", { count })}
-        </button>
+        <span className="dialog-note">{t("analysis.custom.background")}</span>
+        <DialogDismissButton className="btn btn-secondary">{tc("action.cancel")}</DialogDismissButton>
+        <DialogActionButton
+          className="btn btn-primary"
+          onClick={onRun}
+          disabled={count === 0}
+        >
+          {t("analysis.custom.analyze", { count })}
+        </DialogActionButton>
       </div>
     </Dialog>
   );

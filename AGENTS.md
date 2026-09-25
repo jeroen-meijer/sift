@@ -1,8 +1,24 @@
 # Agent context: Sift
 
-Local sample manager (Tauri 2 + React). Product rules: [SPEC.md](SPEC.md). Stack: [docs/TECH_STACK.md](docs/TECH_STACK.md).
+Local sample manager (Tauri 2 + React). Docs map: [docs/README.md](docs/README.md). Product rules: [docs/spec.md](docs/spec.md). Stack: [docs/reference/tech-stack.md](docs/reference/tech-stack.md). Locales: [docs/reference/localization.md](docs/reference/localization.md).
 
-## Settled tooling (mirror chat-search where applicable)
+## Prefer clean end state
+
+Prefer the finished shape of the code or docs over a small patch that leaves the old shape intact.
+
+- When extending something that did X so it also does Y, reshape so X and Y read as one design. A later reader should not see that Y was bolted on.
+- Delete or merge the old path when the new one replaces it. Touch every call site the clean design needs.
+- Do not leave flags, adapters, duplicate branches, rename redirects, or "also call this now" glue that preserves the old structure.
+- Temporary QA or dogfood hooks stay local and get removed; they are not product design.
+- "Only modify what the task needs" still means do not churn unrelated areas. It does not forbid reshaping the area you are changing.
+
+Applies to Rust, TypeScript, tests, docs, scripts, and agent instruction files in this repo.
+
+## Documentation
+
+Obey [docs/README.md](docs/README.md) for layout, kebab-case naming, no frontmatter, single source of truth, repo hygiene, and persisting durable preferences without being asked. Do not invent parallel trees or dump new markdown at the repo root. Root [README.md](README.md) stays user-facing.
+
+## Settled tooling
 
 | Layer | Choice |
 | --- | --- |
@@ -20,7 +36,7 @@ Local sample manager (Tauri 2 + React). Product rules: [SPEC.md](SPEC.md). Stack
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
 | Package manager | Bun |
 | CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest); Bun+Rust caches; publish on macOS/Windows |
-| Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (macOS + Windows) |
+| Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (installers + updater + `latest.json`) |
 
 ## Commands
 
@@ -47,19 +63,27 @@ bun run version:sync
 bun run version:set 0.2.0
 ```
 
+Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`. Watch Clippy: `cd src-tauri && bacon clippy`.
+
+App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
+
 ## Changelog / release
 
 `CHANGELOG.md` → `## Upcoming` is the **user-facing draft for the next release**, not a commit diary.
 
 - Write for someone who installs the next version. Conventional prefixes (`feat` / `fix` / `perf` / …) are fine; the rest of the line should read as a product note.
-- **Unshipped work:** edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
-- **After a release:** only then does a later bugfix get its own Upcoming line.
-- Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn (overscan tweaks, temporary flags, profiling hooks) unless it changes what users notice.
-- Run `/humanize` (or match that skill) on every new or edited Upcoming bullet before you commit. Keep conventional prefixes; the rest should read like a short product note, not a session diary.
-- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers + GitHub release + tag).
+- Unshipped work: edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
+- After a release: only then does a later bugfix get its own Upcoming line.
+- Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn unless it changes what users notice.
+- Run `/humanize` (or match that skill) on every new or edited Upcoming bullet before you commit.
+- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release**.
 - Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.
 - Retry: Actions → **Publish Release** → Run workflow with the version.
-- macOS signing/notarization is optional (unsigned if Apple secrets are absent).
+- macOS Apple signing/notarization is optional (unsigned if Apple secrets are absent).
+- Updater signing is required on Publish Release. Set repo secrets `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Put the public key in `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`. Do not commit the private key. For local signed builds, export the same env vars from your secrets manager.
+- Release asset helpers: `tool/stage_release_assets.sh` and `tool/finish_github_release.ts`. Keep Tauri’s versioned names for the updater (`*_x.y.z_*-setup.exe`, `.app.tar.gz` + `.sig`). Staging also uploads stable hand-install aliases with OS in the name (`Sift_macOS_aarch64.dmg`, `Sift_Windows_x64-setup.exe`) for README `/releases/latest/download/…` links. Ship `latest.json` plus the `.sig` / updater bundles or the release is incomplete.
+- App update endpoint: `https://github.com/jeroen-meijer/sift/releases/latest/download/latest.json`. That URL returns 404 while the repo is private, so in-app updates only work after the repo is public. Dev builds skip the check.
+- README download badges: `…/latest/download/Sift_macOS_aarch64.dmg` and `…/latest/download/Sift_Windows_x64-setup.exe`.
 
 ## Perf / profiling
 

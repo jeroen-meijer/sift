@@ -1,64 +1,39 @@
 # Sift
 
-Local desktop sample manager for producers and audio engineers (macOS + Windows).
+<p align="center">
+  <img src="assets/screenshot.png" alt="Sift" style="max-height: 550px; width: auto;" />
+</p>
 
-Product rules: [SPEC.md](SPEC.md). Decision log: [DECISIONS.md](DECISIONS.md). Stack: [docs/TECH_STACK.md](docs/TECH_STACK.md). Plans: [docs/plans/index.plan.md](docs/plans/index.plan.md). Design: [docs/design/](docs/design/). Agent/tooling notes: [AGENTS.md](AGENTS.md).
+<p align="center">
+  <strong>Local desktop sample manager for producers and audio engineers.<br/>Browse, play, tag, and drag samples into your DAW. macOS and Windows.</strong>
+</p>
 
-## Dogfood (v1)
+<p align="center">
+  <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_macOS_aarch64.dmg"><img alt="Download (Apple Silicon)" src="https://img.shields.io/badge/Download-macOS%20(Apple%20Silicon)-black?style=for-the-badge&logo=apple&logoColor=white" /></a>
+  <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_Windows_x64-setup.exe"><img alt="Download" src="https://img.shields.io/badge/Download-Windows-blue?style=for-the-badge&logo=windows&logoColor=white" /></a>
+</p>
 
-Requires Bun, Xcode CLT, and Rust **nightly** (pinned by `src-tauri/rust-toolchain.toml`).
+## Features
+
+- **Browse:** Large local libraries across multiple folders
+- **Preview:** Instantly listen to samples while you browse
+- **Search:** Name, tags, BPM, key, type, and folder
+- **Drag:** Full files or a waveform clip into a DAW
+- **Tag:** Favorite or tag samples, and create custom tags
+- **Analyze:** BPM, key, loop/one-shot, suggested tags in the background
+- **Integrations:** Integrates with 3rd party tools like [Splice](https://splice.com/) to automatically set BPM and key
+- **Formats:** WAV, AIFF, FLAC, MP3, AAC/M4A, OGG, Opus
+
+## Build from source
+
+Needs Bun, Rust nightly (pinned in `src-tauri/rust-toolchain.toml`), and Xcode Command Line Tools on macOS.
 
 ```bash
 bun install
 bun run tauri:dev
 ```
 
-Then in the app:
+Add a sample folder (try `example_samples/` in this repo), then browse and play.
 
-1. Add folder → choose `example_samples/` (or any sample root).
-2. Browse the table, play with ↑↓ / Enter / Space, search via the omni field.
-3. Tag samples, favorite, right-click for Open / Reveal / Re-analyze / parent folder filter.
-4. Drag a row (full files) or a waveform selection (JIT clip) into a DAW.
-5. Copy a new audio file into a watched root → it should auto-index (or ask, per Settings).
-
-If you previously ran a pre-Diesel build and the app fails on migrate, delete the old DB once:
-
-```bash
-rm -f ~/Library/Application\ Support/dev.jfk.Sift/library.sqlite3*
-```
-
-(That only removes Sift's index; sample files on disk are untouched.)
-
-## Lint, test, build
-
-```bash
-# Frontend
-bun run lint
-bun run typecheck
-bun run test
-bun run build
-
-# Rust (from src-tauri/)
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo nextest run --all-features
-cargo bench --bench audio_hotpath
-
-# App package (syncs version, lints, then tauri build)
-bun run tauri:build
-```
-
-Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`.
-Frontend micro-bench: `bun run bench`.
-
-Watch Clippy: `cd src-tauri && bacon clippy`.
-
-## Release
-
-Version lives in `package.json` (`bun run version:sync` / `version:set`). Keep `CHANGELOG.md` → `## Upcoming` as a short user-facing draft for the next release (merge unshipped work; do not append fix-of-unshipped-feat noise).
-
-```bash
-./tool/prepare_release.sh 0.2.0   # on clean main: bump, push, triggers macOS + Windows installers
-```
-
-Optional PR path: `./tool/prepare_release.sh 0.2.0 --pr`. Retry a failed publish from Actions → **Publish Release**. Apple signing secrets are optional.
+Lint, test, release, and contributor conventions: [AGENTS.md](AGENTS.md).
+Docs map for agents and maintainers: [docs/README.md](docs/README.md).

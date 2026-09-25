@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { flattenTags, type TagNode } from "../../lib/ipc";
 import { tagPalette } from "../../lib/tagColors";
 import { Checkbox } from "../../ui/Checkbox";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   tags: TagNode[];
@@ -27,15 +27,15 @@ export function TagPickerDialog({ tags, checkedIds, sampleCount, onToggle, onClo
   }, [tags, filter]);
 
   return (
-    <Dialog width={452} label={t("tagsDialogTitle")} onClose={onClose}>
-      <h2 className="dialog-title">{t("tagsDialogTitle")}</h2>
+    <Dialog width={452} label={t("tagsDialog.title")} onClose={onClose}>
+      <h2 className="dialog-title">{t("tagsDialog.title")}</h2>
       <p className="dialog-body dialog-body-spaced">
-        {t("tagsDialogBody", { count: sampleCount })}
+        {t("tagsDialog.body", { count: sampleCount })}
       </p>
       <input
         className="input"
         value={filter}
-        placeholder={t("tagFilterPlaceholder")}
+        placeholder={t("tagsDialog.filterPlaceholder")}
         onChange={(e) => {
           setFilter(e.target.value);
         }}
@@ -59,9 +59,7 @@ export function TagPickerDialog({ tags, checkedIds, sampleCount, onToggle, onClo
         ))}
       </div>
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={onClose}>
-          {tc("close")}
-        </button>
+        <DialogDismissButton className="btn btn-secondary">{tc("action.close")}</DialogDismissButton>
       </div>
     </Dialog>
   );

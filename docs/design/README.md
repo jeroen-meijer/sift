@@ -1,6 +1,6 @@
 # Claude Design export: Sift sample manager
 
-Visual source of truth for v1 chrome. Behavior conflicts: [SPEC.md](../../SPEC.md) wins.
+Visual source of truth for v1 chrome. Behavior conflicts: [spec.md](../spec.md) wins.
 
 ## Origin
 

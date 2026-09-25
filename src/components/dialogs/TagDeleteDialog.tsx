@@ -2,7 +2,7 @@ import { WarningIcon } from "@phosphor-icons/react";
 import { Trans, useTranslation } from "react-i18next";
 import { formatCount } from "../../lib/format";
 import type { TagNode } from "../../lib/ipc";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   tag: TagNode;
@@ -20,14 +20,14 @@ export function TagDeleteDialog({ tag, targets, onCancel, onConfirm }: Props) {
   const rootDepth = tag.path.split("/").length;
 
   return (
-    <Dialog width={452} label={t("deleteTitle")} onClose={onCancel}>
+    <Dialog width={452} label={t("editor.delete.title")} onClose={onCancel}>
       <div className="dialog-head">
         <WarningIcon size={19} className="dialog-icon-danger" />
         <div>
           <h2 className="dialog-title">
             <Trans
               t={t}
-              i18nKey={cascade ? "cascadeTitle" : "simpleTitle"}
+              i18nKey={cascade ? "deleteDialog.cascade.title" : "deleteDialog.simple.title"}
               values={{ name: tag.path }}
               components={[<span className="mono" key="name" />]}
             />
@@ -36,7 +36,7 @@ export function TagDeleteDialog({ tag, targets, onCancel, onConfirm }: Props) {
             {cascade ? (
               <Trans
                 t={t}
-                i18nKey="cascadeBody"
+                i18nKey="deleteDialog.cascade.body"
                 values={{
                   children: targets.length - 1,
                   samples: formatCount(samples),
@@ -44,7 +44,7 @@ export function TagDeleteDialog({ tag, targets, onCancel, onConfirm }: Props) {
                 components={[<strong key="v" />]}
               />
             ) : (
-              t("simpleBody", { count: tag.sample_count })
+              t("deleteDialog.simple.body", { count: tag.sample_count })
             )}
           </p>
         </div>
@@ -52,7 +52,7 @@ export function TagDeleteDialog({ tag, targets, onCancel, onConfirm }: Props) {
 
       {cascade ? (
         <div className="dialog-panel danger">
-          <div className="kicker dialog-panel-kicker">{t("willBeDeleted")}</div>
+          <div className="kicker dialog-panel-kicker">{t("deleteDialog.willBeDeleted")}</div>
           <div className="delete-list mono">
             {targets.map((node) => (
               <span
@@ -67,13 +67,11 @@ export function TagDeleteDialog({ tag, targets, onCancel, onConfirm }: Props) {
       ) : null}
 
       <div className="dialog-actions">
-        <span className="dialog-note">{t("filesUntouched")}</span>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onConfirm}>
-          {t("deleteConfirm", { count: targets.length })}
-        </button>
+        <span className="dialog-note">{t("deleteDialog.filesUntouched")}</span>
+        <DialogDismissButton className="btn btn-secondary">{tc("action.cancel")}</DialogDismissButton>
+        <DialogActionButton className="btn btn-danger" onClick={onConfirm}>
+          {t("deleteDialog.confirm", { count: targets.length })}
+        </DialogActionButton>
       </div>
     </Dialog>
   );

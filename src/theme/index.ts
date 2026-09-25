@@ -1,12 +1,10 @@
-/** Theme ids, labels, and preview swatches for the Settings picker. */
+/** Theme ids and preview swatches for the Settings picker. */
 
 export const THEMES = ["nocturne", "ink", "graphite", "snow"] as const;
 export type ThemeId = (typeof THEMES)[number];
 
 export interface ThemeInfo {
   id: ThemeId;
-  /** Short line under the name in the Settings picker. */
-  blurb: string;
   /** Four chips: ground, accent, text, danger. */
   swatches: [string, string, string, string];
   /** Bass / low-mid / high-mid / treble hues for the card waveform preview. */
@@ -20,12 +18,12 @@ export interface ThemeInfo {
 
 /**
  * Built-in palettes. Nocturne is Sift's default. Ink, Graphite, and Snow
- * follow Monospace VS Code themes.
+ * follow Monospace VS Code themes. Display names and blurbs live in
+ * `locales/en/settings.json` under `appearance.themes`.
  */
 export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
   nocturne: {
     id: "nocturne",
-    blurb: "slate blue, low glare",
     swatches: ["#161826", "#9184d9", "#e9e9ed", "#d4837d"],
     waveBands: {
       bass: "#ff3d8a",
@@ -36,7 +34,6 @@ export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
   },
   ink: {
     id: "ink",
-    blurb: "OLED ink, violet accent",
     swatches: ["#0b0f16", "#976fe1", "#d9dfe7", "#f57f6c"],
     waveBands: {
       bass: "#ff2d7b",
@@ -47,7 +44,6 @@ export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
   },
   graphite: {
     id: "graphite",
-    blurb: "neutral warm grey",
     swatches: ["#121212", "#989898", "#e2e2e2", "#f57f6c"],
     waveBands: {
       bass: "#ff4a4a",
@@ -58,7 +54,6 @@ export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
   },
   snow: {
     id: "snow",
-    blurb: "light chrome",
     swatches: ["#ffffff", "#0366d6", "#24292e", "#cb2431"],
     waveBands: {
       bass: "#cf222e",

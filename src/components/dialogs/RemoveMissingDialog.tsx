@@ -1,7 +1,7 @@
 import { BroomIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 import type { SampleRow } from "../../lib/ipc";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   sample: SampleRow;
@@ -23,12 +23,12 @@ export function RemoveMissingDialog({
   const { t: tc } = useTranslation("common");
 
   return (
-    <Dialog width={452} label={t("removeMissingTitle", { count: 1 })} onClose={onCancel}>
+    <Dialog width={452} label={t("removeMissing.title", { count: 1 })} onClose={onCancel}>
       <div className="dialog-head">
         <WarningIcon size={19} className="dialog-icon-danger" />
         <div>
-          <h2 className="dialog-title">{t("removeMissingTitle", { count: 1 })}</h2>
-          <p className="dialog-body">{t("removeMissingBody")}</p>
+          <h2 className="dialog-title">{t("removeMissing.title", { count: 1 })}</h2>
+          <p className="dialog-body">{t("removeMissing.body")}</p>
         </div>
       </div>
 
@@ -43,20 +43,18 @@ export function RemoveMissingDialog({
       {otherMissing > 0 ? (
         <div className="dialog-inline-note">
           <BroomIcon size={15} />
-          <span>{t("removeMissingOthers", { count: otherMissing })}</span>
-          <button type="button" className="link-button" onClick={onRemoveAll}>
-            {t("removeAllMissing")}
-          </button>
+          <span>{t("removeMissing.others", { count: otherMissing })}</span>
+          <DialogActionButton className="link-button" onClick={onRemoveAll}>
+            {t("removeMissing.removeAll")}
+          </DialogActionButton>
         </div>
       ) : null}
 
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onConfirm}>
-          {t("removeMissingConfirm")}
-        </button>
+        <DialogDismissButton className="btn btn-secondary">{tc("action.cancel")}</DialogDismissButton>
+        <DialogActionButton className="btn btn-danger" onClick={onConfirm}>
+          {t("removeMissing.confirm")}
+        </DialogActionButton>
       </div>
     </Dialog>
   );
