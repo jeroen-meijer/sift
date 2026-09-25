@@ -1175,7 +1175,6 @@ export function LibraryView({
           }}
           onConfirm={() => {
             const rootId = dialog.node.root_id;
-            setDialog(null);
             void ipc.removeRoot(rootId).then(reload).catch(console.error);
           }}
         />
@@ -1190,13 +1189,11 @@ export function LibraryView({
           }}
           onConfirm={() => {
             const id = dialog.sample.id;
-            setDialog(null);
             setFocusedId(null);
             setSelectedIds(new Set());
             void ipc.removeSample(id).then(reload).catch(console.error);
           }}
           onRemoveAll={() => {
-            setDialog(null);
             setFocusedId(null);
             setSelectedIds(new Set());
             void ipc.purgeMissing().then(reload).catch(console.error);
@@ -1219,7 +1216,6 @@ export function LibraryView({
             setDialog(null);
           }}
           onRun={() => {
-            setDialog(null);
             analyze(
               selectedSamples.filter((s) => !s.missing).map((s) => s.id),
               customOpts,

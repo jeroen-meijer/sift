@@ -1,7 +1,7 @@
 import { BroomIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 import type { SampleRow } from "../../lib/ipc";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   sample: SampleRow;
@@ -44,19 +44,17 @@ export function RemoveMissingDialog({
         <div className="dialog-inline-note">
           <BroomIcon size={15} />
           <span>{t("removeMissingOthers", { count: otherMissing })}</span>
-          <button type="button" className="link-button" onClick={onRemoveAll}>
+          <DialogActionButton className="link-button" onClick={onRemoveAll}>
             {t("removeAllMissing")}
-          </button>
+          </DialogActionButton>
         </div>
       ) : null}
 
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onConfirm}>
+        <DialogDismissButton className="btn btn-secondary">{tc("cancel")}</DialogDismissButton>
+        <DialogActionButton className="btn btn-danger" onClick={onConfirm}>
           {t("removeMissingConfirm")}
-        </button>
+        </DialogActionButton>
       </div>
     </Dialog>
   );

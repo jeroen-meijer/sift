@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { keys, matchesBinding } from "../lib/bindings";
 import { flattenTags, ipc, type TagNode } from "../lib/ipc";
 import { TAG_SWATCHES, tagPalette } from "../lib/tagColors";
-import { Dialog } from "../ui/Dialog";
+import { Dialog, DialogDismissButton } from "../ui/Dialog";
 import { PillSelect } from "../ui/PillSelect";
 import { TagDeleteDialog } from "./dialogs/TagDeleteDialog";
 
@@ -73,32 +73,32 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
     if (path) run(ipc.createTag(path, null));
   };
 
-  const dismiss = () => {
-    /* Nested delete confirm handles Esc first. */
-    if (confirmDelete) {
-      setConfirmDelete(null);
-      return;
-    }
-    if (newPath != null) {
-      setNewPath(null);
-      return;
-    }
-    onClose();
-  };
-
   const palette = selected ? tagPalette(selected.path, selected.color) : null;
   const deleteTargets = confirmDelete ? subtree(confirmDelete) : [];
 
   return (
     <>
-    <Dialog width={960} onClose={dismiss} label={t("title")} bare className="settings-dialog">
+    <Dialog
+      width={960}
+      onClose={onClose}
+      onBeforeClose={() => {
+        if (newPath != null) {
+          setNewPath(null);
+          return false;
+        }
+        return true;
+      }}
+      label={t("title")}
+      bare
+      className="settings-dialog"
+    >
       <div className="settings-modal tags-modal">
         <aside className="tag-list">
           <div className="tag-list-head">
             <div className="tag-list-title">{t("title")}</div>
-            <button type="button" className="btn-icon" aria-label={tc("close")} onClick={dismiss}>
+            <DialogDismissButton className="btn-icon" aria-label={tc("close")}>
               <XIcon size={14} />
-            </button>
+            </DialogDismissButton>
           </div>
           <div className="tag-list-toolbar">
             <button
@@ -135,7 +135,11 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                 onBlur={createTag}
                 onKeyDown={(e) => {
                   if (matchesBinding(e, keys.confirm)) createTag();
-                  if (matchesBinding(e, keys.dismiss)) setNewPath(null);
+                  if (matchesBinding(e, keys.dismiss)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setNewPath(null);
+                  }
                 }}
               />
             </div>
@@ -308,7 +312,6 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
         }}
         onConfirm={() => {
           const id = confirmDelete.id;
-          setConfirmDelete(null);
           if (selectedId === id) setSelectedId(null);
           run(ipc.deleteTag(id, true));
         }}

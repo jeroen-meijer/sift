@@ -2,7 +2,7 @@ import { WarningIcon } from "@phosphor-icons/react";
 import { Trans, useTranslation } from "react-i18next";
 import { formatCount } from "../../lib/format";
 import type { TagNode } from "../../lib/ipc";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   tag: TagNode;
@@ -68,12 +68,10 @@ export function TagDeleteDialog({ tag, targets, onCancel, onConfirm }: Props) {
 
       <div className="dialog-actions">
         <span className="dialog-note">{t("filesUntouched")}</span>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onConfirm}>
+        <DialogDismissButton className="btn btn-secondary">{tc("cancel")}</DialogDismissButton>
+        <DialogActionButton className="btn btn-danger" onClick={onConfirm}>
           {t("deleteConfirm", { count: targets.length })}
-        </button>
+        </DialogActionButton>
       </div>
     </Dialog>
   );

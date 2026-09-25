@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding } from "../../lib/bindings";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
+import { useDialogClose } from "../../ui/dialogClose";
 
 interface Props {
   title: string;
@@ -21,12 +22,39 @@ export function SetValueDialog({
   onCancel,
   onApply,
 }: Props) {
+  return (
+    <Dialog width={400} label={title} onClose={onCancel}>
+      <SetValueBody
+        title={title}
+        body={body}
+        initial={initial}
+        onApply={onApply}
+        {...(placeholder != null ? { placeholder } : {})}
+      />
+    </Dialog>
+  );
+}
+
+function SetValueBody({
+  title,
+  body,
+  initial,
+  placeholder,
+  onApply,
+}: {
+  title: string;
+  body: string;
+  initial: string;
+  placeholder?: string;
+  onApply: (value: string) => void;
+}) {
   const { t } = useTranslation("library");
   const { t: tc } = useTranslation("common");
+  const close = useDialogClose();
   const [value, setValue] = useState(initial);
 
   return (
-    <Dialog width={400} label={title} onClose={onCancel}>
+    <>
       <h2 className="dialog-title">{title}</h2>
       <p className="dialog-body dialog-body-spaced">{body}</p>
       <input
@@ -38,23 +66,22 @@ export function SetValueDialog({
           setValue(e.target.value);
         }}
         onKeyDown={(e) => {
-          if (matchesBinding(e, keys.confirm)) onApply(value);
+          if (!matchesBinding(e, keys.confirm)) return;
+          onApply(value);
+          close();
         }}
       />
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button
-          type="button"
+        <DialogDismissButton className="btn btn-secondary">{tc("cancel")}</DialogDismissButton>
+        <DialogActionButton
           className="btn btn-primary"
           onClick={() => {
             onApply(value);
           }}
         >
           {t("apply")}
-        </button>
+        </DialogActionButton>
       </div>
-    </Dialog>
+    </>
   );
 }

@@ -35,7 +35,7 @@ import {
   normalizeThemeId,
   type ThemeId,
 } from "../theme";
-import { Dialog } from "../ui/Dialog";
+import { Dialog, DialogDismissButton } from "../ui/Dialog";
 import { PillSelect } from "../ui/PillSelect";
 import { Segmented } from "../ui/Segmented";
 import { Switch } from "../ui/Switch";
@@ -279,14 +279,9 @@ export function SettingsView({
         <nav className="settings-nav">
           <div className="settings-nav-head">
             <div className="settings-nav-title">{t("title")}</div>
-            <button
-              type="button"
-              className="btn-icon"
-              aria-label={tc("close")}
-              onClick={onClose}
-            >
+            <DialogDismissButton className="btn-icon" aria-label={tc("close")}>
               <XIcon size={14} />
-            </button>
+            </DialogDismissButton>
           </div>
           {nav.map((item) => (
             <button
@@ -701,7 +696,6 @@ export function SettingsView({
             setConfirmReanalyze(false);
           }}
           onConfirm={() => {
-            setConfirmReanalyze(false);
             void ipc.reanalyzeEntireLibrary().catch(console.error);
           }}
         />

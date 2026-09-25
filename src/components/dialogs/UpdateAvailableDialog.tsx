@@ -5,7 +5,7 @@ import {
   installAvailableUpdate,
   type AvailableUpdate,
 } from "../../lib/updates";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   available: AvailableUpdate;
@@ -45,14 +45,9 @@ export function UpdateAvailableDialog({ available, onDismiss }: Props) {
       </div>
 
       <div className="dialog-actions">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={installing}
-          onClick={onDismiss}
-        >
+        <DialogDismissButton className="btn btn-secondary" disabled={installing}>
           {tc("cancel")}
-        </button>
+        </DialogDismissButton>
         <button type="button" className="btn btn-primary" disabled={installing} onClick={install}>
           {installing ? t("updateInstalling") : t("updateInstall")}
         </button>
