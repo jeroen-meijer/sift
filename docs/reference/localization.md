@@ -1,7 +1,7 @@
 # Localization
 
-Playbook for user-facing copy in Sift. Product rules: [SPEC.md](../SPEC.md) §4.14.
-Stack notes: [TECH_STACK.md](TECH_STACK.md).
+Playbook for user-facing copy in Sift. Product rules: [spec.md](../spec.md) §4.14.
+Stack notes: [tech-stack.md](tech-stack.md).
 
 ## Stack
 
@@ -93,7 +93,7 @@ i18next plurals stay as siblings with `_one` / `_other` (and more forms later):
 
 Call: `t("library.missingSamples.hint", { count })`.
 
-### Placeholders and rich text
+### Placeholders and markup
 
 - Interpolation: `{{name}}`, `{{count}}`, `{{formatted}}` (i18next).
 - Inline markup: `<0>…</0>` with `<Trans i18nKey="…" />` (react-i18next).
@@ -133,18 +133,22 @@ UI copy is short and concrete. One string, one job.
 
 | Do | Don't |
 | --- | --- |
-| Plain verbs: is, has, use, try again | serves as, features, enables, allows you to |
+| Plain verbs: is, has, use, try again | Copula padding (`serves as`), vague verbs (`enables`, `allows you to`) |
 | Same word for the same concept | Synonym cycling (color / colour, remove / delete for the same action) |
 | Straight ASCII quotes and punctuation | Em dashes, en dashes, curly quotes, emoji |
 | Labels that stay labels | Inflating a 3-word label into a marketing sentence |
-| Current product behavior | “We’ve improved…”, “Now you can finally…” |
+| Current product behavior | "We've improved…", "Now you can finally…" |
 
-Hard bans in locale values: `—`, `–`, spaced `--` used as a dash. Prefer a
-period, comma, or colon.
+Hard bans in locale values: em dash characters, en dash characters, and spaced
+`--` used as a dash. Prefer a period, comma, or colon.
 
-Skip hype vocabulary in helpers (seamless, robust, leverage, streamline,
-comprehensive, delight, effortless, crucial-as-praise). Prefer the fact or the
-next step.
+Skip hype in helpers. Prefer the fact or the next step. Do not use these in
+locale strings:
+
+```text
+seamless, robust, leverage, streamline, comprehensive, delight, effortless,
+crucial (as praise)
+```
 
 When rewriting copy, match neighbors in the same file. Do not invent product
 rules to sound specific.

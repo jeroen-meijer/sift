@@ -9,9 +9,9 @@ File: `band-probe.wav` (~28 s, stereo 44.1 kHz).
 3. Screenshot or screen-record the waveform while it plays.
 4. Optionally also open the same file in Sift and compare.
 
-## What’s in the file
+## What's in the file
 
-Before each tone: N short 2 kHz clicks (1…11) so you can count which segment you’re on.
+Before each tone: N short 2 kHz clicks (1…11) so you can count which segment you're on.
 
 | ≈ start | Hz | intent |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Before each tone: N short 2 kHz clicks (1…11) so you can count which segment y
 ## What to look for
 
 - Pure tones should be **one solid band color** in Multiband (default theme: low red, mid green, high blue).
-- Where color flips between adjacent tones ≈ MiniMeters’ crossovers.
+- Where color flips between adjacent tones ≈ MiniMeters' crossovers.
 - The chirp should show a smooth or stepped color transition; note where it changes.
 
 Sift four-band cuts today: **200 / 1500 / 6000 Hz** (bass / low-mid / high-mid / treble).

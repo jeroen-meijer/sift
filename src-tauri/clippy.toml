@@ -1,5 +1,4 @@
 # Clippy overrides matching https://www.namtao.com/rust-toolkit-2026/
-# (same as chat-search)
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true

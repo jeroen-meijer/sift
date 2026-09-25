@@ -1,6 +1,6 @@
 # Large collection profiling V3: UI performance implementation spec
 
-This doc turns [LARGE_COLLECTION_PROFILING_V2.md](LARGE_COLLECTION_PROFILING_V2.md) and a profile run (`logs/sift-profile.log`, ~18:47 to 19:00 on 2026-09-22) into ordered work items. V2 records what shipped. This one replaces its "Build next" plan.
+This doc turns an earlier profiling pass and a profile run (`logs/sift-profile.log`, ~18:47 to 19:00 on 2026-09-22) into ordered work items. The previous pass recorded what shipped. This one replaces its "Build next" plan.
 
 Test machine: M2 Max, 12 cores, 32 GB. Library: 20 439 samples, 2 817 distinct folders, 13 986 peakfiles (272 MB on disk). 98 % of files are under 60 s. 183 are over 1 min; 3 are over 10 min (longest 38 min).
 
@@ -10,7 +10,7 @@ Priority: input and scroll must not stall; memory needs a fixed ceiling; backgro
 
 ## Status (handoff, 2026-09-23)
 
-Phase A is on `main` (`06e1107`). Same-day follow-ups also landed: KNOWN_ISSUES UX fixes, analyze PCM budget (A5), decode-cache byte budget (B2), and C1 QoS. For open bugs and what to profile next, see [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Phase A is on `main` (`06e1107`). Same-day follow-ups also landed: known-issues UX fixes, analyze PCM budget (A5), decode-cache byte budget (B2), and C1 QoS. For open bugs and what to profile next, see [known-issues.md](../known-issues.md).
 
 ### Phase A: implemented (A1 to A7) and profiled once
 
@@ -1214,7 +1214,7 @@ An absolutely positioned canvas over the wave column inside `.sample-table-body`
 
 After A5, the 38-minute file still holds ~800 MB interleaved plus ~400 MB mono under the permit. Streaming removes full-file buffers from the analyze path.
 
-**Files:** new `src-tauri/src/audio/stream_analyze.rs`, `src-tauri/Cargo.toml`, `src-tauri/src/analyze/mod.rs`, `src-tauri/src/audio/peaks.rs`, `docs/TECH_STACK.md`.
+**Files:** new `src-tauri/src/audio/stream_analyze.rs`, `src-tauri/Cargo.toml`, `src-tauri/src/analyze/mod.rs`, `src-tauri/src/audio/peaks.rs`, `docs/reference/tech-stack.md`.
 
 1. **moodbar streaming API.** Open a PR on [gildesmarais/moodbar.rs](https://github.com/gildesmarais/moodbar.rs) that exports the existing internals:
 
@@ -1227,7 +1227,7 @@ After A5, the 38-minute file still holds ~800 MB interleaved plus ~400 MB mono u
  }
  ```
 
- Until it is released, point at a fork: `[patch.crates-io] moodbar-analysis = { git = "https://github.com/<your-fork>/moodbar.rs", rev = "<sha>" }`, and note it in `docs/TECH_STACK.md`.
+ Until it is released, point at a fork: `[patch.crates-io] moodbar-analysis = { git = "https://github.com/<your-fork>/moodbar.rs", rev = "<sha>" }`, and note it in `docs/reference/tech-stack.md`.
 
 2. **Stream in one pass** when `num_frames` is known. Fall back to A5's path when it is not.
 

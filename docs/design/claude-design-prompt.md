@@ -238,7 +238,7 @@ If something feels missing for a coherent tool, leave a short designer note on t
 
 ### Library roots
 
-- `/Users/alex/Samples/Packs`
+- `/Samples/Packs`
 - `/Volumes/SFX/Field`
 - `~/Music/Recorded Takes`
 

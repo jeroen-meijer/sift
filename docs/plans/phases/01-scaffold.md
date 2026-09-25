@@ -8,7 +8,7 @@ Tauri 2 + React 19 + Vite 8 + Bun app at repo root. `bun run build` and `cargo c
 
 ## Previous
 
-Repo has SPEC, TECH_STACK, DEFAULT_TAXONOMY, Claude Design under `docs/design/`, and `example_samples/`. No app code yet.
+Repo has SPEC, tech-stack, default-taxonomy, Claude Design under `docs/design/`, and `example_samples/`. No app code yet.
 
 ## This phase
 
@@ -21,7 +21,7 @@ Create a Tauri 2 + React 19 + TypeScript + Vite + Bun desktop app at the repo ro
 - `src-tauri/` with Tauri 2, minimal `lib.rs` / `main.rs`, `tauri.conf.json`, icons
 - `.gitignore` for `node_modules`, `dist`, `src-tauri/target`, `.venv`, etc.
 - README note: how to run `bun install && bun run tauri:dev`
-- Align versions roughly with `~/Projects/oss/loudline` (Tauri 2.x, React 19, Bun)
+- Align versions roughly with [loudline](https://github.com/jeroen-meijer/loudline) (Tauri 2.x, React 19, Bun)
 
 ### Out of scope
 
