@@ -60,9 +60,12 @@ pub fn run() {
             crate::profile_log::init(&state.paths.cache_dir);
             crate::profile_log::milestone("boot.setup_enter", "");
 
-            let watch_start = Instant::now();
-            watch::restart(&handle, &state.watch_shared, &state.watch_guard);
-            crate::profile_log::event("boot.watch_restart", watch_start.elapsed(), "");
+            // Recursive watches stay off the setup path (same as add/remove root).
+            watch::restart_in_background(
+                handle.clone(),
+                state.watch_shared.clone(),
+                Arc::clone(&state.watch_guard),
+            );
 
             // Backfill availability from live metadata, then resume analyze for locals.
             let db = state.db.clone();
@@ -100,16 +103,26 @@ pub fn run() {
                     }
                     crate::analyze::enqueue_unanalyzed(handle, db, peaks_dir);
                 });
-            // Window starts hidden (tauri.conf visible:false). Frontend shows it once
-            // settings + library stats are known. Failsafe if that never happens.
+            // Window starts hidden (tauri.conf `visible: false`). Frontend shows it
+            // once settings and library stats are known. Failsafe if that never runs.
             let reveal = app.handle().clone();
             let _ = std::thread::Builder::new()
                 .name("sift-reveal-failsafe".into())
                 .spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(5));
                     if let Some(win) = reveal.get_webview_window("main") {
-                        crate::profile_log::milestone("boot.reveal_failsafe", "show after 5s");
-                        let _ = win.show();
+                        if matches!(win.is_visible(), Ok(true)) {
+                            crate::profile_log::milestone(
+                                "boot.reveal_failsafe_skip",
+                                "already visible",
+                            );
+                        } else {
+                            crate::profile_log::milestone(
+                                "boot.reveal_failsafe",
+                                "show after 5s",
+                            );
+                            let _ = win.show();
+                        }
                     }
                 });
             crate::profile_log::event("boot.setup", setup_start.elapsed(), "");

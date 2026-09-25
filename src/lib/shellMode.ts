@@ -1,11 +1,11 @@
 import type { DbStats } from "./ipc";
 
-/** Which main chrome to paint after settings + db stats resolve. */
+/** Main view after settings and db stats are known. */
 export type ShellMode = "boot" | "empty" | "library";
 
 /**
- * Startup gate: unknown stats must not look like a first-run empty library.
- * Settings (`loaded`) must be in before we pick a theme-dependent view.
+ * Pick the shell before painting FirstLaunch or the library.
+ * Unknown stats must not look like an empty library. Theme needs `loaded`.
  */
 export function shellMode(loaded: boolean, stats: DbStats | null): ShellMode {
   if (!loaded || stats === null) return "boot";

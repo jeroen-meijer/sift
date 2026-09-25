@@ -62,19 +62,22 @@ pub fn list_tags(conn: &mut SqliteConnection) -> AppResult<Vec<TagNode>> {
         .order(tags_dsl::path.asc())
         .load(conn)?;
 
+    let counts: HashMap<i32, i64> = sample_tags_dsl::sample_tags
+        .group_by(sample_tags_dsl::tag_id)
+        .select((sample_tags_dsl::tag_id, count_star()))
+        .load::<(i32, i64)>(conn)?
+        .into_iter()
+        .collect();
+
     let mut rows = Vec::with_capacity(tags.len());
     for tag in tags {
-        let sample_count: i64 = sample_tags_dsl::sample_tags
-            .filter(sample_tags_dsl::tag_id.eq(tag.id))
-            .select(count_star())
-            .first(conn)?;
         rows.push(TagRow {
             id: id_to_i64(tag.id),
             path: tag.path,
             name: tag.name,
             parent_id: tag.parent_id.map(id_to_i64),
             color: tag.color,
-            sample_count,
+            sample_count: counts.get(&tag.id).copied().unwrap_or(0),
         });
     }
 
@@ -408,4 +411,68 @@ fn ensure_sample(conn: &mut SqliteConnection, id: i32) -> AppResult<()> {
         return Err(AppError::msg("sample not found"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{add_sample_tag, create_tag, list_tags};
+    use crate::db::schema::roots::dsl as roots_dsl;
+    use crate::db::schema::samples::dsl as samples_dsl;
+    use diesel::prelude::*;
+
+    #[test]
+    fn list_tags_counts_via_group_by() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        diesel::insert_into(samples_dsl::samples)
+            .values((
+                samples_dsl::root_id.eq(root_id),
+                samples_dsl::path.eq("/lib/a.wav"),
+                samples_dsl::filename.eq("a.wav"),
+                samples_dsl::parent_path.eq("/lib"),
+                samples_dsl::extension.eq("wav"),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        diesel::insert_into(samples_dsl::samples)
+            .values((
+                samples_dsl::root_id.eq(root_id),
+                samples_dsl::path.eq("/lib/b.wav"),
+                samples_dsl::filename.eq("b.wav"),
+                samples_dsl::parent_path.eq("/lib"),
+                samples_dsl::extension.eq("wav"),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        let ids: Vec<i32> = samples_dsl::samples
+            .select(samples_dsl::id)
+            .load(&mut conn)
+            .unwrap();
+
+        let drums = create_tag(&mut conn, "drums", None).unwrap();
+        let kicks = create_tag(&mut conn, "drums/kicks", None).unwrap();
+        let unused = create_tag(&mut conn, "unused", None).unwrap();
+        add_sample_tag(&mut conn, i64::from(ids[0]), kicks.id).unwrap();
+        add_sample_tag(&mut conn, i64::from(ids[1]), kicks.id).unwrap();
+
+        let tree = list_tags(&mut conn).unwrap();
+        let drums_node = tree.iter().find(|n| n.path == "drums").expect("drums");
+        assert_eq!(drums_node.id, drums.id);
+        let kicks_node = drums_node
+            .children
+            .iter()
+            .find(|n| n.path == "drums/kicks")
+            .expect("kicks");
+        assert_eq!(kicks_node.sample_count, 2);
+        let unused_node = tree.iter().find(|n| n.path == "unused").expect("unused");
+        assert_eq!(unused_node.sample_count, 0);
+        assert_eq!(unused.id, unused_node.id);
+    }
 }

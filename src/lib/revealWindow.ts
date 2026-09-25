@@ -4,9 +4,9 @@ import { bootMark, profileMark } from "./profile";
 let revealed = false;
 
 /**
- * Show the main window once (starts with `visible: false` to avoid the
- * platform white flash before the webview paints). Safe to call repeatedly.
- * Outside Tauri (plain Vite) the call fails and is ignored.
+ * Show the main window once. It starts with `visible: false` so the webview
+ * can paint before the window appears. Safe to call again.
+ * Plain Vite has no Tauri window; failures there are ignored.
  */
 export async function revealMainWindow(): Promise<void> {
   if (revealed) return;
@@ -19,6 +19,6 @@ export async function revealMainWindow(): Promise<void> {
     bootMark("fe.window_show_done");
     await window.setFocus().catch(() => undefined);
   } catch {
-    /* Plain Vite has no Tauri window; leave revealed false so a later retry can run. */
+    /* Leave revealed false so a later retry can run outside Tauri. */
   }
 }

@@ -5,10 +5,11 @@
  * Usage: bun run tauri:profile
  * Log:   logs/sift-profile.log  (truncated each run; also mirrored to stderr)
  *
- * Startup: grep `boot.` in the log. Rust milestones use ms-since-process-start;
- * `boot.fe.*` use ms-since-webview-script. Span names stay `ipc.*` / `boot.fe.ipc_*`.
+ * Startup: grep `boot.` in the log. Rust milestones are ms since process start.
+ * `boot.fe.*` are ms since the webview script loaded. Spans stay `ipc.*` /
+ * `boot.fe.ipc_*`.
  *
- * Quit the app when done; then share / open that log for analysis.
+ * Quit the app when done, then open that log.
  */
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
