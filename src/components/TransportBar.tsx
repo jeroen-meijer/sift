@@ -35,8 +35,8 @@ export function TransportBar({
   return (
     <div className="transport">
       <div className="transport-group">
-        <span className="transport-label">{t("snap")}</span>
-        <PillSelect label={t("snap")} value={snap} options={SNAP_OPTIONS} onChange={onSnapChange} />
+        <span className="transport-label">{t("transport.snap")}</span>
+        <PillSelect label={t("transport.snap")} value={snap} options={SNAP_OPTIONS} onChange={onSnapChange} />
       </div>
 
       <button
@@ -48,13 +48,13 @@ export function TransportBar({
         }}
       >
         <RepeatIcon size={12} weight={loopPreview ? "fill" : "regular"} />
-        {t("loopPreview")}
+        {t("transport.loopPreview")}
       </button>
 
       <div className="transport-group">
-        <span className="transport-label">{t("previewGain")}</span>
+        <span className="transport-label">{t("transport.previewGain")}</span>
         <Slider
-          label={t("previewGain")}
+          label={t("transport.previewGain")}
           value={gainDb}
           min={-24}
           max={6}
@@ -66,16 +66,16 @@ export function TransportBar({
 
       <div className="transport-hints">
         <span>
-          <em>{keys.play.hint}</em> {t("hintPlayStart")}
+          <em>{keys.play.hint}</em> {t("transport.hint.playStart")}
         </span>
         <span>
-          <em>{keys.pause.hint}</em> {t("hintPause")}
+          <em>{keys.pause.hint}</em> {t("transport.hint.pause")}
         </span>
         <span>
-          <em>{keys.freeTime.hint}drag</em> {t("hintFreeTime")}
+          <em>{keys.freeTime.hint}drag</em> {t("transport.hint.freeTime")}
         </span>
         <span>
-          <em>{keys.zeroCrossing.hint}</em> {t("hintZeroCross")}
+          <em>{keys.zeroCrossing.hint}</em> {t("transport.hint.zeroCross")}
         </span>
       </div>
     </div>

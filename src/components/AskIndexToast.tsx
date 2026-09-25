@@ -11,6 +11,7 @@ interface Props {
 /** The non-blocking prompt pinned above the status bar. */
 export function AskIndexToast({ groups, onRespond, onDismiss }: Props) {
   const { t } = useTranslation("library");
+  const { t: tc } = useTranslation("common");
   const [first, ...rest] = groups;
   if (!first) return null;
 
@@ -20,7 +21,7 @@ export function AskIndexToast({ groups, onRespond, onDismiss }: Props) {
     <div className="ask-toast" role="status">
       <FolderPlusIcon size={17} className="ask-toast-icon" />
       <div className="ask-toast-body">
-        <div className="ask-toast-title">{t("askIndexTitle", { count: first.paths.length })}</div>
+        <div className="ask-toast-title">{t("askIndex.title", { count: first.paths.length })}</div>
         <div className="ask-toast-path mono">{first.folder}</div>
         <div className="ask-toast-actions">
           <button
@@ -30,7 +31,7 @@ export function AskIndexToast({ groups, onRespond, onDismiss }: Props) {
               onRespond(first.paths, true);
             }}
           >
-            {t("askIndex")}
+            {t("askIndex.index")}
           </button>
           <button
             type="button"
@@ -39,7 +40,7 @@ export function AskIndexToast({ groups, onRespond, onDismiss }: Props) {
               onRespond(first.paths, false);
             }}
           >
-            {t("askSkip")}
+            {t("askIndex.skip")}
           </button>
           {rest.length > 0 ? (
             <>
@@ -51,7 +52,7 @@ export function AskIndexToast({ groups, onRespond, onDismiss }: Props) {
                   onRespond(allPaths, true);
                 }}
               >
-                {t("askIndexAll")}
+                {t("askIndex.indexAll")}
               </button>
               <button
                 type="button"
@@ -60,20 +61,20 @@ export function AskIndexToast({ groups, onRespond, onDismiss }: Props) {
                   onRespond(allPaths, false);
                 }}
               >
-                {t("askSkipAll")}
+                {t("askIndex.skipAll")}
               </button>
             </>
           ) : null}
         </div>
         <div className="ask-toast-hint">
-          {t("askIndexHint")}
-          {rest.length > 0 ? ` ${t("askIndexQueued", { count: rest.length })}` : ""}
+          {t("askIndex.hint")}
+          {rest.length > 0 ? ` ${t("askIndex.queued", { count: rest.length })}` : ""}
         </div>
       </div>
       <button
         type="button"
         className="ask-toast-close"
-        aria-label={t("askSkip")}
+        aria-label={tc("action.dismiss")}
         onClick={onDismiss}
       >
         <XIcon size={13} />

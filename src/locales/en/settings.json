@@ -1,120 +1,194 @@
 {
   "title": "Settings",
-  "navPlayback": "Playback",
-  "navLibrary": "Library",
-  "navAnalysis": "Analysis",
-  "navShortcuts": "Shortcuts",
-  "navAppearance": "Appearance",
-  "navAbout": "About",
-  "themes": "Themes",
-  "themesHint": "4 palettes · built in",
-  "themeNocturne": "Nocturne",
-  "themeInk": "Ink",
-  "themeGraphite": "Graphite",
-  "themeSnow": "Snow",
-  "themeBlurbNocturne": "slate blue, low glare",
-  "themeBlurbInk": "OLED ink, violet accent",
-  "themeBlurbGraphite": "neutral warm grey",
-  "themeBlurbSnow": "light chrome",
-  "playOnSelect": "Play on select",
-  "playOnSelectHint": "Moving the selection with ↑ ↓ starts preview immediately.",
-  "loopPreview": "Loop preview",
-  "loopPreviewHint": "Sticky. Stays on until you turn it off.",
-  "waveformView": "Waveform view",
-  "waveformViewHint": "Stereo files can show both channels or one summed lane.",
-  "waveformStereo": "Stereo L/R",
-  "waveformMono": "Summed mono",
-  "coloredWaveforms": "Waveform color",
-  "coloredWaveformsHint": "Bass, mids, and treble tint the wave. Theme sets the hues; overlapping bands mix.",
-  "coloredWaveformsOn": "Spectral",
-  "coloredWaveformsOff": "Solid",
-  "outputDevice": "Output device",
-  "outputDeviceHint": "Preview only. Sift never claims your DAW's device exclusively.",
-  "bpmRange": "BPM range preset",
-  "bpmRangeHint": "Narrower ranges guess octaves less often. The Custom analysis dialog starts from this.",
-  "bpmRangeShared": "shared with Settings › Analysis",
-  "bpmPreset_60_150": "60-150",
-  "bpmPreset_68_135": "68-135",
-  "bpmPreset_70_180": "70-180",
-  "bpmPreset_90_180": "90-180",
-  "bpmPreset_98_195": "98-195",
-  "bpmPresetDefault": "default",
-  "bpmMin": "Lowest BPM",
-  "bpmMax": "Highest BPM",
-  "newFiles": "New files inside a root",
-  "newFilesHint": "Roots are watched continuously. Renames and moves update in place.",
-  "autoIndex": "Auto-index",
-  "askFirst": "Ask first",
-  "notifyAutoIndex": "Notify when files are auto-indexed",
-  "ignoreList": "Ignore list",
-  "ignoreListHint": "Paths and patterns Sift never indexes.",
-  "addPattern": "Add pattern",
-  "removePattern": "Remove pattern",
-  "patternPlaceholder": "**/Bounces/**",
-  "missingSamples": "Missing samples",
-  "missingSamplesHint_one": "{{count}} indexed file is not on disk right now.",
-  "missingSamplesHint_other": "{{count}} indexed files are not on disk right now.",
-  "onlineOnlyNote": "Online only is not Missing",
-  "onlineOnlyNoteHint": "Dropbox Online only stubs stay in the library with an Online only badge. They are not Missing. Preview, waveforms, and analysis wait until the file is on disk. Restart does not resume analysis. Use Reindex or Analyze.",
-  "purgeMissing": "Remove all missing",
-  "jitCache": "JIT clip cache",
-  "change": "Change…",
-  "clearCache": "Clear cache",
-  "holdHover": "Hold to hover-preview",
-  "holdHoverHint": "Hold this key and sweep the list to audition rows under the pointer.",
-  "holdHoverUnbound": "Unbound",
-  "record": "Record…",
-  "recording": "Press a key…",
-  "clearBinding": "Clear",
-  "fixedKeys": "Fixed keys, not rebindable in v1.",
-  "keyPlayStart": "Play from start",
-  "keyPause": "Pause / resume, restart if finished",
-  "keyMove": "Move selection",
-  "keyRange": "Range select · free time on waveform",
-  "keyToggle": "Toggle a row in the selection",
-  "keyZero": "Snap selection edges to zero-crossings",
-  "keyZeroFree": "Free time and zero-crossing together",
-  "keySetKey": "Set key for the selection",
-  "keySetBpm": "Set BPM for the selection",
-  "keyCycleType": "Cycle type: unset → loop → one-shot",
-  "keyUndo": "Undo a metadata edit · ⇧⌘Z redo",
-  "keyPreferences": "Open Settings",
-  "customAnalysis": "Custom analysis",
-  "customAnalysisBody_one": "Force-runs on the <0>{{count}} selected sample</0>. Existing values are kept unless you tick the matching box.",
-  "customAnalysisBody_other": "Force-runs on the <0>{{count}} selected samples</0>. Existing values are kept unless you tick the matching box.",
-  "rerunBpm": "Re-run BPM",
-  "rerunKey": "Re-run key",
-  "rerunType": "Re-run loop vs one-shot",
-  "overwriteTags": "Overwrite tags",
-  "overwriteTagsHint": "replaces tags Sift detected; yours stay",
-  "analyzeBackground": "Runs in the background",
-  "analyzeN_one": "Analyze {{count}} sample",
-  "analyzeN_other": "Analyze {{count}} samples",
-  "bpmRangeShort": "BPM range",
-  "spliceMetadata": "Use Splice metadata",
-  "spliceMetadataHint": "When Splice Desktop's local catalog is on this machine, prefer its BPM, key, and loop/one-shot over filename and audio guesses.",
-  "spliceStatusLoading": "Looking for Splice catalog…",
-  "spliceStatusOk": "Catalog: {{path}} · {{count}} sounds",
-  "spliceStatusMissing": "Splice catalog not found. Install or open Splice Desktop once, then try again.",
-  "spliceStatusError": "Could not open Splice catalog: {{error}}",
-  "refreshMetadata": "Refresh metadata",
-  "refreshMetadataHint": "Re-match the library to Splice without re-decoding. Fills empty BPM, key, and type when a higher-priority value is not already set.",
-  "reanalyzeLibrary": "Re-analyze entire library",
-  "reanalyzeLibraryHint": "Erases BPM, key, type, auto tags, and waveforms, then analyzes everything again. Favorites and your tags stay.",
-  "reanalyzeLibraryTitle": "Erase analysis data?",
-  "reanalyzeLibraryBody": "This clears BPM, key, type, auto tags, and peakfiles for every sample, including values you edited by hand. Favorites, your tags, and folder roots stay. Analysis then runs again in the background.",
-  "reanalyzeLibraryConfirm": "Erase analysis data",
-  "aboutVersion": "Version",
-  "aboutVersionHint": "What's installed.",
-  "checkForUpdates": "Check for updates",
-  "updateChecking": "Checking…",
-  "updateUpToDate": "You have the latest version.",
-  "updateAvailableStatus": "Version {{version}} is available.",
-  "updateDownloading": "Downloading update…",
-  "updateError": "Could not check for updates.",
-  "updateSkippedDev": "Updates are off in development builds.",
-  "updateAvailableTitle": "Update available",
-  "updateAvailableBody": "Sift {{version}} is ready. The app restarts after install.",
-  "updateInstall": "Install and restart",
-  "updateInstalling": "Installing…"
+  "nav": {
+    "appearance": "Appearance",
+    "playback": "Playback",
+    "library": "Library",
+    "analysis": "Analysis",
+    "shortcuts": "Shortcuts",
+    "about": "About"
+  },
+  "appearance": {
+    "themes": {
+      "label": "Themes",
+      "hint": "4 palettes · built in",
+      "nocturne": {
+        "name": "Nocturne",
+        "blurb": "slate blue, low glare"
+      },
+      "ink": {
+        "name": "Ink",
+        "blurb": "OLED ink, violet accent"
+      },
+      "graphite": {
+        "name": "Graphite",
+        "blurb": "neutral warm grey"
+      },
+      "snow": {
+        "name": "Snow",
+        "blurb": "light chrome"
+      }
+    }
+  },
+  "playback": {
+    "playOnSelect": {
+      "label": "Play on select",
+      "hint": "Moving the selection with ↑ ↓ starts preview immediately."
+    },
+    "loopPreview": {
+      "label": "Loop preview",
+      "hint": "Sticky. Stays on until you turn it off."
+    },
+    "waveformView": {
+      "label": "Waveform view",
+      "hint": "Stereo files can show both channels or one summed lane.",
+      "stereo": "Stereo L/R",
+      "mono": "Summed mono"
+    },
+    "coloredWaveforms": {
+      "label": "Waveform color",
+      "hint": "Bass, mids, and treble tint the wave. Theme sets the hues; overlapping bands mix.",
+      "on": "Spectral",
+      "off": "Solid"
+    },
+    "outputDevice": {
+      "label": "Output device",
+      "hint": "Preview only. Sift never claims your DAW's device exclusively."
+    }
+  },
+  "library": {
+    "newFiles": {
+      "label": "New files inside a root",
+      "hint": "Roots are watched continuously. Renames and moves update in place.",
+      "autoIndex": "Auto-index",
+      "askFirst": "Ask first"
+    },
+    "notifyAutoIndex": {
+      "label": "Notify when files are auto-indexed"
+    },
+    "ignoreList": {
+      "label": "Ignore list",
+      "hint": "Paths and patterns Sift never indexes.",
+      "addPattern": "Add pattern",
+      "removePattern": "Remove pattern",
+      "patternPlaceholder": "**/Bounces/**"
+    },
+    "onlineOnly": {
+      "label": "Online only is not Missing",
+      "hint": "Dropbox Online only stubs stay in the library with an Online only badge. They are not Missing. Preview, waveforms, and analysis wait until the file is on disk. Restart does not resume analysis. Use Reindex or Analyze."
+    },
+    "missingSamples": {
+      "label": "Missing samples",
+      "hint_one": "{{count}} indexed file is not on disk right now.",
+      "hint_other": "{{count}} indexed files are not on disk right now.",
+      "purge": "Remove all missing"
+    }
+  },
+  "analysis": {
+    "bpmRange": {
+      "label": "BPM range preset",
+      "hint": "Narrower ranges guess octaves less often. The Custom analysis dialog starts from this.",
+      "short": "BPM range",
+      "shared": "shared with Settings › Analysis",
+      "min": "Lowest BPM",
+      "max": "Highest BPM",
+      "default": "default",
+      "preset": {
+        "60_150": "60-150",
+        "68_135": "68-135",
+        "70_180": "70-180",
+        "90_180": "90-180",
+        "98_195": "98-195"
+      }
+    },
+    "splice": {
+      "label": "Use Splice metadata",
+      "hint": "When Splice Desktop's local catalog is on this machine, prefer its BPM, key, and loop/one-shot over filename and audio guesses.",
+      "status": {
+        "loading": "Looking for Splice catalog…",
+        "ok": "Catalog: {{path}} · {{count}} sounds",
+        "missing": "Splice catalog not found. Install or open Splice Desktop once, then try again.",
+        "error": "Could not open Splice catalog: {{error}}"
+      }
+    },
+    "refreshMetadata": {
+      "label": "Refresh metadata",
+      "hint": "Re-match the library to Splice without re-decoding. Fills empty BPM, key, and type when a higher-priority value is not already set."
+    },
+    "reanalyze": {
+      "label": "Re-analyze entire library",
+      "hint": "Erases BPM, key, type, auto tags, and waveforms, then analyzes everything again. Favorites and your tags stay.",
+      "dialog": {
+        "title": "Erase analysis data?",
+        "body": "This clears BPM, key, type, auto tags, and peakfiles for every sample, including values you edited by hand. Favorites, your tags, and folder roots stay. Analysis then runs again in the background.",
+        "confirm": "Erase analysis data"
+      }
+    },
+    "jitCache": {
+      "label": "JIT clip cache",
+      "change": "Change…",
+      "clear": "Clear cache"
+    },
+    "custom": {
+      "title": "Custom analysis",
+      "body_one": "Force-runs on the <0>{{count}} selected sample</0>. Existing values are kept unless you tick the matching box.",
+      "body_other": "Force-runs on the <0>{{count}} selected samples</0>. Existing values are kept unless you tick the matching box.",
+      "rerunBpm": "Re-run BPM",
+      "rerunKey": "Re-run key",
+      "rerunType": "Re-run loop vs one-shot",
+      "overwriteTags": {
+        "label": "Overwrite tags",
+        "hint": "replaces tags Sift detected; yours stay"
+      },
+      "background": "Runs in the background",
+      "analyze_one": "Analyze {{count}} sample",
+      "analyze_other": "Analyze {{count}} samples"
+    }
+  },
+  "shortcuts": {
+    "holdHover": {
+      "label": "Hold to hover-preview",
+      "hint": "Hold this key and sweep the list to audition rows under the pointer.",
+      "unbound": "Unbound",
+      "record": "Record…",
+      "recording": "Press a key…",
+      "clear": "Clear"
+    },
+    "fixedKeysNote": "Fixed keys, not rebindable in v1.",
+    "key": {
+      "playStart": "Play from start",
+      "pause": "Pause / resume, restart if finished",
+      "move": "Move selection",
+      "range": "Range select · free time on waveform",
+      "toggle": "Toggle a row in the selection",
+      "zero": "Snap selection edges to zero-crossings",
+      "zeroFree": "Free time and zero-crossing together",
+      "setKey": "Set key for the selection",
+      "setBpm": "Set BPM for the selection",
+      "cycleType": "Cycle type: unset → loop → one-shot",
+      "undo": "Undo a metadata edit · ⇧⌘Z redo",
+      "preferences": "Open Settings"
+    }
+  },
+  "about": {
+    "version": {
+      "label": "Version",
+      "hint": "What's installed."
+    },
+    "updates": {
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "upToDate": "You have the latest version.",
+      "availableStatus": "Version {{version}} is available.",
+      "downloading": "Downloading update…",
+      "error": "Could not check for updates.",
+      "skippedDev": "Updates are off in development builds.",
+      "dialog": {
+        "title": "Update available",
+        "body": "Sift {{version}} is ready. The app restarts after install.",
+        "install": "Install and restart",
+        "installing": "Installing…"
+      }
+    }
+  }
 }

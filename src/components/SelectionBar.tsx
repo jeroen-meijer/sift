@@ -14,16 +14,16 @@ export function SelectionBar({ count, bytes }: Props) {
   return (
     <div className="selection-bar">
       <StackIcon size={13} weight="fill" />
-      <span className="selection-count">{t("selectedCount", { count })}</span>
+      <span className="selection-count">{t("selection.count", { count })}</span>
       <span className="selection-sep" aria-hidden>
         ·
       </span>
       <span className="selection-meta mono">
-        {formatBytes(bytes)} · {t("selectionKeys")}
+        {formatBytes(bytes)} · {t("selection.keys")}
       </span>
       <span className="selection-drag">
         <HandGrabbingIcon size={14} />
-        {t("selectionDrag", { count })}
+        {t("selection.drag", { count })}
       </span>
     </div>
   );

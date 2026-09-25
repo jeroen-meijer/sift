@@ -225,7 +225,7 @@ export function App() {
   }, []);
 
   const addRoot = useCallback(() => {
-    void open({ directory: true, multiple: false, title: tl("addFolder") })
+    void open({ directory: true, multiple: false, title: tl("sidebar.addFolder") })
       .then((selected) => {
         if (typeof selected !== "string") return;
         return ipc.addRoot(selected).then(refreshLibrary);

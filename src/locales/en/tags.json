@@ -1,34 +1,53 @@
 {
   "title": "Tags",
-  "new": "New",
-  "newPathPlaceholder": "New path, e.g. Drums/Rim",
-  "filterPlaceholder": "Filter taxonomy…",
-  "editing": "Editing tag",
-  "selectHint": "Pick a tag on the left to rename, recolour, move or delete it.",
-  "counts_one": "{{samples}} samples · {{count}} child",
-  "counts_other": "{{samples}} samples · {{count}} children",
-  "name": "Name",
-  "nameHint": "Full path <0>{{path}}</0>. Renaming it updates every sample and chip.",
-  "parent": "Parent",
-  "parentHint": "Moving a tag carries its children with it.",
-  "noParent": "No parent (top level)",
-  "color": "Color",
-  "inheritFrom": "Inherit from {{parent}}",
-  "inheritNone": "No colour",
-  "preview": "Preview",
-  "deleteTitle": "Delete this tag",
-  "deleteBody_one": "{{count}} sample loses the tag. Files on disk are untouched.",
-  "deleteBody_other": "{{count}} samples lose the tag. Files on disk are untouched.",
-  "delete": "Delete…",
-  "footer": "{{total}} tags · {{top}} top-level",
-
-  "cascadeTitle": "Delete <0>{{name}}</0> and everything under it?",
-  "cascadeBody": "This is a parent tag. Deleting it also deletes its <0>{{children}} child tags</0>, and removes all of them from <0>{{samples}} samples</0>.",
-  "simpleTitle": "Delete <0>{{name}}</0>?",
-  "simpleBody_one": "It is removed from {{count}} sample.",
-  "simpleBody_other": "It is removed from {{count}} samples.",
-  "willBeDeleted": "Will be deleted",
-  "filesUntouched": "Audio files are never modified.",
-  "deleteConfirm_one": "Delete {{count}} tag",
-  "deleteConfirm_other": "Delete {{count}} tags"
+  "list": {
+    "new": {
+      "label": "New",
+      "pathPlaceholder": "New path, e.g. Drums/Rim"
+    },
+    "filterPlaceholder": "Filter taxonomy…",
+    "footer": "{{total}} tags · {{top}} top-level"
+  },
+  "editor": {
+    "editing": "Editing tag",
+    "selectHint": "Pick a tag on the left to rename, recolor, move or delete it.",
+    "counts_one": "{{samples}} samples · {{count}} child",
+    "counts_other": "{{samples}} samples · {{count}} children",
+    "name": {
+      "label": "Name",
+      "hint": "Full path <0>{{path}}</0>. Renaming it updates every sample and chip."
+    },
+    "parent": {
+      "label": "Parent",
+      "hint": "Moving a tag carries its children with it.",
+      "none": "No parent (top level)"
+    },
+    "color": {
+      "label": "Color",
+      "inheritFrom": "Inherit from {{parent}}",
+      "inheritNone": "No color",
+      "preview": "Preview"
+    },
+    "delete": {
+      "title": "Delete this tag",
+      "body_one": "{{count}} sample loses the tag. Files on disk are untouched.",
+      "body_other": "{{count}} samples lose the tag. Files on disk are untouched.",
+      "action": "Delete…"
+    }
+  },
+  "deleteDialog": {
+    "cascade": {
+      "title": "Delete <0>{{name}}</0> and everything under it?",
+      "body": "This is a parent tag. Deleting it also deletes its <0>{{children}} child tags</0>, and removes all of them from <0>{{samples}} samples</0>."
+    },
+    "simple": {
+      "title": "Delete <0>{{name}}</0>?",
+      "body_one": "It is removed from {{count}} sample.",
+      "body_other": "It is removed from {{count}} samples."
+    },
+    "willBeDeleted": "Will be deleted",
+    "filesUntouched": "Audio files are never modified.",
+    "confirm_one": "Delete {{count}} tag",
+    "confirm_other": "Delete {{count}} tags"
+  }
 }

@@ -99,9 +99,9 @@ export const OmniSearch = memo(function OmniSearch({
     chips.push(
       <Chip
         key="folder"
-        prefix={t("chipFolder")}
+        prefix={t("omni.chip.folder")}
         value={folderChipLabel(value.folder, roots)}
-        removeLabel={t("clear")}
+        removeLabel={t("action.clear")}
         onRemove={() => {
           onChange({ ...value, folder: null });
         }}
@@ -112,10 +112,10 @@ export const OmniSearch = memo(function OmniSearch({
     chips.push(
       <Chip
         key={`tag:${tag}`}
-        prefix={t("chipTag")}
+        prefix={t("omni.chip.tag")}
         value={tag}
         dot={tagPalette(tag, null).dot}
-        removeLabel={t("clear")}
+        removeLabel={t("action.clear")}
         onRemove={() => {
           onChange({ ...value, tags: value.tags.filter((x) => x !== tag) });
         }}
@@ -126,10 +126,10 @@ export const OmniSearch = memo(function OmniSearch({
     chips.push(
       <Chip
         key="bpm"
-        prefix={t("chipBpm")}
+        prefix={t("omni.chip.bpm")}
         value={`${value.bpmMin ?? "…"}-${value.bpmMax ?? "…"}`}
-        toggle={{ label: t("halfDouble"), on: halfDouble, onToggle: onToggleHalfDouble }}
-        removeLabel={t("clear")}
+        toggle={{ label: t("omni.halfDouble"), on: halfDouble, onToggle: onToggleHalfDouble }}
+        removeLabel={t("action.clear")}
         onRemove={() => {
           onChange({ ...value, bpmMin: null, bpmMax: null });
         }}
@@ -140,10 +140,10 @@ export const OmniSearch = memo(function OmniSearch({
     chips.push(
       <Chip
         key="key"
-        prefix={t("chipKey")}
+        prefix={t("omni.chip.key")}
         value={value.key}
-        toggle={{ label: t("relative"), on: relativeKey, onToggle: onToggleRelativeKey }}
-        removeLabel={t("clear")}
+        toggle={{ label: t("omni.relative"), on: relativeKey, onToggle: onToggleRelativeKey }}
+        removeLabel={t("action.clear")}
         onRemove={() => {
           onChange({ ...value, key: null });
         }}
@@ -168,7 +168,7 @@ export const OmniSearch = memo(function OmniSearch({
           <input
             className="omni-input"
             value={value.text}
-            placeholder={chips.length > 0 ? "" : t("searchPlaceholder")}
+            placeholder={chips.length > 0 ? "" : t("omni.placeholder")}
             onChange={(e) => {
               onChange({ ...value, text: e.target.value });
             }}
@@ -181,7 +181,7 @@ export const OmniSearch = memo(function OmniSearch({
           <button
             type="button"
             className="omni-clear"
-            aria-label={t("clear")}
+            aria-label={t("action.clear")}
             onClick={() => {
               onChange(EMPTY_OMNI);
             }}
@@ -194,18 +194,18 @@ export const OmniSearch = memo(function OmniSearch({
         <button
           type="button"
           className={`omni-tool-btn${showWaveforms ? " on" : ""}`}
-          title={t("rowWaveforms")}
+          title={t("omni.rowWaveforms")}
           aria-pressed={showWaveforms}
           onClick={onToggleWaveforms}
         >
           <WaveformIcon size={14} />
-          {t("waveforms")}
+          {t("omni.waveforms")}
         </button>
         <button
           type="button"
           className={`omni-icon-btn${favoritesOnly ? " on" : ""}`}
-          title={t("favoritesOnly")}
-          aria-label={t("favoritesOnly")}
+          title={t("omni.favoritesOnly")}
+          aria-label={t("omni.favoritesOnly")}
           aria-pressed={favoritesOnly}
           onClick={onToggleFavoritesOnly}
         >
@@ -215,8 +215,8 @@ export const OmniSearch = memo(function OmniSearch({
           <button
             type="button"
             className={`omni-icon-btn${columnsOpen ? " on" : ""}`}
-            title={t("columns")}
-            aria-label={t("columns")}
+            title={t("omni.columns")}
+            aria-label={t("omni.columns")}
             aria-expanded={columnsOpen}
             onPointerDown={(e) => {
               /* Keep the popover's outside-close from racing the toggle. */
@@ -230,12 +230,12 @@ export const OmniSearch = memo(function OmniSearch({
           </button>
           {columnsOpen ? (
             <Popover
-              label={t("columns")}
+              label={t("omni.columns")}
               onClose={() => {
                 setColumnsOpen(false);
               }}
             >
-              <div className="popover-label">{t("columns")}</div>
+              <div className="popover-label">{t("omni.columns")}</div>
               {OPTIONAL_COLUMNS.map((column) => (
                 <button
                   key={column}

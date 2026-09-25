@@ -51,8 +51,8 @@ export function SetKeyPanel({ focused, onSetKey }: Props) {
           ref={inputRef}
           className="input input-mono key-panel-input"
           value={query}
-          placeholder={t("keyFilterPlaceholder")}
-          aria-label={t("keyFilterPlaceholder")}
+          placeholder={t("setKey.filter.placeholder")}
+          aria-label={t("setKey.filter.placeholder")}
           onChange={(e) => {
             setQuery(e.target.value);
           }}
@@ -65,9 +65,9 @@ export function SetKeyPanel({ focused, onSetKey }: Props) {
           }}
         />
       </div>
-      <div className="key-panel-list" role="listbox" aria-label={t("setKeyTitle")}>
+      <div className="key-panel-list" role="listbox" aria-label={t("setKey.title")}>
         {hits.length === 0 ? (
-          <div className="key-panel-empty">{t("keyNoMatches")}</div>
+          <div className="key-panel-empty">{t("setKey.filter.empty")}</div>
         ) : (
           hits.map((key) => {
             const selected = active?.value === key.value;
@@ -101,7 +101,7 @@ export function SetKeyPanel({ focused, onSetKey }: Props) {
         <span className="menu-icon">
           <TrashIcon size={14} />
         </span>
-        <span className="menu-label">{t("keyClear")}</span>
+        <span className="menu-label">{t("setKey.clear")}</span>
       </button>
     </div>
   );

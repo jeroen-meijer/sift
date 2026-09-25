@@ -122,13 +122,13 @@ export function matchesBinding(event: ChordEvent, binding: KeyBinding): boolean 
  * comes from `keys.*.hint` so it cannot drift from the real handlers.
  */
 export const SHORTCUT_ROWS: { binding: AppBinding; descriptionKey: string }[] = [
-  { binding: 'play', descriptionKey: 'keyPlayStart' },
-  { binding: 'pause', descriptionKey: 'keyPause' },
-  { binding: 'selectUp', descriptionKey: 'keyMove' },
-  { binding: 'zeroCrossing', descriptionKey: 'keyZero' },
-  { binding: 'setKey', descriptionKey: 'keySetKey' },
-  { binding: 'setBpm', descriptionKey: 'keySetBpm' },
-  { binding: 'cycleType', descriptionKey: 'keyCycleType' },
-  { binding: 'undo', descriptionKey: 'keyUndo' },
-  { binding: 'preferences', descriptionKey: 'keyPreferences' },
+  { binding: 'play', descriptionKey: 'shortcuts.key.playStart' },
+  { binding: 'pause', descriptionKey: 'shortcuts.key.pause' },
+  { binding: 'selectUp', descriptionKey: 'shortcuts.key.move' },
+  { binding: 'zeroCrossing', descriptionKey: 'shortcuts.key.zero' },
+  { binding: 'setKey', descriptionKey: 'shortcuts.key.setKey' },
+  { binding: 'setBpm', descriptionKey: 'shortcuts.key.setBpm' },
+  { binding: 'cycleType', descriptionKey: 'shortcuts.key.cycleType' },
+  { binding: 'undo', descriptionKey: 'shortcuts.key.undo' },
+  { binding: 'preferences', descriptionKey: 'shortcuts.key.preferences' },
 ];

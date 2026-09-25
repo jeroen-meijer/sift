@@ -33,7 +33,6 @@ import {
   THEMES,
   THEME_INFO,
   normalizeThemeId,
-  type ThemeId,
 } from "../theme";
 import { Dialog, DialogDismissButton } from "../ui/Dialog";
 import { PillSelect } from "../ui/PillSelect";
@@ -53,20 +52,6 @@ const SECTIONS: SectionId[] = [
   "shortcuts",
   "about",
 ];
-
-const THEME_NAME_KEY: Record<ThemeId, string> = {
-  nocturne: "themeNocturne",
-  ink: "themeInk",
-  graphite: "themeGraphite",
-  snow: "themeSnow",
-};
-
-const THEME_BLURB_KEY: Record<ThemeId, string> = {
-  nocturne: "themeBlurbNocturne",
-  ink: "themeBlurbInk",
-  graphite: "themeBlurbGraphite",
-  snow: "themeBlurbSnow",
-};
 
 function Row({
   title,
@@ -164,7 +149,7 @@ export function SettingsView({
       switch (outcome.kind) {
         case "skipped":
           setUpdateStatus("idle");
-          setUpdateError(t("updateSkippedDev"));
+          setUpdateError(t("about.updates.skippedDev"));
           break;
         case "upToDate":
           setUpdateStatus("upToDate");
@@ -258,12 +243,12 @@ export function SettingsView({
   };
 
   const nav: { id: SectionId; label: string; icon: ReactNode }[] = [
-    { id: "appearance", label: t("navAppearance"), icon: <PaintBucketIcon size={15} /> },
-    { id: "playback", label: t("navPlayback"), icon: <PlayCircleIcon size={15} weight="fill" /> },
-    { id: "library", label: t("navLibrary"), icon: <FoldersIcon size={15} /> },
-    { id: "analysis", label: t("navAnalysis"), icon: <PulseIcon size={15} /> },
-    { id: "shortcuts", label: t("navShortcuts"), icon: <KeyboardIcon size={15} /> },
-    { id: "about", label: t("navAbout"), icon: <InfoIcon size={15} /> },
+    { id: "appearance", label: t("nav.appearance"), icon: <PaintBucketIcon size={15} /> },
+    { id: "playback", label: t("nav.playback"), icon: <PlayCircleIcon size={15} weight="fill" /> },
+    { id: "library", label: t("nav.library"), icon: <FoldersIcon size={15} /> },
+    { id: "analysis", label: t("nav.analysis"), icon: <PulseIcon size={15} /> },
+    { id: "shortcuts", label: t("nav.shortcuts"), icon: <KeyboardIcon size={15} /> },
+    { id: "about", label: t("nav.about"), icon: <InfoIcon size={15} /> },
   ];
 
   const addPattern = () => {
@@ -279,7 +264,7 @@ export function SettingsView({
         <nav className="settings-nav">
           <div className="settings-nav-head">
             <div className="settings-nav-title">{t("title")}</div>
-            <DialogDismissButton className="btn-icon" aria-label={tc("close")}>
+            <DialogDismissButton className="btn-icon" aria-label={tc("action.close")}>
               <XIcon size={14} />
             </DialogDismissButton>
           </div>
@@ -303,10 +288,10 @@ export function SettingsView({
             <div className="settings-sections">
               <section id="settings-appearance">
                 <div className="settings-themes-head">
-                  <div className="kicker settings-section-label">{t("themes")}</div>
-                  <span className="settings-themes-count">{t("themesHint")}</span>
+                  <div className="kicker settings-section-label">{t("appearance.themes.label")}</div>
+                  <span className="settings-themes-count">{t("appearance.themes.hint")}</span>
                 </div>
-                <div className="theme-grid" role="listbox" aria-label={t("themes")}>
+                <div className="theme-grid" role="listbox" aria-label={t("appearance.themes.label")}>
                   {THEMES.map((id) => {
                     const info = THEME_INFO[id];
                     const selected = currentTheme === id;
@@ -323,8 +308,8 @@ export function SettingsView({
                       >
                         <div className="theme-card-top">
                           <div className="theme-card-text">
-                            <div className="theme-card-name">{t(THEME_NAME_KEY[id])}</div>
-                            <div className="theme-card-blurb">{t(THEME_BLURB_KEY[id])}</div>
+                            <div className="theme-card-name">{t(`appearance.themes.${id}.name`)}</div>
+                            <div className="theme-card-blurb">{t(`appearance.themes.${id}.blurb`)}</div>
                           </div>
                           <div className="theme-card-swatches" aria-hidden>
                             {info.swatches.map((color) => (
@@ -344,54 +329,54 @@ export function SettingsView({
               </section>
 
               <section id="settings-playback" className="rule">
-                <div className="kicker settings-section-label">{t("navPlayback")}</div>
-                <Row title={t("playOnSelect")} hint={t("playOnSelectHint")}>
+                <div className="kicker settings-section-label">{t("nav.playback")}</div>
+                <Row title={t("playback.playOnSelect.label")} hint={t("playback.playOnSelect.hint")}>
                   <Switch
-                    label={t("playOnSelect")}
+                    label={t("playback.playOnSelect.label")}
                     checked={settings.play_on_select}
                     onChange={(v) => {
                       onChange("play_on_select", v);
                     }}
                   />
                 </Row>
-                <Row title={t("loopPreview")} hint={t("loopPreviewHint")}>
+                <Row title={t("playback.loopPreview.label")} hint={t("playback.loopPreview.hint")}>
                   <Switch
-                    label={t("loopPreview")}
+                    label={t("playback.loopPreview.label")}
                     checked={settings.loop_preview}
                     onChange={(v) => {
                       onChange("loop_preview", v);
                     }}
                   />
                 </Row>
-                <Row title={t("waveformView")} hint={t("waveformViewHint")}>
+                <Row title={t("playback.waveformView.label")} hint={t("playback.waveformView.hint")}>
                   <Segmented<WaveformMode>
-                    label={t("waveformView")}
+                    label={t("playback.waveformView.label")}
                     value={settings.waveform_view}
                     options={[
-                      { value: "stereo", label: t("waveformStereo") },
-                      { value: "mono", label: t("waveformMono") },
+                      { value: "stereo", label: t("playback.waveformView.stereo") },
+                      { value: "mono", label: t("playback.waveformView.mono") },
                     ]}
                     onChange={(v) => {
                       onChange("waveform_view", v);
                     }}
                   />
                 </Row>
-                <Row title={t("coloredWaveforms")} hint={t("coloredWaveformsHint")}>
+                <Row title={t("playback.coloredWaveforms.label")} hint={t("playback.coloredWaveforms.hint")}>
                   <Segmented<"on" | "off">
-                    label={t("coloredWaveforms")}
+                    label={t("playback.coloredWaveforms.label")}
                     value={settings.colored_waveforms ? "on" : "off"}
                     options={[
-                      { value: "on", label: t("coloredWaveformsOn") },
-                      { value: "off", label: t("coloredWaveformsOff") },
+                      { value: "on", label: t("playback.coloredWaveforms.on") },
+                      { value: "off", label: t("playback.coloredWaveforms.off") },
                     ]}
                     onChange={(v) => {
                       onChange("colored_waveforms", v === "on");
                     }}
                   />
                 </Row>
-                <Row title={t("outputDevice")} hint={t("outputDeviceHint")}>
+                <Row title={t("playback.outputDevice.label")} hint={t("playback.outputDevice.hint")}>
                   <PillSelect
-                    label={t("outputDevice")}
+                    label={t("playback.outputDevice.label")}
                     variant="input"
                     width={248}
                     value={settings.output_device}
@@ -404,23 +389,23 @@ export function SettingsView({
               </section>
 
               <section id="settings-library" className="rule">
-                <div className="kicker settings-section-label">{t("navLibrary")}</div>
-                <Row title={t("newFiles")} hint={t("newFilesHint")}>
+                <div className="kicker settings-section-label">{t("nav.library")}</div>
+                <Row title={t("library.newFiles.label")} hint={t("library.newFiles.hint")}>
                   <Segmented<NewFileMode>
-                    label={t("newFiles")}
+                    label={t("library.newFiles.label")}
                     value={settings.new_file_mode}
                     options={[
-                      { value: "auto", label: t("autoIndex") },
-                      { value: "ask", label: t("askFirst") },
+                      { value: "auto", label: t("library.newFiles.autoIndex") },
+                      { value: "ask", label: t("library.newFiles.askFirst") },
                     ]}
                     onChange={(v) => {
                       onChange("new_file_mode", v);
                     }}
                   />
                 </Row>
-                <Row title={t("notifyAutoIndex")}>
+                <Row title={t("library.notifyAutoIndex.label")}>
                   <Switch
-                    label={t("notifyAutoIndex")}
+                    label={t("library.notifyAutoIndex.label")}
                     checked={settings.notify_auto_index}
                     onChange={(v) => {
                       onChange("notify_auto_index", v);
@@ -429,15 +414,15 @@ export function SettingsView({
                 </Row>
 
                 <div className="settings-stack">
-                  <div className="settings-row-title">{t("ignoreList")}</div>
-                  <div className="settings-row-hint">{t("ignoreListHint")}</div>
+                  <div className="settings-row-title">{t("library.ignoreList.label")}</div>
+                  <div className="settings-row-hint">{t("library.ignoreList.hint")}</div>
                   <div className="ignore-box">
                     {settings.ignore_list.map((pattern) => (
                       <div key={pattern} className="ignore-row mono">
                         {pattern}
                         <button
                           type="button"
-                          aria-label={t("removePattern")}
+                          aria-label={t("library.ignoreList.removePattern")}
                           onClick={() => {
                             onChange(
                               "ignore_list",
@@ -453,8 +438,8 @@ export function SettingsView({
                       <PlusIcon size={11} />
                       <input
                         value={newPattern}
-                        placeholder={t("patternPlaceholder")}
-                        aria-label={t("addPattern")}
+                        placeholder={t("library.ignoreList.patternPlaceholder")}
+                        aria-label={t("library.ignoreList.addPattern")}
                         onChange={(e) => {
                           setNewPattern(e.target.value);
                         }}
@@ -468,13 +453,13 @@ export function SettingsView({
                 </div>
 
                 <div className="settings-stack">
-                  <div className="settings-row-title">{t("onlineOnlyNote")}</div>
-                  <div className="settings-row-hint">{t("onlineOnlyNoteHint")}</div>
+                  <div className="settings-row-title">{t("library.onlineOnly.label")}</div>
+                  <div className="settings-row-hint">{t("library.onlineOnly.hint")}</div>
                 </div>
 
                 <Row
-                  title={t("missingSamples")}
-                  hint={t("missingSamplesHint", { count: stats.missing })}
+                  title={t("library.missingSamples.label")}
+                  hint={t("library.missingSamples.hint", { count: stats.missing })}
                 >
                   <button
                     type="button"
@@ -482,16 +467,16 @@ export function SettingsView({
                     disabled={stats.missing === 0}
                     onClick={onPurgeMissing}
                   >
-                    {t("purgeMissing")}
+                    {t("library.missingSamples.purge")}
                   </button>
                 </Row>
               </section>
 
               <section id="settings-analysis" className="rule">
-                <div className="kicker settings-section-label">{t("navAnalysis")}</div>
+                <div className="kicker settings-section-label">{t("nav.analysis")}</div>
                 <div className="settings-stack">
-                  <div className="settings-row-title">{t("bpmRange")}</div>
-                  <div className="settings-row-hint">{t("bpmRangeHint")}</div>
+                  <div className="settings-row-title">{t("analysis.bpmRange.label")}</div>
+                  <div className="settings-row-hint">{t("analysis.bpmRange.hint")}</div>
                   <BpmRangePicker
                     min={settings.bpm_range_min}
                     max={settings.bpm_range_max}
@@ -503,9 +488,9 @@ export function SettingsView({
                   />
                 </div>
 
-                <Row title={t("spliceMetadata")} hint={t("spliceMetadataHint")}>
+                <Row title={t("analysis.splice.label")} hint={t("analysis.splice.hint")}>
                   <Switch
-                    label={t("spliceMetadata")}
+                    label={t("analysis.splice.label")}
                     checked={settings.splice_enabled}
                     onChange={(v) => {
                       onChange("splice_enabled", v);
@@ -515,19 +500,19 @@ export function SettingsView({
                 <div className="settings-stack settings-status-line">
                   <div className="settings-row-hint mono">
                     {spliceStatus == null
-                      ? t("spliceStatusLoading")
+                      ? t("analysis.splice.status.loading")
                       : spliceStatus.ok
-                        ? t("spliceStatusOk", {
+                        ? t("analysis.splice.status.ok", {
                             path: spliceStatus.path ?? "",
                             count: formatCount(spliceStatus.row_count ?? 0),
                           })
                         : spliceStatus.error
-                          ? t("spliceStatusError", { error: spliceStatus.error })
-                          : t("spliceStatusMissing")}
+                          ? t("analysis.splice.status.error", { error: spliceStatus.error })
+                          : t("analysis.splice.status.missing")}
                   </div>
                 </div>
 
-                <Row title={t("refreshMetadata")} hint={t("refreshMetadataHint")}>
+                <Row title={t("analysis.refreshMetadata.label")} hint={t("analysis.refreshMetadata.hint")}>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
@@ -545,11 +530,11 @@ export function SettingsView({
                         });
                     }}
                   >
-                    {t("refreshMetadata")}
+                    {t("analysis.refreshMetadata.label")}
                   </button>
                 </Row>
 
-                <Row title={t("reanalyzeLibrary")} hint={t("reanalyzeLibraryHint")}>
+                <Row title={t("analysis.reanalyze.label")} hint={t("analysis.reanalyze.hint")}>
                   <button
                     type="button"
                     className="btn btn-danger btn-sm"
@@ -557,32 +542,32 @@ export function SettingsView({
                       setConfirmReanalyze(true);
                     }}
                   >
-                    {t("reanalyzeLibrary")}
+                    {t("analysis.reanalyze.label")}
                   </button>
                 </Row>
 
-                <Row title={t("jitCache")} hint={`${stats.clips_dir} · ${formatBytes(stats.clips_bytes)}`}>
+                <Row title={t("analysis.jitCache.label")} hint={`${stats.clips_dir} · ${formatBytes(stats.clips_bytes)}`}>
                   <div className="settings-button-pair">
                     <button type="button" className="btn btn-secondary btn-sm" onClick={onChangeCacheDir}>
-                      {t("change")}
+                      {t("analysis.jitCache.change")}
                     </button>
                     <button type="button" className="btn btn-secondary btn-sm" onClick={onClearCache}>
-                      {t("clearCache")}
+                      {t("analysis.jitCache.clear")}
                     </button>
                   </div>
                 </Row>
               </section>
 
               <section id="settings-shortcuts" className="rule">
-                <div className="kicker settings-section-label">{t("navShortcuts")}</div>
-                <Row title={t("holdHover")} hint={t("holdHoverHint")}>
+                <div className="kicker settings-section-label">{t("nav.shortcuts")}</div>
+                <Row title={t("shortcuts.holdHover.label")} hint={t("shortcuts.holdHover.hint")}>
                   <div className="settings-button-pair">
                     <span
                       className={`hotkey-slot mono${settings.hold_hover_hotkey ? " bound" : ""}`}
                     >
                       {recording
-                        ? t("recording")
-                        : (hotkeyLabel(settings.hold_hover_hotkey) ?? t("holdHoverUnbound"))}
+                        ? t("shortcuts.holdHover.recording")
+                        : (hotkeyLabel(settings.hold_hover_hotkey) ?? t("shortcuts.holdHover.unbound"))}
                     </span>
                     <button
                       type="button"
@@ -591,7 +576,7 @@ export function SettingsView({
                         setRecording(true);
                       }}
                     >
-                      {t("record")}
+                      {t("shortcuts.holdHover.record")}
                     </button>
                     {settings.hold_hover_hotkey ? (
                       <button
@@ -601,14 +586,14 @@ export function SettingsView({
                           onChange("hold_hover_hotkey", null);
                         }}
                       >
-                        {t("clearBinding")}
+                        {t("shortcuts.holdHover.clear")}
                       </button>
                     ) : null}
                   </div>
                 </Row>
 
                 <div className="shortcut-panel">
-                  <div className="shortcut-panel-note">{t("fixedKeys")}</div>
+                  <div className="shortcut-panel-note">{t("shortcuts.fixedKeysNote")}</div>
                   <div className="shortcut-grid">
                     {SHORTCUT_ROWS.map((row) => (
                       <div key={row.binding} className="shortcut-item">
@@ -625,41 +610,41 @@ export function SettingsView({
                         {keys.freeTime.hint}
                         {keys.zeroCrossing.hint}
                       </span>
-                      <span>{t("keyZeroFree")}</span>
+                      <span>{t("shortcuts.key.zeroFree")}</span>
                     </div>
                     <div className="shortcut-item">
                       <span className="mono shortcut-keys">{keys.freeTime.hint}</span>
-                      <span>{t("keyRange")}</span>
+                      <span>{t("shortcuts.key.range")}</span>
                     </div>
                     <div className="shortcut-item">
                       <span className="mono shortcut-keys">⌘ / Ctrl</span>
-                      <span>{t("keyToggle")}</span>
+                      <span>{t("shortcuts.key.toggle")}</span>
                     </div>
                   </div>
                 </div>
               </section>
 
               <section id="settings-about" className="rule">
-                <div className="kicker settings-section-label">{t("navAbout")}</div>
-                <Row title={t("aboutVersion")} hint={t("aboutVersionHint")}>
+                <div className="kicker settings-section-label">{t("nav.about")}</div>
+                <Row title={t("about.version.label")} hint={t("about.version.hint")}>
                   <span className="mono settings-about-version">
                     {appVersion ?? "…"}
                   </span>
                 </Row>
                 <Row
-                  title={t("checkForUpdates")}
+                  title={t("about.updates.check")}
                   {...(updateStatus === "upToDate"
-                    ? { hint: t("updateUpToDate") }
+                    ? { hint: t("about.updates.upToDate") }
                     : updateStatus === "available" && availableUpdate != null
                       ? {
-                          hint: t("updateAvailableStatus", {
+                          hint: t("about.updates.availableStatus", {
                             version: availableUpdate.version,
                           }),
                         }
                       : updateStatus === "downloading"
-                        ? { hint: t("updateDownloading") }
+                        ? { hint: t("about.updates.downloading") }
                         : updateStatus === "error"
-                          ? { hint: updateError ?? t("updateError") }
+                          ? { hint: updateError ?? t("about.updates.error") }
                           : updateError != null && updateStatus === "idle"
                             ? { hint: updateError }
                             : {})}
@@ -671,7 +656,7 @@ export function SettingsView({
                       disabled={false}
                       onClick={runUpdateInstall}
                     >
-                      {t("updateInstall")}
+                      {t("about.updates.dialog.install")}
                     </button>
                   ) : (
                     <button
@@ -680,7 +665,7 @@ export function SettingsView({
                       disabled={updateStatus === "checking" || updateStatus === "downloading"}
                       onClick={runUpdateCheck}
                     >
-                      {updateStatus === "checking" ? t("updateChecking") : t("checkForUpdates")}
+                      {updateStatus === "checking" ? t("about.updates.checking") : t("about.updates.check")}
                     </button>
                   )}
                 </Row>

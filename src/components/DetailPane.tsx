@@ -130,8 +130,8 @@ function DetailPath({ absolutePath, displayPath }: { absolutePath: string; displ
     <button
       type="button"
       className={`detail-path${copied ? " copied" : ""}`}
-      aria-label={copied ? t("ctxCopyPathDone") : t("ctxCopyPath")}
-      title={copied ? t("ctxCopyPathDone") : absolutePath}
+      aria-label={copied ? t("menu.copyPathDone") : t("menu.copyPath")}
+      title={copied ? t("menu.copyPathDone") : absolutePath}
       onClick={onCopy}
       onMouseLeave={() => {
         if (resetTimer.current) clearTimeout(resetTimer.current);
@@ -208,7 +208,7 @@ export const DetailPane = memo(function DetailPane({
   if (!sample) {
     return (
       <div className="detail-pane">
-        <div className="detail-placeholder">{t("selectSample")}</div>
+        <div className="detail-placeholder">{t("detail.selectSample")}</div>
       </div>
     );
   }
@@ -221,7 +221,7 @@ export const DetailPane = memo(function DetailPane({
         <button
           type="button"
           className={`detail-fav${sample.favorite ? " on" : ""}`}
-          aria-label={t("addTag")}
+          aria-label={t("detail.addTag")}
           aria-pressed={sample.favorite}
           onClick={onToggleFavorite}
         >
@@ -236,7 +236,7 @@ export const DetailPane = memo(function DetailPane({
                 onOpenMenu(e.clientX, e.clientY);
               }}
             />
-            {sample.missing ? <span className="detail-badge">{t("fileMissing")}</span> : null}
+            {sample.missing ? <span className="detail-badge">{t("detail.fileMissing")}</span> : null}
           </div>
           <DetailPath absolutePath={sample.path} displayPath={displayPath} />
         </div>
@@ -254,7 +254,7 @@ export const DetailPane = memo(function DetailPane({
                 <button
                   type="button"
                   className="tag-chip-x"
-                  aria-label={t("removeTag")}
+                  aria-label={t("detail.removeTag")}
                   onClick={() => {
                     onRemoveTag(tag.id);
                   }}
@@ -269,8 +269,8 @@ export const DetailPane = memo(function DetailPane({
             <button
               type="button"
               className="tag-add-btn"
-              title={t("addTag")}
-              aria-label={t("addTag")}
+              title={t("detail.addTag")}
+              aria-label={t("detail.addTag")}
               aria-expanded={tagPickerOpen}
               onPointerDown={(e) => {
                 if (tagPickerOpen) e.stopPropagation();
@@ -283,7 +283,7 @@ export const DetailPane = memo(function DetailPane({
             </button>
             {tagPickerOpen ? (
               <Popover
-                label={t("addTag")}
+                label={t("detail.addTag")}
                 onClose={() => {
                   setTagPickerOpen(false);
                   setTagFilter("");
@@ -292,8 +292,8 @@ export const DetailPane = memo(function DetailPane({
                 <input
                   className="input popover-search"
                   value={tagFilter}
-                  placeholder={t("tagFilterPlaceholder")}
-                  aria-label={t("tagFilterPlaceholder")}
+                  placeholder={t("detail.tagFilter.placeholder")}
+                  aria-label={t("detail.tagFilter.placeholder")}
                   autoFocus
                   onChange={(e) => {
                     setTagFilter(e.target.value);
@@ -304,7 +304,7 @@ export const DetailPane = memo(function DetailPane({
                 />
                 {available.length === 0 ? (
                   <div className="popover-label">
-                    {tagFilter.trim() ? t("tagFilterEmpty") : t("noMoreTags")}
+                    {tagFilter.trim() ? t("detail.tagFilter.empty") : t("detail.noMoreTags")}
                   </div>
                 ) : (
                   available.map((node) => (
@@ -344,11 +344,11 @@ export const DetailPane = memo(function DetailPane({
         <div className="detail-missing">
           <PlugChargingIcon size={26} />
           <div>
-            <div className="detail-missing-title">{t("missingTitle")}</div>
+            <div className="detail-missing-title">{t("detail.missing.title")}</div>
             <p className="detail-missing-body">
               <Trans
                 t={t}
-                i18nKey="missingBody"
+                i18nKey="detail.missing.body"
                 values={{ volume }}
                 components={[<span className="mono detail-missing-volume" key="volume" />]}
               />
@@ -356,14 +356,14 @@ export const DetailPane = memo(function DetailPane({
             <div className="detail-missing-actions">
               <button type="button" className="btn btn-secondary btn-sm" onClick={onLocate}>
                 <ArrowsClockwiseIcon size={13} />
-                {t("locate")}
+                {t("detail.locate")}
               </button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={onRecheckPath}>
                 <ArrowCounterClockwiseIcon size={13} />
-                {t("recheckPath")}
+                {t("detail.recheckPath")}
               </button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={onRemoveMissing}>
-                {t("removeFromLibrary")}
+                {t("detail.removeFromLibrary")}
               </button>
             </div>
           </div>
