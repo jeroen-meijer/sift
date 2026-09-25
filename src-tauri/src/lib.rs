@@ -31,7 +31,9 @@ pub mod perf {
 
 use state::AppState;
 use std::sync::Arc;
+use std::time::Instant;
 
+use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -39,7 +41,12 @@ use tauri::{Manager, WindowEvent};
 // are unrecoverable, so this is the one place that may panic.
 #[allow(clippy::expect_used, clippy::panic, clippy::exit)]
 pub fn run() {
+    crate::profile_log::note_boot();
+    crate::profile_log::milestone("boot.run_enter", "");
+
+    let state_start = Instant::now();
     let app_state = AppState::init().expect("failed to initialize Sift app state");
+    crate::profile_log::event("boot.app_state_init", state_start.elapsed(), "");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -47,10 +54,16 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         .manage(app_state)
         .setup(|app| {
+            let setup_start = Instant::now();
             let handle = app.handle().clone();
             let state = app.state::<AppState>();
             crate::profile_log::init(&state.paths.cache_dir);
+            crate::profile_log::milestone("boot.setup_enter", "");
+
+            let watch_start = Instant::now();
             watch::restart(&handle, &state.watch_shared, &state.watch_guard);
+            crate::profile_log::event("boot.watch_restart", watch_start.elapsed(), "");
+
             // Backfill availability from live metadata, then resume analyze for locals.
             let db = state.db.clone();
             let peaks_dir = state.paths.peaks_dir.clone();
@@ -59,7 +72,7 @@ pub fn run() {
                 .name("sift-avail-backfill".into())
                 .spawn(move || {
                     let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
-                    let start = std::time::Instant::now();
+                    let start = Instant::now();
                     let refresh = crate::samples::refresh_availability_all(&db, Some(&handle))
                         .unwrap_or_default();
                     crate::profile_log::event(
@@ -87,7 +100,34 @@ pub fn run() {
                     }
                     crate::analyze::enqueue_unanalyzed(handle, db, peaks_dir);
                 });
+            // Window starts hidden (tauri.conf visible:false). Frontend shows it once
+            // settings + library stats are known. Failsafe if that never happens.
+            let reveal = app.handle().clone();
+            let _ = std::thread::Builder::new()
+                .name("sift-reveal-failsafe".into())
+                .spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    if let Some(win) = reveal.get_webview_window("main") {
+                        crate::profile_log::milestone("boot.reveal_failsafe", "show after 5s");
+                        let _ = win.show();
+                    }
+                });
+            crate::profile_log::event("boot.setup", setup_start.elapsed(), "");
+            crate::profile_log::milestone("boot.setup_done", "");
             Ok(())
+        })
+        .on_page_load(|webview, payload| {
+            if webview.label() != "main" {
+                return;
+            }
+            match payload.event() {
+                PageLoadEvent::Started => {
+                    crate::profile_log::milestone("boot.page_load_started", payload.url().as_str());
+                }
+                PageLoadEvent::Finished => {
+                    crate::profile_log::milestone("boot.page_load_finished", payload.url().as_str());
+                }
+            }
         })
         .on_window_event(|_window, event| {
             if let WindowEvent::Focused(focused) = event {

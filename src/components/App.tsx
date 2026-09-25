@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding } from "../lib/bindings";
 import {
@@ -14,8 +14,10 @@ import {
 } from "../lib/ipc";
 import { analysisStore, rowChangesStore } from "../lib/liveStores";
 import { invalidateRowPeaks } from "../lib/rowPeaks";
+import { revealMainWindow } from "../lib/revealWindow";
+import { shellMode } from "../lib/shellMode";
 import { useSettings } from "../lib/useSettings";
-import { warmProfile } from "../lib/profile";
+import { bootMark, bootProfiled, warmProfile } from "../lib/profile";
 import { applyTheme } from "../theme";
 import { groupByFolder } from "../lib/askIndex";
 import { AskIndexToast } from "./AskIndexToast";
@@ -53,17 +55,9 @@ export function App() {
   const { t: tl } = useTranslation("library");
   const { settings, set: setSetting, loaded } = useSettings();
 
-  useEffect(() => {
-    if (!loaded) return;
-    applyTheme(settings.theme);
-  }, [loaded, settings.theme]);
-
-  useEffect(() => {
-    void warmProfile();
-  }, []);
-
   const [view, setView] = useState<View>("library");
-  const [stats, setStats] = useState<DbStats>(EMPTY_STATS);
+  /** null until the first db_stats round-trip; do not treat as empty roots. */
+  const [stats, setStats] = useState<DbStats | null>(null);
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [tags, setTags] = useState<TagNode[]>([]);
   const [outputDevices, setOutputDevices] = useState<OutputDevice[]>([]);
@@ -71,14 +65,47 @@ export function App() {
 
   const [askPaths, setAskPaths] = useState<string[]>([]);
 
+  const mode = shellMode(loaded, stats);
+
+  useLayoutEffect(() => {
+    if (!loaded) return;
+    applyTheme(settings.theme);
+    bootMark("fe.theme_applied", settings.theme);
+  }, [loaded, settings.theme]);
+
+  /* Hide-until-ready: window starts with visible:false (tauri.conf). */
+  useLayoutEffect(() => {
+    if (mode === "boot") return;
+    bootMark("fe.ready", `mode=${mode}`);
+    void revealMainWindow();
+  }, [mode]);
+
+  useEffect(() => {
+    void warmProfile();
+  }, []);
+
   const refreshLibrary = useCallback(() => {
-    void Promise.all([ipc.dbStats(), ipc.folderTree(), ipc.listTags()])
+    const t0 = performance.now();
+    void Promise.all([
+      bootProfiled("fe.ipc_db_stats", "", () => ipc.dbStats()),
+      bootProfiled("fe.ipc_folder_tree", "", () => ipc.folderTree()),
+      bootProfiled("fe.ipc_list_tags", "", () => ipc.listTags()),
+    ])
       .then(([nextStats, tree, tagTree]) => {
         setStats(nextStats);
         setFolders(tree);
         setTags(tagTree);
+        bootMark(
+          "fe.library_refresh",
+          `roots=${String(nextStats.roots)} folders=${String(tree.length)} tags=${String(tagTree.length)} span_ms=${(performance.now() - t0).toFixed(1)}`,
+        );
       })
-      .catch(console.error);
+      .catch((err: unknown) => {
+        console.error(err);
+        /* Still leave boot so the window can show (empty or last known). */
+        setStats((prev) => prev ?? EMPTY_STATS);
+        bootMark("fe.library_refresh_failed", "");
+      });
   }, []);
 
   useEffect(() => {
@@ -211,8 +238,8 @@ export function App() {
     [refreshLibrary],
   );
 
-  const isEmpty = stats.roots === 0;
   const askGroups = groupByFolder(askPaths);
+  const liveStats = stats ?? EMPTY_STATS;
 
   return (
     <div className="app-shell">
@@ -225,7 +252,7 @@ export function App() {
         }}
       />
 
-      {isEmpty ? (
+      {mode === "empty" ? (
         <>
           <FirstLaunch
             onAddFolder={addRoot}
@@ -237,11 +264,11 @@ export function App() {
         </>
       ) : null}
 
-      {!isEmpty && loaded ? (
+      {mode === "library" ? (
         <LibraryView
           settings={settings}
           onSettingChange={setSetting}
-          stats={stats}
+          stats={liveStats}
           folders={folders}
           tags={tags}
           refreshToken={refreshToken}
@@ -259,7 +286,7 @@ export function App() {
           settings={settings}
           onChange={setSetting}
           outputDevices={outputDevices}
-          stats={stats}
+          stats={liveStats}
           onClose={() => {
             setView("library");
           }}

@@ -5,6 +5,11 @@
 //! cache dir). Lines go over a channel to one writer thread, so callers (the
 //! main thread, analyze workers) never wait on file I/O. Set
 //! `SIFT_PROFILE_STDERR=1` to also mirror lines to stderr.
+//!
+//! Startup timeline: call [`note_boot`] at process entry, then [`milestone`]
+//! for points since boot (`boot.*`). Span timings use [`event`] / [`time`] as
+//! usual. Marks logged before [`init`] are buffered and flushed when the
+//! writer starts.
 
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -18,6 +23,10 @@ static ENABLED: OnceLock<bool> = OnceLock::new();
 static LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 static TX: OnceLock<Mutex<Sender<String>>> = OnceLock::new();
 static EMITS: OnceLock<Mutex<EmitCounts>> = OnceLock::new();
+/// Process boot clock; set once from [`note_boot`] at `run()` entry.
+static BOOT: OnceLock<Instant> = OnceLock::new();
+/// Lines logged before [`init`] has a writer (`AppState` open, etc.).
+static EARLY: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// How often per-event emit counts are written.
 const EMIT_WINDOW: Duration = Duration::from_secs(10);
@@ -46,6 +55,27 @@ fn resolve_log_path(cache_dir: &Path) -> PathBuf {
         return repo_log;
     }
     cache_dir.join("sift-profile.log")
+}
+
+/// Pin the boot clock. Call at the very start of [`crate::run`].
+pub fn note_boot() {
+    let _ = BOOT.set(Instant::now());
+}
+
+/// Ms since [`note_boot`], if profiling is on and boot was noted.
+pub fn since_boot() -> Option<Duration> {
+    if !enabled() {
+        return None;
+    }
+    BOOT.get().map(Instant::elapsed)
+}
+
+/// Point-in-time mark: `ms` is elapsed since [`note_boot`] (startup timeline).
+pub fn milestone(name: &str, detail: &str) {
+    let Some(elapsed) = since_boot() else {
+        return;
+    };
+    event(name, elapsed, detail);
 }
 
 /// Call once at startup (cache dir from [`crate::paths::AppPaths`]).
@@ -91,7 +121,23 @@ pub fn init(cache_dir: &Path) {
     }
     let _ = LOG_PATH.set(path.clone());
     let _ = TX.set(Mutex::new(tx));
+    // Replay anything measured before the writer existed (e.g. DB open).
+    let early = EARLY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .drain(..)
+        .collect::<Vec<_>>();
+    for line in early {
+        if let Some(lock) = TX.get() {
+            let sender = lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            let _ = sender.send(line);
+        }
+    }
     log_line(&format!("profile session start path={}", path.display()));
+    milestone("boot.profile_writer", "");
     eprintln!("[sift-profile] writing to {}", path.display());
 }
 
@@ -116,13 +162,19 @@ fn log_line(msg: &str) {
     if !enabled() {
         return;
     }
+    let line = format!("{}\t{}\n", now_ms(), msg);
     if let Some(lock) = TX.get() {
         let tx = lock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let _ = tx.send(format!("{}\t{}\n", now_ms(), msg));
+        let _ = tx.send(line);
+        return;
     }
+    EARLY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push(line);
 }
 
 /// Log a named span that already finished.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { mergeColumnWidths } from "./columnWidths";
 import { mergeColumnOrder } from "./columnOrder";
 import { DEFAULT_SETTINGS, ipc, type AppSettings } from "./ipc";
+import { bootMark, bootProfiled } from "./profile";
 
 export interface SettingsStore {
   settings: AppSettings;
@@ -27,13 +28,13 @@ export function useSettings(): SettingsStore {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void ipc
-      .getSettings()
+    void bootProfiled("fe.get_settings", "", () => ipc.getSettings())
       .then((stored) => {
         const merged = { ...DEFAULT_SETTINGS, ...stored };
         merged.column_widths = mergeColumnWidths(stored.column_widths ?? merged.column_widths);
         merged.column_order = mergeColumnOrder(stored.column_order ?? merged.column_order);
         setSettings(merged);
+        bootMark("fe.settings_loaded", `theme=${merged.theme}`);
       })
       .catch(console.error)
       .finally(() => {
