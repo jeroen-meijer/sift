@@ -1,14 +1,9 @@
 <p align="center">
-  <table align="center">
-    <tr>
-      <td valign="middle">
-        <img src="assets/brand/macos-1024.png" width="56" height="56" alt="" />
-      </td>
-      <td valign="middle">
-        <font size="6"><b>Sift</b></font>
-      </td>
-    </tr>
-  </table>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/readme-lockup-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/brand/readme-lockup-light.png">
+    <img src="assets/brand/readme-lockup-dark.png" height="56" alt="Sift" />
+  </picture>
 </p>
 
 <p align="center">
@@ -35,7 +30,7 @@
 
 - 📁 **Browse:** Large local libraries across multiple folders
 - 🎧 **Preview:** Instantly listen to samples while you browse
-- 🔎 **Search:** Name, tags, BPM, key, type, and folder
+- 🔎 **Search:** Name, tags, BPM, key, type, and folder *(⚠️ Work in progress)*
 - 🖱️ **Drag:** Full files or a waveform clip into a DAW
 - 🏷️ **Tag:** Favorite or tag samples, and create custom tags
 - 🎼 **Analyze:** BPM, key, loop/one-shot, suggested tags in the background

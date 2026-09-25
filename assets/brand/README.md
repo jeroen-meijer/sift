@@ -9,6 +9,7 @@ Edit the icon and logo here. The files the app ships are generated into [`src-ta
 | `mark.svg` / `mark-1024.png` | Transparent logo mark |
 | `tile.svg` | Full-bleed square tile (Windows, Linux, `tauri icon` input) |
 | `macos-1024.png` / `macos-1024.svg` | Classic macOS icon: 824 px body on 1024 canvas with shadow |
+| `readme-lockup-dark.png` / `readme-lockup-light.png` | README header lockup (icon + "Sift"); GitHub picks via `prefers-color-scheme` |
 | `AppIcon.icon/` | Icon Composer project (macOS 26 Liquid Glass). Open in Icon Composer to edit |
 | `layers/` | Layer SVGs/PNG used to build or rebuild the Composer project |
 
@@ -40,6 +41,23 @@ rm -rf src-tauri/icons/android src-tauri/icons/ios
 ```
 
 When the macOS inset art changes, re-export a classic `.icns` from Icon Composer (Platform: macOS pre-Tahoe, 1024pt, 1×). For Windows, build a full-bleed `icon.ico` from `tile.svg` or a size set. Do not use `macos-1024.png` for Windows or Linux.
+
+Rebuild the README lockups after the macOS icon or wordmark changes (SF Compact Display Bold, same icon both themes):
+
+```bash
+FONT="/Library/Fonts/SF-Compact-Display-Bold.otf"
+ICON=assets/brand/macos-1024.png
+for pair in "dark:#e9e9ed" "light:#1f2328"; do
+  theme="${pair%%:*}"
+  fill="${pair#*:}"
+  magick -background none \
+    \( "$ICON" -resize 112x112 \) \
+    \( -background none -fill "$fill" -font "$FONT" -pointsize 72 label:'Sift' \) \
+    -gravity center +smush 14 \
+    -strip PNG32:"assets/brand/readme-lockup-$theme.png"
+done
+bunx oxipng -o 3 --strip safe assets/brand/readme-lockup-*.png
+```
 
 ## Do not
 
