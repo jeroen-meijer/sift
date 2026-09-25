@@ -1,10 +1,10 @@
 # Sift - Product Specification
 
-**Version:** 0.3.1  
-**Status:** Q&A paused. Ready for UI design and implementation planning.  
-**Platforms:** macOS, Windows  
-**Users:** Music producers and audio engineers  
-**Reference feel:** ADSR Sample Manager local-library workflows (not the store)  
+**Version:** 0.3.1
+**Status:** Q&A paused. Ready for UI design and implementation planning.
+**Platforms:** macOS, Windows
+**Users:** Music producers and audio engineers
+**Reference feel:** ADSR Sample Manager local-library workflows (not the store)
 **Stack:** Undecided. Assume audio, analysis, and I/O stay fast enough for large local libraries.
 
 Shared reference for design and engineering. States behavior and constraints. Does not prescribe layout, chrome, or visual brand beyond §2.
@@ -332,7 +332,7 @@ Drag origin decides the payload:
 - Safety: Never modify or delete user audio without an explicit confirmed action. Metadata never writes into source files in v1.
 - Privacy: Local-first; no account for core use.
 - Reliability: Crash/force-quit must not corrupt the library index; analysis can resume.
-- v1 quality bar: Complete Must coverage of this SPEC plus the Claude Design surfaces, usable for daily dogfood on your library. Analysis, fuzzy search, and watch edge cases may be imperfect. Ship Must coverage, then tune from dogfood.
+- v1 quality bar: Complete Must coverage of this spec plus the Claude Design surfaces, usable for daily dogfood on your library. Analysis, fuzzy search, and watch edge cases may be imperfect. Ship Must coverage, then tune from dogfood.
 - Implementation bias: Prefer maintained Rust crates and existing React packages when they fit (audio I/O, decode, FS watch, SQLite, BPM/key, table virtualization, i18n). Custom code for product glue and UI chrome; avoid reimplementing OS integration or DSP that a crate already does well.
 
 ---

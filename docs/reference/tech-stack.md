@@ -168,7 +168,7 @@ Rules:
 - Auto-tags v1: filename/path token → [default-taxonomy.md](default-taxonomy.md). BPM/key via crate (`stratum-dsp` first spike); unknown/low-confidence OK.
 - Claude Design exports (Project HTML zip + screens) are the visual target. SPEC wins when behavior conflicts.
 - v1 bar: complete Must surfaces you can dogfood; imperfect analysis/search/watch edges are acceptable until you tune.
-- Icons: mock/design assets fine until a real brand pass.
+- App icon / logo: [`assets/brand/`](../../assets/brand/README.md); generated platform files in `src-tauri/icons/`.
 - Delivery: build until the Must surfaces run end to end; tune after you dogfood.
 
 ## Spike before locking (1-2 days)

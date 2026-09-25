@@ -14,6 +14,8 @@ How Sift docs are laid out, named, and maintained. Agents and humans follow this
 | [plans/](plans/) | Historical v1 phase plan |
 | [design/](design/) | Claude Design export and visual gaps |
 
+App icon and logo sources: [`assets/brand/`](../assets/brand/README.md). Generated platform icons: `src-tauri/icons/`.
+
 Root of the repo keeps only `README.md` (users), `AGENTS.md` (agents/contributors), and `CHANGELOG.md`. Do not add other root markdown except `LICENSE`, `CONTRIBUTING.md`, or `SECURITY.md` if those files are added later.
 
 ## Naming

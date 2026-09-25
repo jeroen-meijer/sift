@@ -1,16 +1,28 @@
-# Sift
-
 <p align="center">
-  <img src="assets/screenshot.png" alt="Sift" style="max-height: 550px; width: auto;" />
+  <table align="center">
+    <tr>
+      <td valign="middle">
+        <img src="assets/brand/macos-1024.png" width="56" height="56" alt="" />
+      </td>
+      <td valign="middle">
+        <font size="6"><b>Sift</b></font>
+      </td>
+    </tr>
+  </table>
 </p>
 
 <p align="center">
-  <strong>Local desktop sample manager for producers and audio engineers.<br/>Browse, play, tag, and drag samples into your DAW. macOS and Windows.</strong>
+  Local desktop sample manager for producers and audio engineers.<br/>
+  Browse, play, tag, and drag samples and clips into your DAW.
 </p>
 
 <p align="center">
   <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_macOS_aarch64.dmg"><img alt="Download (Apple Silicon)" src="https://img.shields.io/badge/Download-macOS%20(Apple%20Silicon)-black?style=for-the-badge&logo=apple&logoColor=white" /></a>
   <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_Windows_x64-setup.exe"><img alt="Download" src="https://img.shields.io/badge/Download-Windows-blue?style=for-the-badge&logo=windows&logoColor=white" /></a>
+</p>
+
+<p align="center">
+  <img src="assets/screenshot.png" alt="Sift screenshot" width="900" />
 </p>
 
 > [!WARNING]

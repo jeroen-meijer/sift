@@ -78,15 +78,46 @@ theme key for crossover Hz.** Docs never state the cut frequencies.
 - "Butterworth" in the binary is a **Syphon license** (Tom Butterworth), not a filter hint.
 - Weak signal: `2π·200/44100` as `f64` appears twice (could be coincidence).
 
-**Conclusion:** MiniMeters Multiband is the same *family* as Sift (3-band energy
-→ theme RGB), but exact crossovers are opaque without runtime measurement.
-Do not assume they match Sift's 200/1500/6000.
+**Conclusion (pre-probe):** MiniMeters Multiband is the same *family* as Sift
+(band energy → theme RGB), but exact crossovers needed a runtime measure.
 
 ### Color Map vs "pretty gaps"
 
 Quieter gaps looking different is often **Color Map** (amp→gradient), not
 Multiband. If the user sees low=red and high=blue/other with steady level,
 that is Multiband.
+
+### Probe results (2026-09-25)
+
+Played `band-probe.wav` into MiniMeters Multiband (default-ish RGB theme).
+Click-count markers identify each pure tone.
+
+| Clicks | Hz | Observed Multiband color | Band read |
+| --- | --- | --- | --- |
+| 1 | 60 | deep red / maroon | Low |
+| 2 | 120 | orange-red | Low (soft lean toward mid) |
+| 3 | 200 | yellow-orange | Low+Mid blend |
+| 4 | 400 | solid lime green | Mid |
+| 5 | 800 | solid green | Mid |
+| 6 | 1500 | cyan | Mid+High blend |
+| 7+ | 2500…12k | solid blue | High |
+
+Chirp (waveform strip): continuous soft rainbow **red → orange → yellow →
+green → cyan → blue** as frequency rises. That is soft 3-band Multiband
+mixing, not four discrete Sift hues.
+
+Spectrogram panel in the same capture uses a separate continuous freq→hue
+colormap (purple→red→yellow). Do not confuse that with Multiband.
+
+**Inferred MiniMeters cuts (soft, ±100 Hz):**
+
+- Low ↔ Mid ≈ **200–250 Hz**
+- Mid ↔ High ≈ **1.5–2 kHz**
+
+Matches Aurora defaults (250 / 2000) and DJ folklore (200 / 2000) much better
+than Sift’s four-band 200 / 1500 / 6000. MiniMeters stays at **three** bands;
+Sift’s extra high-mid/treble split is what made pads differ, but it will not
+match MiniMeters’ blue-by-~2.5 kHz behavior.
 
 ## Other apps / libraries
 
@@ -104,30 +135,52 @@ or amp-colormaps are alternate products, not the Multiband look.
 
 ## Calibration fixture
 
-`testdata/spectral-fixtures/band-probe.wav` (~33 s) + `band-probe.md`.
+`testdata/spectral-fixtures/band-probe.wav` (~33 s, stereo 44.1 kHz).
 
-Stepped pure tones (60…12 kHz) with click-count markers, then a 40→16 kHz
-chirp. Play into MiniMeters Multiband and screenshot: color flips between
-adjacent tones ≈ their crossovers. Same file in Sift checks four-band hue
-steps (green→cyan around 1.5 kHz, cyan→violet around 6 kHz).
+Stepped pure tones with N short 2 kHz clicks before each segment (count the
+clicks to know which tone), then a 40→16 kHz chirp:
+
+| After clicks | Hz | Intent |
+| --- | --- | --- |
+| 1 | 60 | sub |
+| 2 | 120 | kick-ish |
+| 3 | 200 | low crossover probe |
+| 4 | 400 | low-mid |
+| 5 | 800 | body |
+| 6 | 1500 | mid crossover probe |
+| 7 | 2500 | presence |
+| 8 | 4000 | high-mid |
+| 9 | 6000 | high crossover probe |
+| 10 | 9000 | air |
+| 11 | 12000 | top |
+| end | chirp 40→16k | continuous sweep |
+
+**Replay in MiniMeters:** Waveform Color Mode → Multiband (not Color Map).
+Play through the device MiniMeters is listening to (or MiniMeters Server in a
+DAW). Screenshot or screen-record while it plays; optionally open the same
+file in Sift and compare. Pure tones should read as one solid band color;
+where color flips between adjacent tones ≈ MiniMeters' crossovers.
+
+Probe completed 2026-09-25 (see MiniMeters section above). Sift four-band cuts
+today: **200 / 1500 / 6000 Hz**.
 
 ## Options considered (and status)
 
 | Option | Status |
 | --- | --- |
 | Soften winner-take-more | Tried (1.75); pads unchanged, grooves uglier → **reverted** |
-| Four bands (split mid) | **Shipped on this branch** |
-| Five bands | Possible; more theme/tune cost; try after dogfooding four |
+| Four bands (split mid) | **Shipped**; pads look better in Sift |
+| Align cuts with MiniMeters (~250 / 2k, 3-band) | Would match MM chirp; would likely flatten pads again |
+| Keep four bands, retune edges toward MM mid/high | Possible compromise (e.g. 250 / 1200 / 2500) |
 | Spectral centroid → hue | Stronger within-band motion; different visual language |
 | Amp Color Map mode | Optional second mode; good for rhythm, not timbre |
-| Retune 3 cuts only | Trades amen vs pads; four bands is cleaner |
 
 ## Suggested next steps
 
-1. Dogfood pads + drums after peakfiles rebuild (status bar should show work).
-2. Play `band-probe.wav` in MiniMeters Multiband; note flip points; optionally
-   retune Sift edges toward measured MiniMeters cuts if we want closer parity.
-3. If pads still feel flat within a file, consider centroid tint *inside* the
-   winning band, or a fifth edge (~800 Hz), before another soft-blend pass.
+1. Decide product goal: MiniMeters parity (3-band ~250/2k) vs pad differentiation
+   (keep four bands). Those pull in opposite directions.
+2. If keeping four bands: optional retune of the mid/high edges after more
+   dogfood; do not chase MM’s early blue unless we drop a band.
+3. Centroid tint inside the winning band if within-file pad motion still feels flat.
 4. Keep Multiband and Color Map as separate mental models; do not mix amp into
    spectral hue by default.

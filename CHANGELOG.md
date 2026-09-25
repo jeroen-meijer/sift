@@ -1,5 +1,7 @@
 ## Upcoming
 
+- feat(app): new app icon on macOS and Windows (Liquid Glass on macOS 26)
+
 ## 0.3.2
 
 - feat(app): Check for updates in Settings → About, and offer install on launch when a newer release is out
