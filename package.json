@@ -2,6 +2,7 @@
   "name": "sift",
   "private": true,
   "version": "0.3.2",
+  "license": "MIT",
   "type": "module",
   "packageManager": "bun@1.4.2",
   "scripts": {
