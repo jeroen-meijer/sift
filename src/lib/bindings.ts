@@ -9,10 +9,16 @@
 import { hotkeyId, type ChordEvent } from './hotkey';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgent);
+const IS_WINDOWS = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
 
 /** True on macOS / iOS. Used for Finder vs Explorer copy and similar. */
 export function isApplePlatform(): boolean {
   return IS_MAC;
+}
+
+/** True on Windows. Used for custom caption buttons (no Overlay title bar). */
+export function isWindowsPlatform(): boolean {
+  return IS_WINDOWS;
 }
 
 /** ⌘ on Apple, "Ctrl" elsewhere. */

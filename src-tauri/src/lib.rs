@@ -62,6 +62,14 @@ pub fn run() {
             crate::profile_log::init(&state.paths.cache_dir);
             crate::profile_log::milestone("boot.setup_enter", "");
 
+            // macOS keeps Overlay + native traffic lights. Windows Overlay falls
+            // back to a system title bar, so drop decorations and draw caption
+            // buttons in the webview title bar (window still hidden until reveal).
+            #[cfg(windows)]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_decorations(false);
+            }
+
             // Recursive watches stay off the setup path (same as add/remove root).
             watch::restart_in_background(
                 handle.clone(),

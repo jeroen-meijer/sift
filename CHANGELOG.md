@@ -1,6 +1,7 @@
 ## Upcoming
 
 - feat(app): new app icon on macOS and Windows (Liquid Glass on macOS 26)
+- feat(ui): on Windows, window controls sit in the dark title bar with Settings and Tags (no separate system chrome)
 
 ## 0.3.2
 

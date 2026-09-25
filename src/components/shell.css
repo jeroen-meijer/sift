@@ -17,7 +17,8 @@
 .titlebar {
   height: var(--titlebar-height);
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 9px;
   padding: 0 14px;
@@ -27,18 +28,26 @@
   cursor: default;
 }
 
+.titlebar--windows {
+  padding-right: 0;
+}
+
 [data-tauri-drag-region] {
   app-region: drag;
 }
 
-.titlebar-spacer,
-.titlebar-actions {
+.titlebar-leading {
+  justify-self: start;
+  min-height: 100%;
+}
+
+.titlebar-spacer {
   width: 74px;
-  flex: none;
+  height: 100%;
 }
 
 .titlebar-title {
-  flex: 1;
+  justify-self: center;
   text-align: center;
   font-size: 12px;
   letter-spacing: 0.01em;
@@ -46,10 +55,41 @@
 }
 
 .titlebar-actions {
+  justify-self: end;
   display: flex;
+  align-items: center;
   gap: 4px;
-  justify-content: flex-end;
+  height: 100%;
   app-region: no-drag;
+}
+
+.titlebar-caption {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  margin-left: 6px;
+}
+
+.titlebar-caption-btn {
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+}
+
+.titlebar-caption-btn:hover {
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  color: var(--color-text);
+}
+
+.titlebar-caption-close:hover {
+  background: #e81123;
+  color: #fff;
 }
 
 /* status bar */

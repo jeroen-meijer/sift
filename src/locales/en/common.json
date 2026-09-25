@@ -10,7 +10,11 @@
     "preferences": "Preferences",
     "settings": "Settings",
     "tags": "Tags",
-    "tagManagement": "Tag management"
+    "tagManagement": "Tag management",
+    "windowControls": "Window controls",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore"
   },
   "omni": {
     "placeholder": "Search names, or add folder / tag / BPM / key filters",
