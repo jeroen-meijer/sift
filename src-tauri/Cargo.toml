@@ -79,7 +79,7 @@ strip = true
 unsafe_code = "deny"
 
 [lints.clippy]
-# https://www.namtao.com/rust-toolkit-2026/ (same deny set as chat-search)
+# https://www.namtao.com/rust-toolkit-2026/
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 # App crate: Tauri lib is not a published public API.

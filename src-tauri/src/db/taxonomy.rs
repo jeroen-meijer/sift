@@ -5,7 +5,7 @@ use crate::db::models::NewTag;
 use crate::db::schema::tags::dsl as tags_dsl;
 use crate::error::{AppError, AppResult};
 
-/// Default taxonomy from `docs/DEFAULT_TAXONOMY.md`.
+/// Default taxonomy from `docs/reference/default-taxonomy.md`.
 const TAXONOMY: &[(&str, Option<&str>)] = &[
     ("Drums", Some("#8B7CF6")),
     ("Drums/Kick", None),

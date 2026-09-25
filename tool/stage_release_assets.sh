@@ -7,7 +7,12 @@
 #
 # bundle-dir is usually src-tauri/target/release/bundle
 #
-# latest.json uses the NSIS *-setup.exe on Windows. MSI is staged for hand install.
+# Tauri's default versioned names stay for the updater (latest.json + .sig).
+# Hand installers also get a stable alias with OS in the name so README can use
+#   …/releases/latest/download/Sift_macOS_aarch64.dmg
+#   …/releases/latest/download/Sift_Windows_x64-setup.exe
+# (same idea as Spacedrive's unversioned darwin/windows assets, or a second
+# upload beside tauri-action's versioned names).
 
 set -eu
 
@@ -44,6 +49,40 @@ if [ -d "$BUNDLE/nsis" ]; then
         cp "$path" "$OUT/"
       done
 fi
+
+# Stable hand-install names: drop _x.y.z_, insert macOS_ or Windows_ after product.
+# Sift_0.3.1_aarch64.dmg       → Sift_macOS_aarch64.dmg
+# Sift_0.3.1_x64-setup.exe     → Sift_Windows_x64-setup.exe
+# Sift_0.3.1_x64_en-US.msi     → Sift_Windows_x64_en-US.msi
+stage_stable_aliases() {
+  for path in "$OUT"/*; do
+    [ -f "$path" ] || continue
+    name=$(basename "$path")
+    case "$name" in
+      *.app.tar.gz | *.sig) continue ;;
+      *.dmg) os="macOS" ;;
+      *-setup.exe | *.msi) os="Windows" ;;
+      *) continue ;;
+    esac
+
+    # product_x.y.z_rest → product + rest
+    product=$(printf '%s\n' "$name" | sed -E 's/^(.+)_[0-9]+\.[0-9]+\.[0-9]+_.+$/\1/')
+    rest=$(printf '%s\n' "$name" | sed -E 's/^.+_[0-9]+\.[0-9]+\.[0-9]+_(.+)$/\1/')
+    if [ "$product" = "$name" ] || [ "$rest" = "$name" ] || [ -z "$product" ] || [ -z "$rest" ]; then
+      continue
+    fi
+
+    stable="${product}_${os}_${rest}"
+    if [ -e "$OUT/$stable" ]; then
+      echo "error: stable alias already exists: $stable (from $name)" >&2
+      exit 1
+    fi
+    cp "$path" "$OUT/$stable"
+    echo "stable alias: $name -> $stable"
+  done
+}
+
+stage_stable_aliases
 
 if [ -z "$(ls -A "$OUT" 2>/dev/null)" ]; then
   echo "error: no release assets staged from $BUNDLE" >&2

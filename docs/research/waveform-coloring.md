@@ -1,6 +1,6 @@
 # Waveform coloring research
 
-Notes from 2026-09-23 while iterating Sift’s spectral row/detail waves
+Notes from 2026-09-23 while iterating Sift's spectral row/detail waves
 (four-band bump on `feat/four-band-waveforms`). Goal: understand why pads
 looked all-green, how MiniMeters and DJ apps color waves, and what to try next.
 
@@ -11,8 +11,8 @@ Peakfile **v7** stores four u8 weights per bucket from moodbar STFT energy:
 | Band | Hz range | Theme token | Default (Nocturne) |
 | --- | --- | --- | --- |
 | Bass | &lt; 200 | `--color-wave-bass` | pink `#ff3d8a` |
-| Low-mid | 200–1500 | `--color-wave-low-mid` (legacy `--color-wave-mid`) | green `#2ee89a` |
-| High-mid | 1500–6000 | `--color-wave-high-mid` | cyan `#40c8e8` |
+| Low-mid | 200-1500 | `--color-wave-low-mid` (legacy `--color-wave-mid`) | green `#2ee89a` |
+| High-mid | 1500-6000 | `--color-wave-high-mid` | cyan `#40c8e8` |
 | Treble | &gt; 6000 | `--color-wave-treble` | violet `#8b7cff` |
 
 UI blend (`blendSpectralRgb`): normalize band shares, raise to **emphasis 3.5**
@@ -20,7 +20,7 @@ UI blend (`blendSpectralRgb`): normalize band shares, raise to **emphasis 3.5**
 encode loudness.
 
 **Why FNF pads were all green (3-band era):** almost all energy sat in the old
-single mid band (200 Hz–6 kHz). Softening emphasis to 1.75 did not help pads
+single mid band (200 Hz-6 kHz). Softening emphasis to 1.75 did not help pads
 and made mixed grooves (pink↔teal chatter) look worse; reverted to 3.5.
 
 **Verified after the mid split** (same pad folder):
@@ -46,11 +46,11 @@ arm64 slice probed with `strings` / float scans; themes under
 
 From in-app help strings and [minimeters.app](https://minimeters.app/):
 
-1. **Solid** — one color (`Waveform color is solid`).
-2. **Multiband** — “balance between Low, Mid, and High bands.” Help:
-   “Audio will be split into 3 bands. Low (Red), Mid (Green), High (Blue).
-   Some themes select custom colors.”
-3. **Color Map** — “based on overall volume, mapped to the selected ColorMap.”
+1. **Solid** - one color (`Waveform color is solid`).
+2. **Multiband** - "balance between Low, Mid, and High bands." Help:
+   "Audio will be split into 3 bands. Low (Red), Mid (Green), High (Blue).
+   Some themes select custom colors."
+3. **Color Map** - "based on overall volume, mapped to the selected ColorMap."
 
 Peak History overlay (since 0.7.0): RMS of the same three bands
 (Fast 1024 / Slow 16384 samples); Red/Green/Blue = Low/Mid/High.
@@ -75,14 +75,14 @@ theme key for crossover Hz.** Docs never state the cut frequencies.
 
 - No adjacent `f32`/`f64`/`i32` pairs for common DJ cuts (200/2000, 250/2000, …).
 - No strings `crossover`, `lowpass`, `highpass`, `biquad`.
-- “Butterworth” in the binary is a **Syphon license** (Tom Butterworth), not a filter hint.
+- "Butterworth" in the binary is a **Syphon license** (Tom Butterworth), not a filter hint.
 - Weak signal: `2π·200/44100` as `f64` appears twice (could be coincidence).
 
 **Conclusion:** MiniMeters Multiband is the same *family* as Sift (3-band energy
 → theme RGB), but exact crossovers are opaque without runtime measurement.
-Do not assume they match Sift’s 200/1500/6000.
+Do not assume they match Sift's 200/1500/6000.
 
-### Color Map vs “pretty gaps”
+### Color Map vs "pretty gaps"
 
 Quieter gaps looking different is often **Color Map** (amp→gradient), not
 Multiband. If the user sees low=red and high=blue/other with steady level,
@@ -98,7 +98,7 @@ that is Multiband.
 | **libdjwaveform** | STFT + **continuous frequency→color gradient** (not 3 buckets) | Serato-like look via gradient points |
 | **moodbar** (Sift backend) | N-band STFT energy → Classic RGB or themed blend | Sift drives `band_edges_hz` |
 
-Industry consensus for “DJ colored waveforms”: **three bands, RGB convention**,
+Industry consensus for "DJ colored waveforms": **three bands, RGB convention**,
 soft additive mix of band energies into one stroke color. Continuous centroid
 or amp-colormaps are alternate products, not the Multiband look.
 

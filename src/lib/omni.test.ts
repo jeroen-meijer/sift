@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { folderChipLabel } from "./omni";
 
 const EXAMPLE = {
-  path: "/Users/jeroen/Projects/other/sift/example_samples",
+  path: "/tmp/example_samples",
   name: "example_samples",
 };
 const SAMPLES = { path: "/Volumes/Samples", name: "Samples" };
