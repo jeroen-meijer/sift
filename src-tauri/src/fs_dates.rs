@@ -107,7 +107,7 @@ pub fn date_added_ms(path: &Path) -> Option<i64> {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn date_added_ms(_path: &Path) -> Option<i64> {
+pub const fn date_added_ms(_path: &Path) -> Option<i64> {
     None
 }
 
