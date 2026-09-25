@@ -1,5 +1,6 @@
 ## Upcoming
 
+- feat(app): Check for updates in Settings → About, and offer install on launch when a newer release is out
 - fix(ui): wait for theme and library roots before showing the window, so launch no longer flashes white or a fake first-run screen
 - perf(boot): improve startup time by starting folder watch in the background and loading the sidebar after stats (locally ~70% faster, now ~0.7s)
 

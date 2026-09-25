@@ -20,7 +20,7 @@ Local sample manager (Tauri 2 + React). Product rules: [SPEC.md](SPEC.md). Stack
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
 | Package manager | Bun |
 | CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest); Bun+Rust caches; publish on macOS/Windows |
-| Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (macOS + Windows) |
+| Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (installers + updater + `latest.json`) |
 
 ## Commands
 
@@ -56,10 +56,13 @@ bun run version:set 0.2.0
 - **After a release:** only then does a later bugfix get its own Upcoming line.
 - Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn (overscan tweaks, temporary flags, profiling hooks) unless it changes what users notice.
 - Run `/humanize` (or match that skill) on every new or edited Upcoming bullet before you commit. Keep conventional prefixes; the rest should read like a short product note, not a session diary.
-- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers + GitHub release + tag).
+- Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release** (macOS + Windows installers, updater payloads, `latest.json`, GitHub release + tag).
 - Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.
 - Retry: Actions → **Publish Release** → Run workflow with the version.
-- macOS signing/notarization is optional (unsigned if Apple secrets are absent).
+- macOS Apple signing/notarization is optional (unsigned if Apple secrets are absent).
+- Updater signing is required on Publish Release. Set repo secrets `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Put the public key in `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`. Do not commit the private key. For local signed builds, export the same vars (they are also in `~/Dropbox/.shared_configs/vars.env`).
+- Release asset helpers: `tool/stage_release_assets.sh` and `tool/finish_github_release.ts`. The Windows updater entry is the NSIS `*-setup.exe`. MSI is for hand installs only. Ship `latest.json` plus the `.sig` / updater bundles or the release is incomplete.
+- App update endpoint: `https://github.com/jeroen-meijer/sift/releases/latest/download/latest.json`. That URL returns 404 while the repo is private, so in-app updates only work after the repo is public. Dev builds skip the check.
 
 ## Perf / profiling
 

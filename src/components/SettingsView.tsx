@@ -1,5 +1,6 @@
 import {
   FoldersIcon,
+  InfoIcon,
   KeyboardIcon,
   PaintBucketIcon,
   PlayCircleIcon,
@@ -7,6 +8,7 @@ import {
   PulseIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import { getVersion } from "@tauri-apps/api/app";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, SHORTCUT_ROWS, matchesBinding } from "../lib/bindings";
@@ -22,6 +24,12 @@ import {
   type WaveformView as WaveformMode,
 } from "../lib/ipc";
 import {
+  checkForAppUpdate,
+  installAvailableUpdate,
+  type AvailableUpdate,
+  type UpdateStatus,
+} from "../lib/updates";
+import {
   THEMES,
   THEME_INFO,
   normalizeThemeId,
@@ -35,9 +43,16 @@ import { BpmRangePicker } from "./BpmRangePicker";
 import { ReanalyzeLibraryDialog } from "./dialogs/ReanalyzeLibraryDialog";
 import { ThemeWavePreview } from "./ThemeWavePreview";
 
-type SectionId = "appearance" | "playback" | "library" | "analysis" | "shortcuts";
+type SectionId = "appearance" | "playback" | "library" | "analysis" | "shortcuts" | "about";
 
-const SECTIONS: SectionId[] = ["appearance", "playback", "library", "analysis", "shortcuts"];
+const SECTIONS: SectionId[] = [
+  "appearance",
+  "playback",
+  "library",
+  "analysis",
+  "shortcuts",
+  "about",
+];
 
 const THEME_NAME_KEY: Record<ThemeId, string> = {
   nocturne: "themeNocturne",
@@ -102,6 +117,10 @@ export function SettingsView({
   const [spliceStatus, setSpliceStatus] = useState<SpliceCatalogStatus | null>(null);
   const [confirmReanalyze, setConfirmReanalyze] = useState(false);
   const [refreshingMeta, setRefreshingMeta] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
+  const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   /** Ignore scroll-spy briefly after a nav click so short last sections stay selected. */
   const pinned = useRef(false);
@@ -127,6 +146,50 @@ export function SettingsView({
   useEffect(() => {
     loadSpliceStatus();
   }, [loadSpliceStatus, settings.splice_enabled]);
+
+  useEffect(() => {
+    void getVersion()
+      .then(setAppVersion)
+      .catch((err: unknown) => {
+        console.error(err);
+        setAppVersion(null);
+      });
+  }, []);
+
+  const runUpdateCheck = useCallback(() => {
+    setUpdateStatus("checking");
+    setUpdateError(null);
+    setAvailableUpdate(null);
+    void checkForAppUpdate().then((outcome) => {
+      switch (outcome.kind) {
+        case "skipped":
+          setUpdateStatus("idle");
+          setUpdateError(t("updateSkippedDev"));
+          break;
+        case "upToDate":
+          setUpdateStatus("upToDate");
+          break;
+        case "available":
+          setAvailableUpdate(outcome.available);
+          setUpdateStatus("available");
+          break;
+        case "error":
+          setUpdateStatus("error");
+          setUpdateError(outcome.message);
+          break;
+      }
+    });
+  }, [t]);
+
+  const runUpdateInstall = useCallback(() => {
+    if (availableUpdate == null) return;
+    setUpdateStatus("downloading");
+    setUpdateError(null);
+    void installAvailableUpdate(availableUpdate).catch((err: unknown) => {
+      setUpdateStatus("error");
+      setUpdateError(err instanceof Error ? err.message : String(err));
+    });
+  }, [availableUpdate]);
 
   useEffect(() => {
     if (!recording) return;
@@ -200,6 +263,7 @@ export function SettingsView({
     { id: "library", label: t("navLibrary"), icon: <FoldersIcon size={15} /> },
     { id: "analysis", label: t("navAnalysis"), icon: <PulseIcon size={15} /> },
     { id: "shortcuts", label: t("navShortcuts"), icon: <KeyboardIcon size={15} /> },
+    { id: "about", label: t("navAbout"), icon: <InfoIcon size={15} /> },
   ];
 
   const addPattern = () => {
@@ -579,11 +643,54 @@ export function SettingsView({
                   </div>
                 </div>
               </section>
-            </div>
-          </div>
 
-          <div className="full-view-footer">
-            <span className="full-view-footer-note">{t("changesApply")}</span>
+              <section id="settings-about" className="rule">
+                <div className="kicker settings-section-label">{t("navAbout")}</div>
+                <Row title={t("aboutVersion")} hint={t("aboutVersionHint")}>
+                  <span className="mono settings-about-version">
+                    {appVersion ?? "…"}
+                  </span>
+                </Row>
+                <Row
+                  title={t("checkForUpdates")}
+                  {...(updateStatus === "upToDate"
+                    ? { hint: t("updateUpToDate") }
+                    : updateStatus === "available" && availableUpdate != null
+                      ? {
+                          hint: t("updateAvailableStatus", {
+                            version: availableUpdate.version,
+                          }),
+                        }
+                      : updateStatus === "downloading"
+                        ? { hint: t("updateDownloading") }
+                        : updateStatus === "error"
+                          ? { hint: updateError ?? t("updateError") }
+                          : updateError != null && updateStatus === "idle"
+                            ? { hint: updateError }
+                            : {})}
+                >
+                  {updateStatus === "available" && availableUpdate != null ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={false}
+                      onClick={runUpdateInstall}
+                    >
+                      {t("updateInstall")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={updateStatus === "checking" || updateStatus === "downloading"}
+                      onClick={runUpdateCheck}
+                    >
+                      {updateStatus === "checking" ? t("updateChecking") : t("checkForUpdates")}
+                    </button>
+                  )}
+                </Row>
+              </section>
+            </div>
           </div>
         </div>
       </div>

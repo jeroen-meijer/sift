@@ -58,7 +58,7 @@ Watch Clippy: `cd src-tauri && bacon clippy`.
 Version lives in `package.json` (`bun run version:sync` / `version:set`). Keep `CHANGELOG.md` → `## Upcoming` as a short user-facing draft for the next release (merge unshipped work; do not append fix-of-unshipped-feat noise).
 
 ```bash
-./tool/prepare_release.sh 0.2.0   # on clean main: bump, push, triggers macOS + Windows installers
+./tool/prepare_release.sh 0.2.0   # on clean main: bump, push, triggers installers + in-app update artifacts
 ```
 
-Optional PR path: `./tool/prepare_release.sh 0.2.0 --pr`. Retry a failed publish from Actions → **Publish Release**. Apple signing secrets are optional.
+Optional PR path: `./tool/prepare_release.sh 0.2.0 --pr`. Retry a failed publish from Actions → **Publish Release**. Apple signing secrets are optional. Updater signing (`TAURI_SIGNING_PRIVATE_KEY`) is required. In-app updates need the repo public so `latest.json` downloads without auth.
