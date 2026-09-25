@@ -51,7 +51,7 @@ export function omniHasQuery(value: OmniState): boolean {
 
 /**
  * Chip label for a folder filter: root folder name + path under it, matching
- * the sidebar (e.g. `example_samples/limbowrld_drumkit/808s`).
+ * the sidebar (e.g. `Library/Drums/808s`).
  */
 export function folderChipLabel(
   folderPath: string,

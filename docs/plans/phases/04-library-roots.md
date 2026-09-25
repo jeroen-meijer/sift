@@ -30,7 +30,7 @@ User can add and remove library roots (index only; disk untouched) and see them 
 
 ## Acceptance
 
-- Add `example_samples` (or a subfolder) as a root; it appears in sidebar
+- Add a local sample folder as a root; it appears in sidebar
 - Remove root after confirm; files on disk remain; DB rows for that root gone
 - Relaunch restores roots
 

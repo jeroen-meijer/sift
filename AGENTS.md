@@ -41,6 +41,9 @@ Obey [docs/README.md](docs/README.md) for layout, kebab-case naming, no frontmat
 ## Commands
 
 ```bash
+# Before push / PR (same gates as CI on this machine)
+bun run preflight
+
 # Rust (from src-tauri/)
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings
@@ -65,6 +68,10 @@ bun run version:set 0.2.0
 
 Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`. Watch Clippy: `cd src-tauri && bacon clippy`.
 
+`.vscode/settings.json` runs rust-analyzer Clippy with `-D warnings` and rustfmt on save. Reload the window if diagnostics look stale.
+
+`bun run preflight` runs the same checks as CI on this machine (fmt, clippy, nextest, eslint, tsc, vitest). Run it before push when you changed Rust, frontend, or CI config. It does not compile `cfg(not(target_os = "macos"))` code, so keep those stubs tiny (`const fn`, no real logic). CI still catches ubuntu-only Clippy.
+
 App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 
 ## Changelog / release
@@ -81,7 +88,7 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 - Retry: Actions → **Publish Release** → Run workflow with the version.
 - macOS Apple signing/notarization is optional (unsigned if Apple secrets are absent).
 - Updater signing is required on Publish Release. Set repo secrets `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Put the public key in `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`. Do not commit the private key. For local signed builds, export the same env vars from your secrets manager.
-- Release asset helpers: `tool/stage_release_assets.sh` and `tool/finish_github_release.ts`. Keep Tauri’s versioned names for the updater (`*_x.y.z_*-setup.exe`, `.app.tar.gz` + `.sig`). Staging also uploads stable hand-install aliases with OS in the name (`Sift_macOS_aarch64.dmg`, `Sift_Windows_x64-setup.exe`) for README `/releases/latest/download/…` links. Ship `latest.json` plus the `.sig` / updater bundles or the release is incomplete.
+- Release asset helpers: `tool/stage_release_assets.sh` and `tool/finish_github_release.ts`. Keep Tauri's versioned names for the updater (`*_x.y.z_*-setup.exe`, `.app.tar.gz` + `.sig`). Staging also uploads stable hand-install copies with OS in the name (`Sift_macOS_aarch64.dmg`, `Sift_Windows_x64-setup.exe`) so README can use `/releases/latest/download/…` without rewriting URLs each release. Ship `latest.json` plus the `.sig` / updater bundles or the release is incomplete.
 - App update endpoint: `https://github.com/jeroen-meijer/sift/releases/latest/download/latest.json`. That URL returns 404 while the repo is private, so in-app updates only work after the repo is public. Dev builds skip the check.
 - README download badges: `…/latest/download/Sift_macOS_aarch64.dmg` and `…/latest/download/Sift_Windows_x64-setup.exe`.
 
@@ -98,5 +105,6 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 - Prefer crates / React packages over custom DSP/OS code.
 - Diesel for DB; no hand-written SQL migrations outside `src-tauri/migrations/`.
 - Integer boundary: `crate::ids` helpers, not bare `as` (clippy `as_conversions` deny).
+- Before push: `bun run preflight` when Rust, frontend, or CI-related files changed. Do not push a "fix CI" commit for fmt/clippy/eslint/tsc failures that preflight would have caught.
 - No commit/push unless asked (except when the user explicitly requests autonomous delivery).
 - No AI-tool credit in commits, PRs, or docs.

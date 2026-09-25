@@ -7,12 +7,10 @@
 #
 # bundle-dir is usually src-tauri/target/release/bundle
 #
-# Tauri's default versioned names stay for the updater (latest.json + .sig).
-# Hand installers also get a stable alias with OS in the name so README can use
+# Keep Tauri's versioned names for the updater (latest.json + .sig). Also copy
+# hand installers under stable names so README can link forever:
 #   …/releases/latest/download/Sift_macOS_aarch64.dmg
 #   …/releases/latest/download/Sift_Windows_x64-setup.exe
-# (same idea as Spacedrive's unversioned darwin/windows assets, or a second
-# upload beside tauri-action's versioned names).
 
 set -eu
 
@@ -54,7 +52,7 @@ fi
 # Sift_0.3.1_aarch64.dmg       → Sift_macOS_aarch64.dmg
 # Sift_0.3.1_x64-setup.exe     → Sift_Windows_x64-setup.exe
 # Sift_0.3.1_x64_en-US.msi     → Sift_Windows_x64_en-US.msi
-stage_stable_aliases() {
+stage_stable_copies() {
   for path in "$OUT"/*; do
     [ -f "$path" ] || continue
     name=$(basename "$path")
@@ -74,15 +72,15 @@ stage_stable_aliases() {
 
     stable="${product}_${os}_${rest}"
     if [ -e "$OUT/$stable" ]; then
-      echo "error: stable alias already exists: $stable (from $name)" >&2
+      echo "error: stable name already exists: $stable (from $name)" >&2
       exit 1
     fi
     cp "$path" "$OUT/$stable"
-    echo "stable alias: $name -> $stable"
+    echo "stable copy: $name -> $stable"
   done
 }
 
-stage_stable_aliases
+stage_stable_copies
 
 if [ -z "$(ls -A "$OUT" 2>/dev/null)" ]; then
   echo "error: no release assets staged from $BUNDLE" >&2

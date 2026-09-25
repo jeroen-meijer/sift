@@ -28,7 +28,7 @@ Decode audio via Symphonia; build peak buffers for row and detail views; cache p
 
 ## Acceptance
 
-- Selecting a WAV/MP3/FLAC from `example_samples` shows detail waveform
+- Selecting a WAV/MP3/FLAC from a local library shows detail waveform
 - Row waveforms appear when toggle on (default on)
 - Regenerating peaks does not block UI
 

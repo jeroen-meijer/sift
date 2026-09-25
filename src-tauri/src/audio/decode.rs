@@ -277,9 +277,9 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn decode_example_wav() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples");
-        let path = root.join("heatwave/Moods/mood-hopeful.wav");
+    fn decode_band_probe_wav() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../testdata/spectral-fixtures/band-probe.wav");
         if !path.exists() {
             eprintln!("skip: missing {}", path.display());
             return;

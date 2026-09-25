@@ -22,7 +22,7 @@ Close remaining SPEC Musts: continuous watch, missing files, ask/auto-index, ful
 - Hold-to-hover-preview rebindable shortcut (default unbound)
 - Settings panes: Playback, Library, Analysis, Shortcuts (design)
 - Status bar: roots, indexed, analysis/index progress
-- Dogfood: add `example_samples`, browse, play, search, tag, drag clip, confirm no freezes
+- Dogfood: add a local sample folder, browse, play, search, tag, drag clip, confirm no freezes
 - README: run instructions for v1
 
 ### Out of scope

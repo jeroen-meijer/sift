@@ -1,34 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { folderChipLabel } from "./omni";
 
-const EXAMPLE = {
-  path: "/tmp/example_samples",
-  name: "example_samples",
+const LIBRARY = {
+  path: "/tmp/Library",
+  name: "Library",
 };
 const SAMPLES = { path: "/Volumes/Samples", name: "Samples" };
-const ROOTS = [EXAMPLE, SAMPLES];
+const ROOTS = [LIBRARY, SAMPLES];
 
 describe("folderChipLabel", () => {
   it("uses the root name when the root itself is selected", () => {
-    expect(folderChipLabel(EXAMPLE.path, ROOTS)).toBe("example_samples");
+    expect(folderChipLabel(LIBRARY.path, ROOTS)).toBe("Library");
   });
 
   it("prefixes nested folders with the root name", () => {
-    expect(folderChipLabel(`${EXAMPLE.path}/limbowrld_drumkit/808s`, ROOTS)).toBe(
-      "example_samples/limbowrld_drumkit/808s",
+    expect(folderChipLabel(`${LIBRARY.path}/Drums/808s`, ROOTS)).toBe(
+      "Library/Drums/808s",
     );
   });
 
   it("prefixes a sample file path with the root name", () => {
     expect(
-      folderChipLabel(`${EXAMPLE.path}/Studio/sounds/packs/lead.wav`, ROOTS),
-    ).toBe("example_samples/Studio/sounds/packs/lead.wav");
+      folderChipLabel(`${LIBRARY.path}/Studio/sounds/packs/lead.wav`, ROOTS),
+    ).toBe("Library/Studio/sounds/packs/lead.wav");
   });
 
   it("picks the longest matching root", () => {
-    const nested = [...ROOTS, { path: `${EXAMPLE.path}/limbowrld_drumkit`, name: "limbowrld_drumkit" }];
-    expect(folderChipLabel(`${EXAMPLE.path}/limbowrld_drumkit/808s`, nested)).toBe(
-      "limbowrld_drumkit/808s",
+    const nested = [
+      ...ROOTS,
+      { path: `${LIBRARY.path}/Drums`, name: "Drums" },
+    ];
+    expect(folderChipLabel(`${LIBRARY.path}/Drums/808s`, nested)).toBe(
+      "Drums/808s",
     );
   });
 

@@ -17,12 +17,9 @@ mod tests {
         decode_file, generate_peaks, render_clip, to_mono,
     };
 
-    fn examples_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples")
-    }
-
-    fn fixture(rel: &str) -> Option<PathBuf> {
-        let path = examples_root().join(rel);
+    fn band_probe() -> Option<PathBuf> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../testdata/spectral-fixtures/band-probe.wav");
         path.exists().then_some(path)
     }
 
@@ -39,50 +36,26 @@ mod tests {
     }
 
     #[test]
-    fn perf_decode_short_wav() {
-        let Some(path) = fixture("amen_breaks/cw_amen_chopper.wav") else {
-            eprintln!("skip: missing amen chopper fixture");
+    fn perf_decode_wav() {
+        let Some(path) = band_probe() else {
+            eprintln!("skip: missing band-probe fixture");
             return;
         };
-        // Debug builds on CI; keep generous.
-        let decoded = measure("decode_short_wav", Duration::from_secs(2), || {
+        // Debug builds on CI; keep generous (band-probe is ~33 s).
+        let decoded = measure("decode_wav", Duration::from_secs(8), || {
             decode_file(&path).expect("decode")
         });
         assert!(decoded.frame_count() > 0);
     }
 
     #[test]
-    fn perf_decode_medium_wav() {
-        let Some(path) = fixture("heatwave/Moods/mood-hopeful.wav") else {
-            eprintln!("skip: missing mood-hopeful fixture");
-            return;
-        };
-        let decoded = measure("decode_medium_wav", Duration::from_secs(4), || {
-            decode_file(&path).expect("decode")
-        });
-        assert!(decoded.duration_ms() > 0.0);
-    }
-
-    #[test]
-    fn perf_decode_mp3() {
-        let Some(path) = fixture("amen_breaks/cw_amen_distorted.mp3") else {
-            eprintln!("skip: missing mp3 fixture");
-            return;
-        };
-        let decoded = measure("decode_mp3", Duration::from_secs(3), || {
-            decode_file(&path).expect("decode")
-        });
-        assert!(decoded.sample_rate > 0);
-    }
-
-    #[test]
     fn perf_generate_peaks_default_buckets() {
-        let Some(path) = fixture("heatwave/Moods/mood-hopeful.wav") else {
-            eprintln!("skip: missing mood-hopeful fixture");
+        let Some(path) = band_probe() else {
+            eprintln!("skip: missing band-probe fixture");
             return;
         };
         let decoded = decode_file(&path).expect("decode");
-        let peaks = measure("generate_peaks_1024", Duration::from_secs(3), || {
+        let peaks = measure("generate_peaks_1024", Duration::from_secs(5), || {
             generate_peaks(&decoded, DEFAULT_BUCKETS).expect("peaks")
         });
         assert_eq!(peaks.bucket_count, DEFAULT_BUCKETS);
@@ -90,8 +63,8 @@ mod tests {
 
     #[test]
     fn perf_jit_render_clip() {
-        let Some(path) = fixture("heatwave/Moods/mood-hopeful.wav") else {
-            eprintln!("skip: missing mood-hopeful fixture");
+        let Some(path) = band_probe() else {
+            eprintln!("skip: missing band-probe fixture");
             return;
         };
         let out = std::env::temp_dir().join("sift_perf_jit_clip.wav");
@@ -115,15 +88,15 @@ mod tests {
 
     #[test]
     fn perf_heuristic_analyze_short_loop() {
-        let Some(path) = fixture("amen_breaks/cw_amen_chopper.wav") else {
-            eprintln!("skip: missing amen chopper fixture");
+        let Some(path) = band_probe() else {
+            eprintln!("skip: missing band-probe fixture");
             return;
         };
         let decoded = decode_file(&path).expect("decode");
         let mono = to_mono(&decoded);
         let input = AnalysisInput::from_full_mono(&mono, decoded.sample_rate);
         // stratum-dsp is the heavy part; budget is for debug CI, not release.
-        let result = measure("heuristic_analyze", Duration::from_secs(8), || {
+        let result = measure("heuristic_analyze", Duration::from_secs(15), || {
             HeuristicAnalyzer.analyze(&path, &input, 70.0, 180.0)
         });
         assert!(result.sample_type.is_some());

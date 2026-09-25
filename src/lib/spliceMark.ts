@@ -1,11 +1,11 @@
-/** Splice mark geometry shared by the row badge and `tool/render-splice-badge.ts`. */
+/** Splice mark geometry for the Source-column row badge. */
 
 /**
  * Square crop around the mark.
  *
  * Path ink bbox ≈ 217.5,128.5 → 732×849.5 (515×721). Taller than wide, so the
- * square needs padding or the tips sit on the chip edge. Tuned with
- * `bun run tool/render-splice-badge.ts` (margins L≈R, T≈B).
+ * square needs padding or the tips sit on the chip edge. Tuned so margins are
+ * roughly even (L≈R, T≈B).
  */
 export const SPLICE_MARK_VIEWBOX = "55 66 850 850";
 

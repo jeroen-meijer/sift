@@ -8,7 +8,7 @@ Tauri 2 + React 19 + Vite 8 + Bun app at repo root. `bun run build` and `cargo c
 
 ## Previous
 
-Repo has SPEC, tech-stack, default-taxonomy, Claude Design under `docs/design/`, and `example_samples/`. No app code yet.
+Repo has SPEC, tech-stack, default-taxonomy, and Claude Design under `docs/design/`. Local example sample files were used for dogfood. No app code yet.
 
 ## This phase
 

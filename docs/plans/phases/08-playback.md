@@ -33,7 +33,7 @@ Rust `cpal` preview engine with SPEC transport: play-on-select, Enter/Space, Up/
 
 ## Acceptance
 
-- Rapid Up/Down through `example_samples` feels snappy; no ~0.5s hitch
+- Rapid Up/Down through a local library feels snappy; no ~0.5s hitch
 - Gain and loop toggle behave per SPEC
 - Switching output device works (or reports clear error)
 

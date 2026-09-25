@@ -490,8 +490,6 @@ pub fn empty_peaks(buckets: usize) -> PeakData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::decode::decode_file;
-    use std::path::{Path, PathBuf};
 
     #[test]
     fn empty_peaks_has_zero_duration() {
@@ -617,25 +615,6 @@ mod tests {
         assert_eq!(loaded.peaks.len(), data.peaks.len());
     }
 
-    /// PPM debug strip: R=bass, G=low-mid, B=high-mid (treble omitted).
-    fn write_ppm_strip(path: &Path, colors: &[u8], buckets: usize, height: usize) {
-        use std::fmt::Write as _;
-        let width = buckets.max(1);
-        let mut body = String::new();
-        for _y in 0..height {
-            for x in 0..width {
-                let base = x.saturating_mul(BAND_COUNT);
-                let r = colors.get(base).copied().unwrap_or(0);
-                let g = colors.get(base.saturating_add(1)).copied().unwrap_or(0);
-                let b = colors.get(base.saturating_add(2)).copied().unwrap_or(0);
-                let _ = write!(body, "{r} {g} {b} ");
-            }
-            body.push('\n');
-        }
-        let header = format!("P3\n{width} {height}\n255\n");
-        fs::write(path, header + &body).expect("write ppm");
-    }
-
     /// `GlobalPeak`: a pure bass tone must not wash across all bands.
     #[test]
     fn pure_bass_tone_is_bass_dominant_not_white() {
@@ -650,109 +629,6 @@ mod tests {
         assert!(
             mid[0] > mid[1] * 1.8 && mid[0] > mid[2] * 1.8 && mid[0] > mid[3] * 1.8,
             "70 Hz should be bass-dominant, got {mid:?}"
-        );
-    }
-
-    /// Real library fixtures: 808 bass-led, vocal mid-led, amen not flat treble.
-    #[test]
-    fn example_samples_have_distinct_spectral_shapes() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples");
-        let eight = root.join("limbowrld_drumkit/808s/If u Swag 808 ._.`.wav");
-        let vocal =
-            root.join("foushee_vocals/runs/FOUSHEE_vocal_run_clean_jazzy_harmony_87_Bmaj.wav");
-        let amen = root.join("amen_breaks/cw_amen_updown.wav");
-        if !eight.is_file() || !vocal.is_file() || !amen.is_file() {
-            eprintln!("skip: example samples missing");
-            return;
-        }
-
-        let eight_peaks =
-            generate_peaks(&decode_file(&eight).expect("808"), 256).expect("808 peaks");
-        let vocal_peaks =
-            generate_peaks(&decode_file(&vocal).expect("vocal"), 256).expect("vocal peaks");
-        let amen_peaks =
-            generate_peaks(&decode_file(&amen).expect("amen"), 256).expect("amen peaks");
-
-        let share = |w: [f32; BAND_COUNT], i: usize| {
-            let sum = w.iter().sum::<f32>().max(1.0);
-            w[i] / sum
-        };
-        let end = |n: usize| (n / 8).max(8);
-
-        let a808 = avg_bands(&eight_peaks.colors, 0, end(eight_peaks.bucket_count));
-        let avoc = avg_bands(&vocal_peaks.colors, 0, end(vocal_peaks.bucket_count));
-        let amen_avg = avg_bands(&amen_peaks.colors, 0, amen_peaks.bucket_count);
-
-        assert!(
-            share(a808, 0) > 0.55,
-            "808 attack should be bass-led, bands={a808:?}"
-        );
-        let vocal_mid = share(avoc, 1) + share(avoc, 2);
-        assert!(
-            vocal_mid > 0.5 && share(avoc, 0) < 0.25,
-            "vocal should be mid-led with little bass, bands={avoc:?}"
-        );
-
-        let amen_body = share(amen_avg, 1) + share(amen_avg, 2);
-        let amen_treble = share(amen_avg, 3);
-        assert!(
-            amen_body > 0.35,
-            "amen should carry substantial mid body, bands={amen_avg:?}"
-        );
-        assert!(
-            amen_treble < 0.55,
-            "amen must not wash to flat treble, bands={amen_avg:?}"
-        );
-        assert!(
-            amen_body > 0.15 && amen_treble > 0.1,
-            "amen should mix mid+treble over time, bands={amen_avg:?}"
-        );
-
-        let mut mid_dom = 0u32;
-        let mut treble_dom = 0u32;
-        for i in 0..amen_peaks.bucket_count {
-            let base = i.saturating_mul(BAND_COUNT);
-            let mut w = [0i32; BAND_COUNT];
-            for (c, slot) in w.iter_mut().enumerate() {
-                *slot = i32::from(
-                    amen_peaks
-                        .colors
-                        .get(base.saturating_add(c))
-                        .copied()
-                        .unwrap_or(0),
-                );
-            }
-            let body = w[1].saturating_add(w[2]);
-            if body >= w[0] && body >= w[3] {
-                mid_dom = mid_dom.saturating_add(1);
-            } else if w[3] >= w[0] && w[3] >= body {
-                treble_dom = treble_dom.saturating_add(1);
-            }
-        }
-        assert!(
-            mid_dom > u32::try_from(amen_peaks.bucket_count / 4).unwrap_or(0),
-            "amen should have many mid-dominant buckets, mid_dom={mid_dom} treble_dom={treble_dom}"
-        );
-
-        let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/spectral-fixtures");
-        let _ = fs::create_dir_all(&out);
-        write_ppm_strip(
-            &out.join("808-classic-weights.ppm"),
-            &eight_peaks.colors,
-            eight_peaks.bucket_count,
-            24,
-        );
-        write_ppm_strip(
-            &out.join("vocal-classic-weights.ppm"),
-            &vocal_peaks.colors,
-            vocal_peaks.bucket_count,
-            24,
-        );
-        write_ppm_strip(
-            &out.join("amen-classic-weights.ppm"),
-            &amen_peaks.colors,
-            amen_peaks.bucket_count,
-            24,
         );
     }
 

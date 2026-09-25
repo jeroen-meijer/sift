@@ -169,10 +169,9 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn fixture(rel: &str) -> Option<PathBuf> {
+    fn band_probe() -> Option<PathBuf> {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../example_samples")
-            .join(rel);
+            .join("../testdata/spectral-fixtures/band-probe.wav");
         path.exists().then_some(path)
     }
 
@@ -187,8 +186,8 @@ mod tests {
 
     #[test]
     fn cache_hit_skips_second_decode() {
-        let Some(path) = fixture("amen_breaks/cw_amen_chopper.wav") else {
-            eprintln!("skip: missing amen chopper fixture");
+        let Some(path) = band_probe() else {
+            eprintln!("skip: missing band-probe fixture");
             return;
         };
         let cache = Mutex::new(DecodeCache::new(64 * 1024 * 1024));
@@ -227,7 +226,7 @@ mod tests {
 
     #[test]
     fn lock_is_free_while_decoding() {
-        let Some(path) = fixture("heatwave/Moods/mood-hopeful.wav") else {
+        let Some(path) = band_probe() else {
             return;
         };
         let cache = std::sync::Arc::new(Mutex::new(DecodeCache::new(64 * 1024 * 1024)));

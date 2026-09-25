@@ -6,7 +6,7 @@
 //! cargo bench --bench audio_hotpath -- --warm-up-time 1 --measurement-time 3
 //! ```
 //!
-//! Fixtures live in `../example_samples` (tracked in the repo).
+//! Primary fixture: `../testdata/spectral-fixtures/band-probe.wav`.
 
 #![allow(
     clippy::expect_used,
@@ -25,15 +25,16 @@ use sift_lib::perf::{
 };
 use tempfile::tempdir;
 
-fn examples_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../example_samples")
+fn band_probe() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../testdata/spectral-fixtures/band-probe.wav")
 }
 
-fn require_fixture(rel: &str) -> PathBuf {
-    let path = examples_root().join(rel);
+fn require_fixture() -> PathBuf {
+    let path = band_probe();
     assert!(
         path.exists(),
-        "missing bench fixture {} (expected under example_samples/)",
+        "missing bench fixture {} (expected under testdata/spectral-fixtures/)",
         path.display()
     );
     path
@@ -45,28 +46,23 @@ fn decode_benches(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
 
-    let fixtures = [
-        ("wav_short", "amen_breaks/cw_amen_chopper.wav"),
-        ("wav_medium", "heatwave/Moods/mood-hopeful.wav"),
-        ("mp3_short", "amen_breaks/cw_amen_distorted.mp3"),
-        ("flac_short", "amen_breaks/cw_amen_highpass.flac"),
-    ];
-
-    for (label, rel) in fixtures {
-        let path = require_fixture(rel);
-        group.bench_with_input(BenchmarkId::from_parameter(label), &path, |b, path| {
+    let path = require_fixture();
+    group.bench_with_input(
+        BenchmarkId::from_parameter("wav_band_probe"),
+        &path,
+        |b, path| {
             b.iter(|| {
                 let decoded = decode_file(black_box(path)).expect("decode");
                 black_box(decoded.samples.len())
             });
-        });
-    }
+        },
+    );
 
     group.finish();
 }
 
 fn peaks_benches(c: &mut Criterion) {
-    let path = require_fixture("heatwave/Moods/mood-hopeful.wav");
+    let path = require_fixture();
     let decoded = decode_file(&path).expect("decode for peaks bench");
 
     let mut group = c.benchmark_group("peaks");
@@ -87,7 +83,7 @@ fn peaks_benches(c: &mut Criterion) {
 }
 
 fn jit_benches(c: &mut Criterion) {
-    let path = require_fixture("heatwave/Moods/mood-hopeful.wav");
+    let path = require_fixture();
     let dir = tempdir().expect("tempdir");
     let out = dir.path().join("clip.wav");
 
@@ -107,7 +103,7 @@ fn jit_benches(c: &mut Criterion) {
 }
 
 fn analyze_benches(c: &mut Criterion) {
-    let path = require_fixture("amen_breaks/cw_amen_chopper.wav");
+    let path = require_fixture();
     let decoded = decode_file(&path).expect("decode for analyze bench");
     let mono = to_mono(&decoded);
     let input = AnalysisInput::from_full_mono(&mono, decoded.sample_rate);

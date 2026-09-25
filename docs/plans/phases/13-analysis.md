@@ -34,7 +34,7 @@ Background analysis never blocks UI: file info, BPM, key, loop/one-shot, path/fi
 
 ## Acceptance
 
-- Indexing `example_samples` fills many BPM/key/tags without freezing UI
+- Indexing a local library fills many BPM/key/tags without freezing UI
 - Custom analysis dialog runs on multi-select
 - Removing an auto tag sticks across normal re-analyze
 

@@ -623,7 +623,7 @@ export const playheadStore = createStore<number | null>(null);
 
 - `excerpt_range`: 30 s file covers the whole range; 90 s file starts at 9 s and is 60 s long; 10 min file starts at 30 s and is 60 s long.
 - Synthetic click track, 3 minutes at 120 BPM, 44.1 kHz, generated in the test: excerpt BPM within ±1 of 120.
-- Existing heuristic tests on `example_samples` unchanged. All fixtures are under 60 s, so results must be identical.
+- Existing heuristic tests on local example sample fixtures unchanged. All fixtures are under 60 s, so results must be identical.
 
 **Verify:** `tool/memwatch.sh` during a wave: `Physical footprint (peak)` < 2 GB for the whole wave.
 
@@ -1256,7 +1256,7 @@ After A5, the 38-minute file still holds ~800 MB interleaved plus ~400 MB mono u
 
 **Tests:**
 
-- For every fixture in `example_samples`: streaming min/max equal `generate_peaks(decode_file(..))` exactly; colors differ by at most 2 per channel.
+- For every local example sample fixture: streaming min/max equal `generate_peaks(decode_file(..))` exactly; colors differ by at most 2 per channel.
 - The excerpt equals `to_mono(decoded)[excerpt_range(..)]` exactly.
 - Criterion: `analyze_stream` is no slower than decode + generate on the longest fixture.
 

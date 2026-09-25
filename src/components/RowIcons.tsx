@@ -52,7 +52,7 @@ export function RowStarIcon({ size, className, filled }: IconProps & { filled: b
 /**
  * Source-column Splice badge: black translucent chip, white mark.
  * Same colors in every theme so the mark stays recognizable.
- * Geometry: `src/lib/spliceMark.ts`. Preview: `bun run tool/render-splice-badge.ts`.
+ * Geometry: `src/lib/spliceMark.ts`.
  */
 export function RowSpliceIcon({ size = 16, className }: { size?: number; className?: string }) {
   const inset = Math.max(2, Math.round(size * 0.12));

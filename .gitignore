@@ -1,3 +1,5 @@
+*.tsbuildinfo
+
 # Logs
 logs
 *.log
@@ -14,6 +16,7 @@ dist-ssr
 # Editor
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -32,8 +35,11 @@ testdata/spectral-fixtures/*.ppm
 # Runtime profile sessions (`bun run tauri:profile`)
 logs/
 
-# Local visual QA (e.g. `bun run tool/render-splice-badge.ts`)
+# Local scratch
 tmp/
+
+# Local sample libraries (not shipped; may contain third-party audio)
+example_samples/
 
 # Env
 .env

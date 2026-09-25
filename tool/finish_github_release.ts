@@ -6,9 +6,8 @@
  *   bun tool/finish_github_release.ts --version 0.4.0 --sha <commit> --assets-dir release-assets
  *
  * latest.json points at versioned macOS *.app.tar.gz and Windows NSIS *-setup.exe.
- * MSI and stable hand-install aliases (e.g. Sift_macOS_aarch64.dmg,
- * Sift_Windows_x64-setup.exe) stay on the release for README
- * /releases/latest/download/ links only.
+ * MSI and stable README downloads (Sift_macOS_aarch64.dmg, Sift_Windows_x64-setup.exe)
+ * stay on the release for /releases/latest/download/ only.
  */
 
 import { spawnSync } from "node:child_process";
@@ -71,7 +70,7 @@ function downloadUrl(ownerRepo: string, version: string, fileName: string): stri
   return `https://github.com/${ownerRepo}/releases/download/${version}/${fileName}`;
 }
 
-/** True when the filename still carries Tauri's _x.y.z_ segment. */
+/** True when the filename still has Tauri's _x.y.z_ segment. */
 function hasSemverInName(fileName: string): boolean {
   return /_\d+\.\d+\.\d+_/.test(fileName) || /_\d+\.\d+\.\d+\./.test(fileName);
 }
@@ -87,7 +86,7 @@ function platformKeysForAsset(fileName: string): string[] {
     return ["darwin-aarch64"];
   }
 
-  // NSIS setup for the updater. MSI and stable aliases are hand-install only.
+  // NSIS setup for the updater. MSI and stable README copies are hand-install only.
   if (lower.endsWith("-setup.exe")) {
     if (lower.includes("aarch64") || lower.includes("arm64")) return ["windows-aarch64"];
     if (lower.includes("i686") || lower.includes("_x86.") || /[^a-z]x86-/.test(lower)) {
@@ -101,7 +100,7 @@ function platformKeysForAsset(fileName: string): string[] {
 
 function isUpdaterBundle(fileName: string): boolean {
   if (platformKeysForAsset(fileName).length === 0) return false;
-  // .app.tar.gz is updater-only (never a stable README alias).
+  // .app.tar.gz is updater-only (never a stable README copy).
   if (fileName.toLowerCase().endsWith(".app.tar.gz")) return true;
   // Stable Sift_Windows_*-setup.exe has no .sig; only the versioned NSIS updates.
   return hasSemverInName(fileName);

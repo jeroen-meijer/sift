@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "vitest bench --run",
@@ -19,7 +19,8 @@
     "tauri:build": "bun tool/build-tauri.ts",
     "tauri:profile": "bun scripts/tauri-profile.ts",
     "version:sync": "bun tool/sync-version.ts",
-    "version:set": "bun tool/sync-version.ts"
+    "version:set": "bun tool/sync-version.ts",
+    "preflight": "./tool/preflight.sh"
   },
   "dependencies": {
     "@crabnebula/tauri-plugin-drag": "2",

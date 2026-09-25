@@ -31,7 +31,7 @@ Virtualized sample list/table with sort, multi-select, favorites, and selection 
 
 ## Acceptance
 
-- Scroll stays smooth with indexed `example_samples`
+- Scroll stays smooth with a modest indexed local library
 - Sort persists across restart
 - Multi-select works; favorite persists
 
