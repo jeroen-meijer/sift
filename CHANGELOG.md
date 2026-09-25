@@ -1,5 +1,7 @@
 ## Upcoming
 
+- fix(macos): ship a precompiled Liquid Glass `Assets.car` so macOS builds no longer die in `actool`
+
 ## 0.4.0
 
 - feat(app): new app icon on macOS and Windows (Liquid Glass on macOS 26)

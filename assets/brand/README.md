@@ -11,13 +11,14 @@ Edit the icon and logo here. The files the app ships are generated into [`src-ta
 | `macos-1024.png` / `macos-1024.svg` | Classic macOS icon: 824 px body on 1024 canvas with shadow |
 | `readme-lockup-dark.png` / `readme-lockup-light.png` | README header lockup (icon + "Sift"); GitHub picks via `prefers-color-scheme` |
 | `AppIcon.icon/` | Icon Composer project (macOS 26 Liquid Glass). Open in Icon Composer to edit |
+| `../../src-tauri/icons/Assets.car` | Precompiled Liquid Glass catalog from `AppIcon.icon` (what Tauri bundles) |
 | `layers/` | Layer SVGs/PNG used to build or rebuild the Composer project |
 
 Colors: ground `#292b31` to `#161826`, accent `#9184d9`, light `#e7e5fe`.
 
 ## Apply / regenerate
 
-`tauri.conf.json` lists `../assets/brand/AppIcon.icon` with the PNG/icns/ico set. On build, Tauri 2.11+ compiles the `.icon` to `Assets.car` (needs Xcode 26 / `actool`). Older macOS and the DMG use `icon.icns`.
+`tauri.conf.json` lists `icons/Assets.car` (precompiled Liquid Glass) plus the PNG/icns/ico set. Edit `AppIcon.icon/` in Icon Composer, then recompile `Assets.car` (needs Xcode 26 / `actool`). Do not point Tauri at the `.icon` directly: bundler `actool` is flaky ([tauri#15315](https://github.com/tauri-apps/tauri/issues/15315)). Older macOS and the DMG use `icon.icns`.
 
 After you change source art, scrub and minify before you commit:
 
@@ -41,6 +42,30 @@ rm -rf src-tauri/icons/android src-tauri/icons/ios
 ```
 
 When the macOS inset art changes, re-export a classic `.icns` from Icon Composer (Platform: macOS pre-Tahoe, 1024pt, 1×). For Windows, build a full-bleed `icon.ico` from `tile.svg` or a size set. Do not use `macos-1024.png` for Windows or Linux.
+
+After editing `AppIcon.icon/`, recompile and commit `src-tauri/icons/Assets.car`:
+
+```bash
+killall ibtoold 2>/dev/null || true
+OUT=$(mktemp -d)
+cp -R assets/brand/AppIcon.icon "$OUT/Icon.icon"
+mkdir -p "$OUT/out"
+xcrun actool "$OUT/Icon.icon" \
+  --compile "$OUT/out" \
+  --output-format human-readable-text \
+  --notices --warnings \
+  --output-partial-info-plist "$OUT/out/assetcatalog_generated_info.plist" \
+  --app-icon Icon \
+  --include-all-app-icons \
+  --enable-on-demand-resources NO \
+  --development-region en \
+  --target-device mac \
+  --minimum-deployment-target 26.0 \
+  --platform macosx
+cp "$OUT/out/Assets.car" src-tauri/icons/Assets.car
+```
+
+Every layer in `icon.json` needs `"glass"` and `"hidden"` or `actool` crashes with a nil-array error.
 
 Rebuild the README lockups after the macOS icon or wordmark changes (SF Compact Display Bold, same icon both themes):
 
