@@ -119,10 +119,7 @@ pub fn run() {
                                 "already visible",
                             );
                         } else {
-                            crate::profile_log::milestone(
-                                "boot.reveal_failsafe",
-                                "show after 5s",
-                            );
+                            crate::profile_log::milestone("boot.reveal_failsafe", "show after 5s");
                             let _ = win.show();
                         }
                     }
@@ -140,7 +137,10 @@ pub fn run() {
                     crate::profile_log::milestone("boot.page_load_started", payload.url().as_str());
                 }
                 PageLoadEvent::Finished => {
-                    crate::profile_log::milestone("boot.page_load_finished", payload.url().as_str());
+                    crate::profile_log::milestone(
+                        "boot.page_load_finished",
+                        payload.url().as_str(),
+                    );
                 }
             }
         })
