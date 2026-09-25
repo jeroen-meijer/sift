@@ -1,6 +1,6 @@
 import { WarningIcon } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 
 interface Props {
   onCancel: () => void;
@@ -22,12 +22,10 @@ export function ReanalyzeLibraryDialog({ onCancel, onConfirm }: Props) {
       </div>
 
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onConfirm}>
+        <DialogDismissButton className="btn btn-secondary">{tc("cancel")}</DialogDismissButton>
+        <DialogActionButton className="btn btn-danger" onClick={onConfirm}>
           {t("reanalyzeLibraryConfirm")}
-        </button>
+        </DialogActionButton>
       </div>
     </Dialog>
   );

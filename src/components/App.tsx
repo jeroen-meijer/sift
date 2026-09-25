@@ -29,7 +29,7 @@ import { StatusBar } from "./StatusBar";
 import { TagManagerView } from "./TagManagerView";
 import { TitleBar } from "./TitleBar";
 import { UpdateAvailableDialog } from "./dialogs/UpdateAvailableDialog";
-import { checkForAppUpdate, type AvailableUpdate } from "../lib/updates";
+import { checkForAppUpdate, previewAvailableUpdate, type AvailableUpdate } from "../lib/updates";
 import "../styles/base.css";
 import "../ui/ui.css";
 import "./shell.css";
@@ -91,6 +91,11 @@ export function App() {
   /* After the shell leaves boot: check for updates (no-op in dev / offline). */
   useEffect(() => {
     if (mode === "boot") return;
+    const preview = previewAvailableUpdate();
+    if (preview != null) {
+      setLaunchUpdate(preview);
+      return;
+    }
     let cancelled = false;
     void checkForAppUpdate().then((outcome) => {
       if (cancelled || outcome.kind !== "available") return;

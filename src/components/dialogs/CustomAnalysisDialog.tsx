@@ -1,7 +1,7 @@
 import { Trans, useTranslation } from "react-i18next";
 import type { CustomAnalysisOpts } from "../../lib/ipc";
 import { Checkbox } from "../../ui/Checkbox";
-import { Dialog } from "../../ui/Dialog";
+import { Dialog, DialogActionButton, DialogDismissButton } from "../../ui/Dialog";
 import { BpmRangePicker } from "../BpmRangePicker";
 
 interface Props {
@@ -86,12 +86,14 @@ export function CustomAnalysisDialog({
 
       <div className="dialog-actions">
         <span className="dialog-note">{t("analyzeBackground")}</span>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
-          {tc("cancel")}
-        </button>
-        <button type="button" className="btn btn-primary" onClick={onRun} disabled={count === 0}>
+        <DialogDismissButton className="btn btn-secondary">{tc("cancel")}</DialogDismissButton>
+        <DialogActionButton
+          className="btn btn-primary"
+          onClick={onRun}
+          disabled={count === 0}
+        >
           {t("analyzeN", { count })}
-        </button>
+        </DialogActionButton>
       </div>
     </Dialog>
   );
