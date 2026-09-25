@@ -464,23 +464,23 @@ export const SampleTable = memo(function SampleTable({
   const columnLabel = (column: TableColumn): string => {
     switch (column) {
       case "name":
-        return t("colName");
+        return t("table.column.name");
       case "source":
-        return t("colSource");
+        return t("table.column.source");
       case "type":
-        return t("colType");
+        return t("table.column.type");
       case "bpm":
-        return t("colBpm");
+        return t("table.column.bpm");
       case "key":
-        return t("colKey");
+        return t("table.column.key");
       case "wave":
-        return t("colWaveform");
+        return t("table.column.waveform");
       case "tags":
-        return t("colTags");
+        return t("table.column.tags");
       case "date_added":
-        return t("colDateAdded");
+        return t("table.column.dateAdded");
       case "date_created":
-        return t("colDateCreated");
+        return t("table.column.dateCreated");
     }
   };
 
@@ -528,7 +528,7 @@ export const SampleTable = memo(function SampleTable({
             type="button"
             className="col-resize"
             tabIndex={-1}
-            aria-label={t("resizeColumn", { column: label })}
+            aria-label={t("table.resizeColumn", { column: label })}
             onPointerDown={(e) => {
               startResize(column, e);
             }}
@@ -584,7 +584,7 @@ export const SampleTable = memo(function SampleTable({
           <div className="sample-table-empty" role="status" aria-live="polite">
             <div className="sample-table-loading">
               <CircleNotchIcon size={28} className="sample-table-spin" aria-hidden />
-              <div className="sample-table-empty-title">{t("loadingSamples")}</div>
+              <div className="sample-table-empty-title">{t("table.loading")}</div>
             </div>
           </div>
         ) : null}
@@ -593,11 +593,11 @@ export const SampleTable = memo(function SampleTable({
           <div className="sample-table-empty">
             <div>
               <MagnifyingGlassIcon size={26} />
-              <div className="sample-table-empty-title">{t("emptyTitle")}</div>
+              <div className="sample-table-empty-title">{t("table.empty.title")}</div>
               <div className="sample-table-empty-body">
-                {t("emptyBody")}
+                {t("table.empty.body")}
                 <br />
-                {t("emptyCount", {
+                {t("table.empty.count", {
                   count: indexedCount,
                   formatted: formatCount(indexedCount),
                 })}

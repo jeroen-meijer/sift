@@ -12,19 +12,19 @@ export function ReanalyzeLibraryDialog({ onCancel, onConfirm }: Props) {
   const { t: tc } = useTranslation("common");
 
   return (
-    <Dialog width={452} label={t("reanalyzeLibraryTitle")} onClose={onCancel}>
+    <Dialog width={452} label={t("analysis.reanalyze.dialog.title")} onClose={onCancel}>
       <div className="dialog-head">
         <WarningIcon size={19} className="dialog-icon-danger" />
         <div>
-          <h2 className="dialog-title">{t("reanalyzeLibraryTitle")}</h2>
-          <p className="dialog-body">{t("reanalyzeLibraryBody")}</p>
+          <h2 className="dialog-title">{t("analysis.reanalyze.dialog.title")}</h2>
+          <p className="dialog-body">{t("analysis.reanalyze.dialog.body")}</p>
         </div>
       </div>
 
       <div className="dialog-actions">
-        <DialogDismissButton className="btn btn-secondary">{tc("cancel")}</DialogDismissButton>
+        <DialogDismissButton className="btn btn-secondary">{tc("action.cancel")}</DialogDismissButton>
         <DialogActionButton className="btn btn-danger" onClick={onConfirm}>
-          {t("reanalyzeLibraryConfirm")}
+          {t("analysis.reanalyze.dialog.confirm")}
         </DialogActionButton>
       </div>
     </Dialog>

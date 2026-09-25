@@ -53,26 +53,26 @@ export function FolderMenu({
     {
       kind: "item",
       id: "reveal",
-      label: isApplePlatform() ? t("ctxReveal") : t("ctxRevealWindows"),
+      label: isApplePlatform() ? t("menu.reveal") : t("menu.revealWindows"),
       icon: <FolderOpenIcon size={14} />,
     },
     {
       kind: "item",
       id: "copyPath",
-      label: t("ctxCopyPath"),
+      label: t("menu.copyPath"),
       icon: <LinkSimpleIcon size={14} />,
     },
     {
       kind: "item",
       id: "copyName",
-      label: t("ctxCopyFolderName"),
+      label: t("menu.copyFolderName"),
       icon: <TextboxIcon size={14} />,
     },
     { kind: "rule" },
     {
       kind: "item",
       id: "favorite",
-      label: folder.favorite ? t("ctxUnfavoriteFolder") : t("ctxFavoriteFolder"),
+      label: folder.favorite ? t("menu.unfavoriteFolder") : t("menu.favoriteFolder"),
       icon: <StarIcon size={14} weight={folder.favorite ? "fill" : "regular"} />,
     },
   ];
@@ -83,28 +83,28 @@ export function FolderMenu({
       entries.push({
         kind: "item",
         id: "collapse",
-        label: t("ctxCollapseFolder"),
+        label: t("menu.collapseFolder"),
         icon: <CaretDownIcon size={14} weight="bold" />,
       });
     } else {
       entries.push({
         kind: "item",
         id: "expand",
-        label: t("ctxExpandFolder"),
+        label: t("menu.expandFolder"),
         icon: <CaretRightIcon size={14} weight="bold" />,
       });
     }
     entries.push({
       kind: "item",
       id: "expandAll",
-      label: t("ctxExpandAllFolders"),
+      label: t("menu.expandAllFolders"),
       icon: <CaretDoubleRightIcon size={14} weight="bold" />,
     });
     if (expanded) {
       entries.push({
         kind: "item",
         id: "collapseAll",
-        label: t("ctxCollapseAllFolders"),
+        label: t("menu.collapseAllFolders"),
         icon: <CaretDoubleDownIcon size={14} weight="bold" />,
       });
     }
@@ -116,13 +116,13 @@ export function FolderMenu({
       {
         kind: "item",
         id: "reindex",
-        label: t("ctxReindexRoot"),
+        label: t("menu.reindexRoot"),
         icon: <ArrowsClockwiseIcon size={14} />,
       },
       {
         kind: "item",
         id: "removeRoot",
-        label: t("ctxRemoveRoot"),
+        label: t("menu.removeRoot"),
         icon: <TrashIcon size={14} />,
         danger: true,
       },

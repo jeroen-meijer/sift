@@ -895,13 +895,13 @@ export function LibraryView({
   });
   const columnLabels = useMemo(
     () => ({
-      source: t("colSource"),
-      type: t("colType"),
-      bpm: t("colBpm"),
-      key: t("colKey"),
-      tags: t("colTags"),
-      date_added: t("colDateAdded"),
-      date_created: t("colDateCreated"),
+      source: t("table.column.source"),
+      type: t("table.column.type"),
+      bpm: t("table.column.bpm"),
+      key: t("table.column.key"),
+      tags: t("table.column.tags"),
+      date_added: t("table.column.dateAdded"),
+      date_created: t("table.column.dateCreated"),
     }),
     [t],
   );

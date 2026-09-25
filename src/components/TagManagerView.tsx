@@ -96,7 +96,7 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
         <aside className="tag-list">
           <div className="tag-list-head">
             <div className="tag-list-title">{t("title")}</div>
-            <DialogDismissButton className="btn-icon" aria-label={tc("close")}>
+            <DialogDismissButton className="btn-icon" aria-label={tc("action.close")}>
               <XIcon size={14} />
             </DialogDismissButton>
           </div>
@@ -109,14 +109,14 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
               }}
             >
               <PlusIcon size={12} />
-              {t("new")}
+              {t("list.new.label")}
             </button>
           </div>
           <div className="tag-list-filter">
             <input
               className="input"
               value={filter}
-              placeholder={t("filterPlaceholder")}
+              placeholder={t("list.filterPlaceholder")}
               onChange={(e) => {
                 setFilter(e.target.value);
               }}
@@ -128,7 +128,7 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                 className="input input-mono"
                 value={newPath}
                 autoFocus
-                placeholder={t("newPathPlaceholder")}
+                placeholder={t("list.new.pathPlaceholder")}
                 onChange={(e) => {
                   setNewPath(e.target.value);
                 }}
@@ -170,12 +170,12 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
           <div className="tag-editor">
             {selected && palette ? (
               <>
-                <div className="kicker">{t("editing")}</div>
+                <div className="kicker">{t("editor.editing")}</div>
                 <div className="tag-editor-head">
                   <span className="tag-swatch large" style={{ background: palette.dot }} />
                   <span className="mono tag-editor-path">{selected.path}</span>
                   <span className="tag-editor-counts">
-                    {t("counts", {
+                    {t("editor.counts", {
                       samples: selected.sample_count,
                       count: selected.children.length,
                     })}
@@ -185,7 +185,7 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                 <div className="tag-editor-fields">
                   <div className="tag-editor-field">
                     <div className="field">
-                      <label htmlFor="tag-name">{t("name")}</label>
+                      <label htmlFor="tag-name">{t("editor.name.label")}</label>
                       <input
                         id="tag-name"
                         className="input input-mono"
@@ -200,18 +200,18 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                       />
                     </div>
                     <div className="field-hint">
-                      {t("nameHint", { path: selected.path }).replace(/<\/?0>/g, "")}
+                      {t("editor.name.hint", { path: selected.path }).replace(/<\/?0>/g, "")}
                     </div>
                   </div>
                   <div className="tag-editor-field">
                     <div className="field">
-                      <label htmlFor="tag-parent">{t("parent")}</label>
+                      <label htmlFor="tag-parent">{t("editor.parent.label")}</label>
                       <PillSelect
-                        label={t("parent")}
+                        label={t("editor.parent.label")}
                         variant="input"
                         value={String(selected.parent_id ?? "")}
                         options={[
-                          { value: "", label: t("noParent") },
+                          { value: "", label: t("editor.parent.none") },
                           ...flat
                             .filter(({ node }) => !subtree(selected).some((n) => n.id === node.id))
                             .map(({ node }) => ({ value: String(node.id), label: node.path })),
@@ -221,12 +221,12 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                         }}
                       />
                     </div>
-                    <div className="field-hint">{t("parentHint")}</div>
+                    <div className="field-hint">{t("editor.parent.hint")}</div>
                   </div>
                 </div>
 
                 <div className="tag-editor-colors">
-                  <div className="tag-editor-colors-label">{t("color")}</div>
+                  <div className="tag-editor-colors-label">{t("editor.color.label")}</div>
                   <div className="tag-swatch-row">
                     {TAG_SWATCHES.map((color) => (
                       <button
@@ -248,11 +248,11 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                       }}
                     >
                       <span className="tag-swatch-ghost" style={{ background: palette.dot }} />
-                      {parent ? t("inheritFrom", { parent: parent.name }) : t("inheritNone")}
+                      {parent ? t("editor.color.inheritFrom", { parent: parent.name }) : t("editor.color.inheritNone")}
                     </button>
                   </div>
                   <div className="tag-editor-preview">
-                    <span className="tag-editor-preview-label">{t("preview")}</span>
+                    <span className="tag-editor-preview-label">{t("editor.color.preview")}</span>
                     {[selected, ...selected.children.slice(0, 1)].map((node) => {
                       const chip = tagPalette(node.path, node.color ?? selected.color);
                       return (
@@ -270,9 +270,9 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
 
                 <div className="tag-editor-delete rule">
                   <div>
-                    <div className="tag-editor-delete-title">{t("deleteTitle")}</div>
+                    <div className="tag-editor-delete-title">{t("editor.delete.title")}</div>
                     <div className="tag-editor-delete-body">
-                      {t("deleteBody", { count: selected.sample_count })}
+                      {t("editor.delete.body", { count: selected.sample_count })}
                     </div>
                   </div>
                   <button
@@ -283,20 +283,20 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                     }}
                   >
                     <TrashIcon size={13} />
-                    {t("delete")}
+                    {t("editor.delete.action")}
                   </button>
                 </div>
 
                 {error ? <p className="error-text">{error}</p> : null}
               </>
             ) : (
-              <p className="tag-editor-empty">{t("selectHint")}</p>
+              <p className="tag-editor-empty">{t("editor.selectHint")}</p>
             )}
           </div>
 
           <div className="full-view-footer">
             <span className="full-view-footer-note mono">
-              {t("footer", { total: flat.length, top: tags.length })}
+              {t("list.footer", { total: flat.length, top: tags.length })}
             </span>
           </div>
         </div>

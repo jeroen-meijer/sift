@@ -29,13 +29,13 @@ export function UpdateAvailableDialog({ available, onDismiss }: Props) {
   };
 
   return (
-    <Dialog width={452} label={t("updateAvailableTitle")} onClose={onDismiss}>
+    <Dialog width={452} label={t("about.updates.dialog.title")} onClose={onDismiss}>
       <div className="dialog-head">
         <DownloadSimpleIcon size={19} />
         <div>
-          <h2 className="dialog-title">{t("updateAvailableTitle")}</h2>
+          <h2 className="dialog-title">{t("about.updates.dialog.title")}</h2>
           <p className="dialog-body">
-            {t("updateAvailableBody", { version: available.version })}
+            {t("about.updates.dialog.body", { version: available.version })}
           </p>
           {available.notes ? (
             <p className="dialog-body settings-update-notes">{available.notes}</p>
@@ -46,10 +46,10 @@ export function UpdateAvailableDialog({ available, onDismiss }: Props) {
 
       <div className="dialog-actions">
         <DialogDismissButton className="btn btn-secondary" disabled={installing}>
-          {tc("cancel")}
+          {tc("action.cancel")}
         </DialogDismissButton>
         <button type="button" className="btn btn-primary" disabled={installing} onClick={install}>
-          {installing ? t("updateInstalling") : t("updateInstall")}
+          {installing ? t("about.updates.dialog.installing") : t("about.updates.dialog.install")}
         </button>
       </div>
     </Dialog>

@@ -34,7 +34,7 @@ export function BpmRangePicker({
           >
             {t(preset.labelKey)}
             {showDefaultNote && preset.isDefault ? (
-              <span className="chip-note"> {t("bpmPresetDefault")}</span>
+              <span className="chip-note"> {t("analysis.bpmRange.default")}</span>
             ) : null}
           </button>
         ))}
@@ -44,7 +44,7 @@ export function BpmRangePicker({
         <div className="bpm-range-row">
           <input
             className="input input-mono bpm-range-input"
-            aria-label={t("bpmMin")}
+            aria-label={t("analysis.bpmRange.min")}
             value={min}
             inputMode="numeric"
             onChange={(e) => {
@@ -57,13 +57,13 @@ export function BpmRangePicker({
             max={BPM_CEILING}
             low={min}
             high={max}
-            lowLabel={t("bpmMin")}
-            highLabel={t("bpmMax")}
+            lowLabel={t("analysis.bpmRange.min")}
+            highLabel={t("analysis.bpmRange.max")}
             onChange={onChange}
           />
           <input
             className="input input-mono bpm-range-input"
-            aria-label={t("bpmMax")}
+            aria-label={t("analysis.bpmRange.max")}
             value={max}
             inputMode="numeric"
             onChange={(e) => {

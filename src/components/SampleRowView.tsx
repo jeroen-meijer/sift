@@ -88,8 +88,8 @@ export const SampleRowView = memo(function SampleRowView({
             {sample.missing ? (
               <WarningCircleIcon size={11} weight="fill" className="row-missing-icon" />
             ) : sample.availability === "cloud" ? (
-              <span className="row-cloud-badge" title={t("statusOnlineOnly")}>
-                {t("statusOnlineOnly")}
+              <span className="row-cloud-badge" title={t("statusBar.onlineOnly")}>
+                {t("statusBar.onlineOnly")}
               </span>
             ) : null}
             <span className="name-text">
@@ -158,7 +158,7 @@ export const SampleRowView = memo(function SampleRowView({
         return (
           <div key={column} className="col tags" data-col={column}>
             {analyzing ? (
-              <span className="analyzing-label">{t("statusAnalyzing")}</span>
+              <span className="analyzing-label">{t("statusBar.analyzing")}</span>
             ) : (
               sample.tags.map((tag) => {
                 const palette = tagPalette(tag.path, tag.color);
@@ -205,7 +205,7 @@ export const SampleRowView = memo(function SampleRowView({
         type="button"
         className={`col fav${playing ? " playing" : ""}`}
         tabIndex={-1}
-        aria-label={sample.favorite ? t("ctxUnfavorite") : t("ctxFavorite")}
+        aria-label={sample.favorite ? t("menu.unfavorite") : t("menu.favorite")}
         aria-pressed={sample.favorite}
         onClick={(e) => {
           e.stopPropagation();

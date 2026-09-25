@@ -103,7 +103,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 - Virtualized table (e.g. TanStack Virtual) for large result sets
 - Canvas (or WebGL) waveform views driven by peak buffers from Rust
 - Bun for scripts
-- i18n: `i18next` + `react-i18next` (same as loudline). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
+- i18n: `i18next` + `react-i18next`. Playbook: [localization.md](localization.md). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
 - Theming: CSS variables (or a small token module) owned by `src/themes/<name>.css` (or equivalent). Components reference `var(--…)` / token names only. v1 ships one dark theme file; new themes are new files + a registry entry.
 
 **What not to swap casually**

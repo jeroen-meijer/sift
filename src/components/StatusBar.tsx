@@ -35,8 +35,8 @@ export const StatusBar = memo(function StatusBar({
     shownCount == null
       ? null
       : filtered
-        ? t("statusResults", { count: shownCount })
-        : t("statusShown", { shown: formatCount(shownCount), total: formatCount(fileCount) });
+        ? t("statusBar.results", { count: shownCount })
+        : t("statusBar.shown", { shown: formatCount(shownCount), total: formatCount(fileCount) });
 
   return (
     <footer className="statusbar">
@@ -47,10 +47,10 @@ export const StatusBar = memo(function StatusBar({
             <span aria-hidden>·</span>
           </>
         ) : null}
-        <span>{t("statusRoots", { count: rootCount })}</span>
+        <span>{t("statusBar.roots", { count: rootCount })}</span>
         <span aria-hidden>·</span>
         <span>
-          {t(shownCount == null ? "statusFilesIndexed" : "statusFiles", {
+          {t(shownCount == null ? "statusBar.filesIndexed" : "statusBar.files", {
             count: fileCount,
             formatted: formatCount(fileCount),
           })}
@@ -67,8 +67,8 @@ export const StatusBar = memo(function StatusBar({
           </div>
           <span className="statusbar-hint">
             {indeterminate
-              ? t("statusProcessingCount", { done: formatCount(analysis.done) })
-              : t("statusProcessingProgress", {
+              ? t("statusBar.processingCount", { done: formatCount(analysis.done) })
+              : t("statusBar.processingProgress", {
                   done: formatCount(analysis.done),
                   total: formatCount(analysis.total),
                 })}

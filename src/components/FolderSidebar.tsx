@@ -100,7 +100,7 @@ export const FolderSidebar = memo(function FolderSidebar({
   onManageTags,
   onFolderAction,
 }: Props) {
-  const { t } = useTranslation('library');
+  const { t } = useTranslation("library");
   useRenderTiming('FolderSidebar');
   const { t: tc } = useTranslation('common');
   /** Expanded folder paths. Empty = only roots after seed; expand is one level. */
@@ -363,12 +363,12 @@ export const FolderSidebar = memo(function FolderSidebar({
     <aside className='sidebar'>
       <div className='sidebar-folders'>
         <div className='sidebar-header'>
-          <span className='kicker'>{t('folders')}</span>
+          <span className='kicker'>{t('sidebar.folders')}</span>
           <button
             type='button'
             className='btn-icon btn-icon-sm'
-            title={t('addRoot')}
-            aria-label={t('addRoot')}
+            title={t('sidebar.addRoot')}
+            aria-label={t('sidebar.addRoot')}
             onClick={onAddRoot}
           >
             <PlusIcon size={12} />
@@ -376,7 +376,7 @@ export const FolderSidebar = memo(function FolderSidebar({
         </div>
         <div className='sidebar-scroll' ref={scrollRef}>
           {folders.length === 0 ? (
-            <div className='sidebar-empty'>{t('noRoots')}</div>
+            <div className='sidebar-empty'>{t('sidebar.noRoots')}</div>
           ) : (
             <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
               {virtualizer.getVirtualItems().map((virtual) => {
@@ -412,7 +412,7 @@ export const FolderSidebar = memo(function FolderSidebar({
                       <button
                         type='button'
                         className='tree-caret'
-                        aria-label={isExpanded ? t('collapseRoot') : t('expandRoot')}
+                        aria-label={isExpanded ? t('sidebar.collapseRoot') : t('sidebar.expandRoot')}
                         aria-expanded={isExpanded}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -470,13 +470,13 @@ export const FolderSidebar = memo(function FolderSidebar({
               weight='bold'
               className={`tree-caret-icon${tagsOpen ? ' open' : ''}`}
             />
-            {tc('tags')}
+            {tc('chrome.tags')}
           </button>
           <button
             type='button'
             className='btn-icon btn-icon-sm'
-            title={t('manageTags')}
-            aria-label={t('manageTags')}
+            title={t('sidebar.manageTags')}
+            aria-label={t('sidebar.manageTags')}
             onClick={onManageTags}
           >
             <SlidersHorizontalIcon size={12} />

@@ -84,7 +84,7 @@ export function SetBpmPanel({
         <span className="bpm-panel-arrow" aria-hidden>
           →
         </span>
-        <span className="bpm-panel-number">{value === "varies" ? t("bpmVaries") : value}</span>
+        <span className="bpm-panel-number">{value === "varies" ? t("setBpm.varies") : value}</span>
       </>
     );
 
@@ -102,7 +102,7 @@ export function SetBpmPanel({
           onSetFromBeats(beats);
         }}
       >
-        <span className="menu-label">{t("bpmBeats", { count: beats })}</span>
+        <span className="menu-label">{t("setBpm.beats", { count: beats })}</span>
         {matches ? <CheckIcon size={11} weight="bold" className="bpm-panel-tick" /> : null}
         {previewCells(value)}
       </button>
@@ -120,7 +120,7 @@ export function SetBpmPanel({
           className="input input-mono bpm-panel-input"
           value={draft}
           inputMode="decimal"
-          aria-label={t("bpmValue")}
+          aria-label={t("setBpm.value")}
           onChange={(e) => {
             setDraft(e.target.value);
           }}
@@ -129,19 +129,19 @@ export function SetBpmPanel({
           }}
           onBlur={commitOnLeavingPanel}
         />
-        <span className="bpm-panel-unit">{t("bpmValue")}</span>
+        <span className="bpm-panel-unit">{t("setBpm.value")}</span>
       </div>
 
       <div className="menu-rule" />
 
       <div className="bpm-panel-head">
-        <span className="kicker">{t("bpmFromLength")}</span>
+        <span className="kicker">{t("setBpm.fromLength")}</span>
         <span className="bpm-panel-duration mono">
           {duration === "varies"
-            ? t("bpmVaries")
+            ? t("setBpm.varies")
             : duration == null
               ? "—"
-              : t("bpmSeconds", { secs: (duration / 1000).toFixed(2) })}
+              : t("setBpm.seconds", { secs: (duration / 1000).toFixed(2) })}
         </span>
       </div>
 
@@ -154,7 +154,7 @@ export function SetBpmPanel({
               value={customBeats}
               inputMode="numeric"
               placeholder="12"
-              aria-label={t("bpmCustomBeats")}
+              aria-label={t("setBpm.customBeats")}
               onChange={(e) => {
                 setCustomBeats(e.target.value);
               }}
@@ -162,18 +162,18 @@ export function SetBpmPanel({
                 if (matchesBinding(e, keys.confirm) && customValid) onSetFromBeats(customCount);
               }}
             />
-            <span className="bpm-panel-unit">{t("bpmCustomBeats")}</span>
+            <span className="bpm-panel-unit">{t("setBpm.customBeats")}</span>
             {customValid ? previewCells(preview(customCount)) : null}
           </div>
         </>
       ) : (
-        <div className="bpm-panel-note">{t("bpmNoDuration")}</div>
+        <div className="bpm-panel-note">{t("setBpm.noDuration")}</div>
       )}
 
       <div className="menu-rule" />
 
       <Checkbox checked={round} onChange={onRoundChange}>
-        {t("bpmRound")}
+        {t("setBpm.round")}
       </Checkbox>
 
       <div className="menu-rule" />
@@ -185,7 +185,7 @@ export function SetBpmPanel({
         onClick={onClear}
       >
         <TrashIcon size={13} />
-        <span className="menu-label">{t("bpmClear")}</span>
+        <span className="menu-label">{t("setBpm.clear")}</span>
       </button>
     </div>
   );
