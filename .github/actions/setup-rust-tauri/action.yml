@@ -3,8 +3,12 @@ description: Nightly Rust (matches src-tauri/rust-toolchain.toml) + rust-cache f
 
 inputs:
   cache-key:
-    description: Suffix for rust-cache shared-key (e.g. macOS, Windows, or ci-ubuntu).
+    description: Suffix for rust-cache shared-key (e.g. macOS-aarch64, Windows, or ci-ubuntu).
     required: true
+  targets:
+    description: Comma-separated rustup targets to install (macOS cross-builds).
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -14,6 +18,7 @@ runs:
       with:
         toolchain: nightly
         components: rustfmt, clippy
+        targets: ${{ inputs.targets }}
 
     - name: Rust cache
       uses: swatinem/rust-cache@v2
