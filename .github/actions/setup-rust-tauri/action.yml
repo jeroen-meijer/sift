@@ -1,5 +1,5 @@
 name: Setup Rust for Tauri
-description: Nightly Rust (matches src-tauri/rust-toolchain.toml) + rust-cache for desktop builds.
+description: Pinned nightly from src-tauri/rust-toolchain.toml + rust-cache for desktop builds.
 
 inputs:
   cache-key:
@@ -13,10 +13,21 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Read toolchain channel
+      id: toolchain
+      shell: bash
+      run: |
+        channel=$(sed -n 's/^channel = "\(.*\)"/\1/p' src-tauri/rust-toolchain.toml)
+        if [ -z "$channel" ]; then
+          echo "Could not read channel from src-tauri/rust-toolchain.toml" >&2
+          exit 1
+        fi
+        echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: nightly
+        toolchain: ${{ steps.toolchain.outputs.channel }}
         components: rustfmt, clippy
         targets: ${{ inputs.targets }}
 

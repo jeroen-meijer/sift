@@ -24,7 +24,7 @@ After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run `bu
 
 | Layer | Choice |
 | --- | --- |
-| Rust toolchain | nightly via `src-tauri/rust-toolchain.toml` |
+| Rust toolchain | pinned nightly via `src-tauri/rust-toolchain.toml` |
 | Edition | 2024 |
 | Lints | namtao clippy deny set in `src-tauri/Cargo.toml` + `clippy.toml` |
 | Watch | `bacon clippy` from `src-tauri/` (`bacon.toml`) |
