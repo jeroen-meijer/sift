@@ -133,8 +133,6 @@ jobs:
           if [ -z "${APPLE_API_KEY:-}" ]; then
             unset APPLE_API_KEY
           fi
-          # Pass --target to tauri (not after `--`). Otherwise cargo builds into
-          # target/<triple>/release but the bundler looks under target/release.
           if [ -n "${RUST_TARGET:-}" ]; then
             bun run tauri build --target "$RUST_TARGET"
           else
