@@ -1,6 +1,6 @@
 [package]
 name = "sift"
-version = "0.4.1"
+version = "0.4.2"
 description = "Local sample manager for producers"
 authors = ["Jeroen Meijer"]
 edition = "2024"
