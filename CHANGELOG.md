@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.4.3
+
 - feat(app): Intel Mac builds alongside Apple Silicon (separate DMG + in-app updates)
 
 ## 0.4.1
