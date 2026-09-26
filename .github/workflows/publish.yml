@@ -65,10 +65,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: macOS
+          # Both macOS targets run on Apple Silicon runners (cross-compile Intel).
+          - label: macOS-aarch64
             os: macos-latest
+            rust_target: aarch64-apple-darwin
+            updater_arch: aarch64
+          - label: macOS-x64
+            os: macos-latest
+            rust_target: x86_64-apple-darwin
+            updater_arch: x64
           - label: Windows
             os: windows-latest
+            rust_target: ""
+            updater_arch: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout release commit
@@ -83,6 +92,7 @@ jobs:
         uses: ./.github/actions/setup-rust-tauri
         with:
           cache-key: ${{ matrix.label }}
+          targets: ${{ matrix.rust_target }}
 
       - name: Sync version from package.json
         run: bun tool/sync-version.ts
@@ -99,6 +109,7 @@ jobs:
 
       - name: Build Tauri app
         env:
+          RUST_TARGET: ${{ matrix.rust_target }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Only pass these when secrets exist. An empty APPLE_SIGNING_IDENTITY
@@ -122,11 +133,29 @@ jobs:
           if [ -z "${APPLE_API_KEY:-}" ]; then
             unset APPLE_API_KEY
           fi
-          bun run tauri build
+          if [ -n "${RUST_TARGET:-}" ]; then
+            bun run tauri build -- --target "$RUST_TARGET"
+          else
+            bun run tauri build
+          fi
 
       - name: Stage release assets
+        env:
+          RUST_TARGET: ${{ matrix.rust_target }}
+          UPDATER_ARCH: ${{ matrix.updater_arch }}
         shell: bash
-        run: ./tool/stage_release_assets.sh src-tauri/target/release/bundle release-assets
+        run: |
+          set -euo pipefail
+          if [ -n "${RUST_TARGET:-}" ]; then
+            bundle="src-tauri/target/${RUST_TARGET}/release/bundle"
+          else
+            bundle="src-tauri/target/release/bundle"
+          fi
+          if [ -n "${UPDATER_ARCH:-}" ]; then
+            ./tool/stage_release_assets.sh "$bundle" release-assets "$UPDATER_ARCH"
+          else
+            ./tool/stage_release_assets.sh "$bundle" release-assets
+          fi
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
@@ -149,10 +178,16 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun-deps
 
-      - name: Download macOS artifacts
+      - name: Download macOS Apple Silicon artifacts
         uses: actions/download-artifact@v4
         with:
-          name: desktop-macOS
+          name: desktop-macOS-aarch64
+          path: release-assets
+
+      - name: Download macOS Intel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-macOS-x64
           path: release-assets
 
       - name: Download Windows artifacts

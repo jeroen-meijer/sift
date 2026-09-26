@@ -92,9 +92,9 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 - Retry: Actions → **Publish Release** → Run workflow with the version.
 - macOS Apple signing/notarization is optional (unsigned if Apple secrets are absent).
 - Updater signing is required on Publish Release. Set repo secrets `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Put the public key in `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`. Do not commit the private key. For local signed builds, export the same env vars from your secrets manager.
-- Release asset helpers: `tool/stage_release_assets.sh` and `tool/finish_github_release.ts`. Keep Tauri's versioned names for the updater (`*_x.y.z_*-setup.exe`, `.app.tar.gz` + `.sig`). Staging also uploads stable hand-install copies with OS in the name (`Sift_macOS_aarch64.dmg`, `Sift_Windows_x64-setup.exe`) so README can use `/releases/latest/download/…` without rewriting URLs each release. Ship `latest.json` plus the `.sig` / updater bundles or the release is incomplete.
+- Release asset helpers: `tool/stage_release_assets.sh` and `tool/finish_github_release.ts`. Publish builds macOS Apple Silicon + Intel (`--target aarch64-apple-darwin` / `x86_64-apple-darwin`) and Windows. Staging renames bare `*.app.tar.gz` to `*_aarch64.app.tar.gz` / `*_x64.app.tar.gz` so dual-arch jobs do not collide, and uploads stable hand-install copies (`Sift_macOS_aarch64.dmg`, `Sift_macOS_x64.dmg`, `Sift_Windows_x64-setup.exe`) for `/releases/latest/download/…`. Ship `latest.json` with both `darwin-aarch64` and `darwin-x86_64` plus Windows, or the release is incomplete.
 - App update endpoint: `https://github.com/jeroen-meijer/sift/releases/latest/download/latest.json`. That URL returns 404 while the repo is private, so in-app updates only work after the repo is public. Dev builds skip the check.
-- README download badges: `…/latest/download/Sift_macOS_aarch64.dmg` and `…/latest/download/Sift_Windows_x64-setup.exe`.
+- README download badges: `…/latest/download/Sift_macOS_aarch64.dmg`, `…/latest/download/Sift_macOS_x64.dmg`, and `…/latest/download/Sift_Windows_x64-setup.exe`.
 
 ## Perf / profiling
 

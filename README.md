@@ -13,6 +13,7 @@
 
 <p align="center">
   <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_macOS_aarch64.dmg"><img alt="Download (Apple Silicon)" src="https://img.shields.io/badge/Download-macOS%20(Apple%20Silicon)-black?style=for-the-badge&logo=apple&logoColor=white" /></a>
+  <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_macOS_x64.dmg"><img alt="Download (Intel)" src="https://img.shields.io/badge/Download-macOS%20(Intel)-black?style=for-the-badge&logo=apple&logoColor=white" /></a>
   <a href="https://github.com/jeroen-meijer/sift/releases/latest/download/Sift_Windows_x64-setup.exe"><img alt="Download" src="https://img.shields.io/badge/Download-Windows-blue?style=for-the-badge&logo=windows&logoColor=white" /></a>
 </p>
 

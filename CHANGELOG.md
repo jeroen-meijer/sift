@@ -1,5 +1,7 @@
 ## Upcoming
 
+- feat(app): Intel Mac builds alongside Apple Silicon (separate DMG + in-app updates)
+
 ## 0.4.1
 
 - fix(macos): ship a precompiled Liquid Glass `Assets.car` so macOS builds no longer die in `actool`

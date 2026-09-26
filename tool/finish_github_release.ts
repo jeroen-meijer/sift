@@ -6,8 +6,10 @@
  *   bun tool/finish_github_release.ts --version 0.4.0 --sha <commit> --assets-dir release-assets
  *
  * latest.json points at versioned macOS *.app.tar.gz and Windows NSIS *-setup.exe.
- * MSI and stable README downloads (Sift_macOS_aarch64.dmg, Sift_Windows_x64-setup.exe)
- * stay on the release for /releases/latest/download/ only.
+ * MSI and stable README downloads (Sift_macOS_aarch64.dmg, Sift_macOS_x64.dmg,
+ * Sift_Windows_x64-setup.exe) stay on the release for /releases/latest/download/ only.
+ * macOS updater bundles must include arch in the name (Sift_aarch64.app.tar.gz /
+ * Sift_x64.app.tar.gz); bare ProductName.app.tar.gz collides across dual-arch jobs.
  */
 
 import { spawnSync } from "node:child_process";
@@ -82,8 +84,8 @@ function platformKeysForAsset(fileName: string): string[] {
   if (lower.endsWith(".app.tar.gz")) {
     if (lower.includes("aarch64") || lower.includes("arm64")) return ["darwin-aarch64"];
     if (lower.includes("x86_64") || lower.includes("x64")) return ["darwin-x86_64"];
-    // Unmarked .app.tar.gz: GitHub macos-latest is Apple Silicon.
-    return ["darwin-aarch64"];
+    // Bare ProductName.app.tar.gz has no arch; staging must rename per updater_arch.
+    return [];
   }
 
   // NSIS setup for the updater. MSI and stable README copies are hand-install only.
@@ -131,6 +133,15 @@ function main(): void {
   const platforms: Record<string, PlatformEntry> = {};
 
   for (const fileName of files) {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith(".app.tar.gz") && !lower.endsWith(".app.tar.gz.sig")) {
+      if (platformKeysForAsset(fileName).length === 0) {
+        console.error(
+          `error: macOS updater bundle missing arch in name (expected *_aarch64.app.tar.gz or *_x64.app.tar.gz): ${fileName}`,
+        );
+        process.exit(1);
+      }
+    }
     if (!isUpdaterBundle(fileName)) continue;
     const sigName = `${fileName}.sig`;
     if (!files.includes(sigName)) {
@@ -146,6 +157,12 @@ function main(): void {
 
   if (Object.keys(platforms).length === 0) {
     console.error("error: no updater platforms found (need .app.tar.gz / NSIS .exe + .sig)");
+    process.exit(1);
+  }
+  if (!platforms["darwin-aarch64"] || !platforms["darwin-x86_64"]) {
+    console.error(
+      `error: expected both darwin-aarch64 and darwin-x86_64 in latest.json; got: ${Object.keys(platforms).sort().join(", ")}`,
+    );
     process.exit(1);
   }
 
