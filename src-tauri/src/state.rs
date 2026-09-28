@@ -14,7 +14,7 @@ pub struct AppState {
     pub paths: AppPaths,
     pub db: Arc<Db>,
     pub player: Mutex<PlayerEngine>,
-    /// Decoded PCM LRU for select→play / prefetch (see SPEC audition latency).
+    /// Decoded PCM LRU for select→play / prefetch (see audition latency in the spec).
     pub decode_cache: Mutex<DecodeCache>,
     pub undo: Mutex<UndoStack>,
     /// Highest play/stop/pause request number seen from the UI. A play whose

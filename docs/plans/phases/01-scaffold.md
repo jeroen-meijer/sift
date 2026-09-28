@@ -8,7 +8,7 @@ Tauri 2 + React 19 + Vite 8 + Bun app at repo root. `bun run build` and `cargo c
 
 ## Previous
 
-Repo has SPEC, tech-stack, default-taxonomy, and Claude Design under `docs/design/`. Local example sample files were used for dogfood. No app code yet.
+Repo has the spec, tech-stack, default-taxonomy, and Claude Design under `docs/design/`. Local example sample files were used for dogfood. No app code yet.
 
 ## This phase
 
@@ -25,7 +25,7 @@ Create a Tauri 2 + React 19 + TypeScript + Vite + Bun desktop app at the repo ro
 
 ### Out of scope
 
-- Product UI, themes beyond a blank dark page, SQLite, audio, any SPEC features
+- Product UI, themes beyond a blank dark page, SQLite, audio, any features from the spec
 
 ## Acceptance
 
@@ -37,6 +37,6 @@ Create a Tauri 2 + React 19 + TypeScript + Vite + Bun desktop app at the repo ro
 
 Phase 02: Nocturne theme tokens, i18n, shell chrome matching first-launch/library frames.
 
-## SPEC
+## Spec
 
 §5 stack bias; TECH_STACK recommendation.

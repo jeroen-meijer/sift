@@ -42,6 +42,6 @@ Background analysis never blocks UI: file info, BPM, key, loop/one-shot, path/fi
 
 Phase 14: filesystem watch, missing files, context menus, undo, settings polish, dogfood.
 
-## SPEC
+## Spec
 
 §4.7 Analysis; §4.8 overrides; DEFAULT_TAXONOMY auto-tag notes.

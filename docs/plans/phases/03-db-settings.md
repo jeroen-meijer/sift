@@ -37,6 +37,6 @@ Embed SQLite and persist settings; seed default tag taxonomy; expose get/set set
 
 Phase 04: add/remove library roots + first-launch Add folder.
 
-## SPEC
+## Spec
 
 §4.8 Metadata storage; §4.9 Tags (seed); §4.5/4.7 defaults that live in settings.

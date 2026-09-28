@@ -39,6 +39,6 @@ Virtualized sample list/table with sort, multi-select, favorites, and selection 
 
 Phase 07: decode + peakfile generation for waveform drawing.
 
-## SPEC
+## Spec
 
 §4.2 Sample list (minus interactive waveforms and full context menu).

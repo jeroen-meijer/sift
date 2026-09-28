@@ -43,6 +43,6 @@ Hierarchical tags with colors, sample tagging, and dedicated tag management UI (
 
 Phase 12: omni search field + structured chips.
 
-## SPEC
+## Spec
 
 §4.9 Tags; design views `tags`, `tagdelete`.

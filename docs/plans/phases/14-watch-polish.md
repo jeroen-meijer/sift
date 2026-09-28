@@ -8,7 +8,7 @@ Phase 13: analysis pipeline works; no continuous watch; gaps in menus/settings/u
 
 ## This phase
 
-Close remaining SPEC Musts: continuous watch, missing files, ask/auto-index, full context menu, metadata undo/redo, hold-hover hotkey, settings completeness, dogfood pass.
+Close remaining Musts from the spec: continuous watch, missing files, ask/auto-index, full context menu, metadata undo/redo, hold-hover hotkey, settings completeness, dogfood pass.
 
 ### In scope
 
@@ -27,15 +27,15 @@ Close remaining SPEC Musts: continuous watch, missing files, ask/auto-index, ful
 
 ### Out of scope
 
-- Anything listed out of v1 in SPEC / index plan
+- Anything listed out of v1 in the spec / index plan
 - Windows certification (macOS dogfood enough)
 
 ## Acceptance
 
-- `bun run tauri:dev` yields a usable v1 matching SPEC Must coverage + design surfaces
+- `bun run tauri:dev` yields a usable v1 matching Must coverage from the spec + design surfaces
 - Watch picks up a copied file into a root (auto-index)
 - Missing file flow works when path deleted outside app
-- Context menu and settings cover SPEC lists
+- Context menu and settings cover lists from the spec
 - All phases 01-14 marked complete in index
 
 ## Shipped vs deferred
@@ -48,6 +48,6 @@ Close remaining SPEC Musts: continuous watch, missing files, ask/auto-index, ful
 
 None for v1. Later: collections, saved searches, Windows validation, analysis tuning.
 
-## SPEC
+## Spec
 
 §4.12 Watch; §4.2 context menu; §4.8 undo; §4.3 hold-hover; §4.1-4.16 remaining Musts; §5 v1 quality bar.

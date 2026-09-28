@@ -39,6 +39,6 @@ Interactive row and detail waveforms: click-to-play-from, hover cursor, selectio
 
 Phase 10: JIT clip render + native drag to DAW.
 
-## SPEC
+## Spec
 
 §4.4 Waveforms; §4.2 row waveform interaction; Shift context note.

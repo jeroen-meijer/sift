@@ -38,6 +38,6 @@ User can add and remove library roots (index only; disk untouched) and see them 
 
 Phase 05: recursive audio indexer with ignore list + progress.
 
-## SPEC
+## Spec
 
 §4.1 Library and folders; §4.16 First launch; Q65 remove root.

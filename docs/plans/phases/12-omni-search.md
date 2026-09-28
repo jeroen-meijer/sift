@@ -46,6 +46,6 @@ ADSR-style omni search: fuzzy text + removable chips; toggles; match highlightin
 
 Phase 13: background analysis (BPM/key/type/auto-tags).
 
-## SPEC
+## Spec
 
 §4.11 Search.

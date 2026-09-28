@@ -29,6 +29,6 @@ JIT WAV clips via hound; `render_jit_clip` / `clear_jit_cache` / `start_drag_fil
 
 Phase 11: hierarchical tags + management UI.
 
-## SPEC
+## Spec
 
 §4.6 Drag to DAW; §6 JIT summary.

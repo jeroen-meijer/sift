@@ -45,7 +45,7 @@ Companion to [spec.md](spec.md). Answers from requirements gathering (2026-09-21
 | Q44 | Search UI | Omni: fuzzy text + chips + highlights; no query language on roadmap |
 | Q45-Q46 | Suggested tags | Auto-apply; sticky reject; Custom analysis can overwrite tags once |
 | Q47 | Unknown BPM + snap | Silent free-time |
-| Q48 | Next | Pause Q&A; tidy SPEC for design + engineering |
+| Q48 | Next | Pause Q&A; tidy the spec for design + engineering |
 | Q49 | JIT start-end format | **A** - seconds with decimals (e.g. `1.250-3.000`) |
 | Q50 | New-file handling options | **B** - Auto-index (+ optional notify) or Ask before indexing |
 | Q51 | Ask-before UX | **A** - non-blocking Index/Skip; Index all/Skip all for batches |
@@ -69,7 +69,7 @@ Companion to [spec.md](spec.md). Answers from requirements gathering (2026-09-21
 | Q69 | Pause + cleanup | Spec → v0.3; Q&A paused; humanize pass |
 | Q70 | Locales + themes | Copy in locale files; colors/tokens in theme files. v1: `en` + one dark theme. Structure ready for more languages/themes later |
 | Q71 | Column sort | Header click cycles asc (↓) → desc (↑) → clear (default Name A-Z). Persists. One column at a time |
-| Q72 | Design authority | Provided Claude Design artifacts are visual source of truth for chrome; SPEC wins on behavior |
+| Q72 | Design authority | Provided Claude Design artifacts are visual source of truth for chrome; the spec wins on behavior |
 | Q73 | Default taxonomy | Ship [docs/reference/default-taxonomy.md](reference/default-taxonomy.md); tunable after dogfood |
 | Q74 | Analysis + packages | Auto-tags: filename/path first. BPM/key: existing Rust crate behind trait; imperfect OK. Prefer crates/React libs over custom DSP/OS code |
 | Q75 | v1 delivery | Complete Must + designs; test once the Must surfaces are done; tune after. Icon mocks OK. macOS host for build; assume stack spikes pass unless they fail |

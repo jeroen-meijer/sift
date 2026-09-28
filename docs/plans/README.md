@@ -6,7 +6,7 @@
 
 ## Goal
 
-Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers SPEC Musts and the Claude Design surfaces. Dogfood against a local sample library on disk.
+Ship a buildable, runnable Tauri 2 + React Sift v1 on macOS that covers Musts from the spec and the Claude Design surfaces. Dogfood against a local sample library on disk.
 
 ## Progress
 

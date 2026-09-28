@@ -38,6 +38,6 @@ Wire dark theme tokens, English locales, and static app chrome that matches the 
 
 Phase 03: SQLite schema, settings store, taxonomy seed.
 
-## SPEC
+## Spec
 
 §4.13 Appearance; §4.14 Localization; §4.16 First launch (UI only).

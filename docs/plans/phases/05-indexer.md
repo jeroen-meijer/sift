@@ -39,6 +39,6 @@ Recursively index audio files under each root into SQLite with progress events; 
 
 Phase 06: virtualized sample table + selection.
 
-## SPEC
+## Spec
 
 §4.12 indexing parts; §4.15 Formats; §4.1 ignore list.

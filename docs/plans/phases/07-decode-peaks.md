@@ -36,6 +36,6 @@ Decode audio via Symphonia; build peak buffers for row and detail views; cache p
 
 Phase 08: cpal preview playback + transport.
 
-## SPEC
+## Spec
 
 §4.4 Waveforms (drawing); §4.15 decode formats; TECH_STACK peakfiles.

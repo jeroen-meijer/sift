@@ -12,7 +12,7 @@ Phase 07: peaks drawn; no audio out.
 
 ## This phase
 
-Rust `cpal` preview engine with SPEC transport: play-on-select, Enter/Space, Up/Down, loop preview, gain, output device.
+Rust `cpal` preview engine with transport from the spec: play-on-select, Enter/Space, Up/Down, loop preview, gain, output device.
 
 ### In scope
 
@@ -34,13 +34,13 @@ Rust `cpal` preview engine with SPEC transport: play-on-select, Enter/Space, Up/
 ## Acceptance
 
 - Rapid Up/Down through a local library feels snappy; no ~0.5s hitch
-- Gain and loop toggle behave per SPEC
+- Gain and loop toggle behave per the spec
 - Switching output device works (or reports clear error)
 
 ## Next
 
 Phase 09: interactive waveforms, snap, selection region.
 
-## SPEC
+## Spec
 
 §4.3 Playback and keyboard; §4.5 Preview audio.

@@ -22,7 +22,7 @@ Related: [loudline](https://github.com/jeroen-meijer/loudline) (same author) is 
 | JIT clips | Rust WAV writer (e.g. `hound`) | Exact rate / bit depth / channels; files in app cache |
 | Drag → DAW | `tauri-plugin-drag` (`startDrag`) | Drag real paths (full files or JIT clip files already on disk) |
 | Waveform peaks | Rust peakfile / downsample workers | UI draws Canvas (or WebGL) from buffers Rust already built |
-| BPM / key / type | Rust worker pool | Algorithms still Open in SPEC; keep behind a trait |
+| BPM / key / type | Rust worker pool | Algorithms still Open in the spec; keep behind a trait |
 
 Do **not** use Electron. Do **not** use Web Audio / AudioWorklet as the primary preview or analysis engine.
 
@@ -56,7 +56,7 @@ Loudline runs metering and preview in the WebView, which fits one-file loudness 
 
 Claude Design mockups are dense VS Code-like chrome (chip bar, virtualized table, dual-pane waveform, purple-dark theme). React matches that shape quickly. Loudline already ships Tauri 2 + React 19 + Vite + Bun, so packaging and habits transfer.
 
-SPEC needs native-speed audio, analysis, and I/O in the same process. The WebView is UI only.
+Spec needs native-speed audio, analysis, and I/O in the same process. The WebView is UI only.
 
 Common setup: Tauri for UI and `cpal` (or similar) in Rust for the device graph. Real-time rules still apply: no alloc/lock in the audio callback; lock-free queues between UI and audio.
 
@@ -68,7 +68,7 @@ Common setup: Tauri for UI and `cpal` (or similar) in Rust for the device graph.
 
 | Option | Verdict for Sift v1 |
 |--------|---------------------|
-| Electron | Heavier; fights the SPEC wording. No win over Tauri for this shape. |
+| Electron | Heavier; fights the wording in the spec. No win over Tauri for this shape. |
 | Web Audio preview (loudline-style) | Fine for one file. Weak for device picker fidelity, RT priority, racing Up/Down select→play, and large-library decode policy. |
 | egui / eframe (pure Rust UI) | Strong for waveforms and native drag-out (see [audiofiles](https://maxj.phd/git/max/audiofiles)). Weaker for matching the Claude Design mockups and for React reuse from loudline. Keep as the fallback if Tauri fails the spike. |
 | Iced | Retained-mode Rust UI; smaller ecosystem and slower UI iteration for this density. |
@@ -88,7 +88,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 |---------|--------------|--------------|
 | Shell / IPC | `tauri` 2.x, `tauri-plugin-dialog`, `tauri-plugin-fs` (scoped), `tauri-plugin-drag` | Still correct. Loudline already on Tauri 2. |
 | Output devices + RT stream | **`cpal`** | Still the low-level standard (CoreAudio / WASAPI). Prefer over `rodio` for Sift: device picker, buffer control, and select→play need the stream API, not a high-level player. `rodio` sits on `cpal` + Symphonia and is fine for simple play-a-file apps, not ideal as the engine. |
-| Decode | **`symphonia` 0.6.x** | Still the pure-Rust decode default. Enable format features for SPEC codecs. **Opus:** no solid native decoder yet; use `symphonia-adapter-libopus` (bundles libopus) until first-party lands. **HE-AAC:** native incomplete; `symphonia-adapter-fdk-aac` if those files matter. AAC-LC / M4A via `aac` + `isomp4` is in good shape. |
+| Decode | **`symphonia` 0.6.x** | Still the pure-Rust decode default. Enable format features for codecs required by the spec. **Opus:** no solid native decoder yet; use `symphonia-adapter-libopus` (bundles libopus) until first-party lands. **HE-AAC:** native incomplete; `symphonia-adapter-fdk-aac` if those files matter. AAC-LC / M4A via `aac` + `isomp4` is in good shape. |
 | Index DB | **Diesel** (SQLite) + `diesel_migrations` + bundled `libsqlite3-sys` | Sync ORM with CLI migrations and typed schema. Prefer over hand-written `rusqlite` SQL. Sync fits worker/`Mutex` access; SeaORM is the async alternative if the core goes fully async later. |
 | FS watch | **`notify`** + **`notify-debouncer-full`** (or similar debouncer) | Still the cross-platform watch stack. Debounce in Rust before applying Ask/Auto-index. |
 | JIT WAV write | **`hound`** | Still fine for 8/16/24/32-bit PCM and float WAV write (exact rate/bit depth/channels). No strong successor; keep unless a spike finds a gap (e.g. exotic WAVEFORMATEXTENSIBLE edge cases). |
@@ -147,9 +147,9 @@ Rules:
 
 ---
 
-## Mapping to SPEC risks
+## Mapping to spec risks
 
-| SPEC need | Stack approach |
+| Spec need | Stack approach |
 |-----------|----------------|
 | Near-instant select→play | Prefetch/decode in Rust; play command is tiny; no Web Audio round-trip |
 | Analysis never blocks UI | Worker pool + progress events; UI stays interactive |
@@ -166,7 +166,7 @@ Rules:
 
 - Prefer maintained crates and React packages when the use case fits (decode, devices, watch, DB, virtualization, i18n, BPM/key). Write glue and product UI; do not reimplement mature DSP or OS integration.
 - Auto-tags v1: filename/path token → [default-taxonomy.md](default-taxonomy.md). BPM/key via crate (`stratum-dsp` first spike); unknown/low-confidence OK.
-- Claude Design exports (Project HTML zip + screens) are the visual target. SPEC wins when behavior conflicts.
+- Claude Design exports (Project HTML zip + screens) are the visual target. The spec wins when behavior conflicts.
 - v1 bar: Must surfaces that work for day-to-day use; imperfect analysis, search, and watch edges are fine until later tuning.
 - App icon / logo: [`assets/brand/`](../../assets/brand/README.md); generated platform files in `src-tauri/icons/`.
 - Delivery: build until the Must surfaces run end to end; tune after day-to-day use.
@@ -206,7 +206,7 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 ## Open engineering choices (not blocking stack choice)
 
 - Peakfile on-disk format and eviction
-- Analysis library for BPM / key / loop-vs-one-shot (SPEC Open)
+- Analysis library for BPM / key / loop-vs-one-shot (Open in the spec)
 - Whether UI is one Tauri window with React router panes or multiple webviews (default: one window)
 - Exact virtualization and Canvas vs WebGL for detail waveform
 - Windows SMB/UNC drag-out edge cases (known drag-rs pain; prefer local paths in v1 tests)
@@ -217,8 +217,8 @@ Optional later: shared private crate for "decode this path to interleaved f32" i
 
 | Date | Notes |
 |------|-------|
-| 2026-09-22 | Initial recommendation after SPEC v0.3, Claude Design mockups, loudline review, and public Tauri/audio research |
-| 2026-09-22 | Locale + theme file layout (SPEC Q70) |
+| 2026-09-22 | Initial recommendation after spec v0.3, Claude Design mockups, loudline review, and public Tauri/audio research |
+| 2026-09-22 | Locale + theme file layout (Q70 in the spec) |
 | 2026-09-22 | Crate currency pass: keep cpal/symphonia/rusqlite/notify/hound; Opus via libopus adapter; analysis still behind trait (`stratum-dsp` candidate) |
 | 2026-09-22 | Implementation bias, taxonomy link, macOS-first dogfood (Q72-Q75) |
 | 2026-09-22 | Index DB: Diesel + embedded migrations (replace rusqlite hand SQL) |

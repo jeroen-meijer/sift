@@ -5,7 +5,7 @@ Read this file at the **start of every phase** before writing code.
 ## Authority
 
 1. [spec.md](../spec.md) wins on behavior.
-2. [docs/design/](../design/) (Claude Design export) wins on chrome/layout/visuals when SPEC is silent.
+2. [docs/design/](../design/) (Claude Design export) wins on chrome/layout/visuals when the spec is silent.
 3. [docs/reference/tech-stack.md](../reference/tech-stack.md) wins on stack choices unless a spike proves a crate unusable; then document the swap in [decisions.md](../decisions.md) and continue.
 
 ## Autonomy
@@ -39,7 +39,7 @@ Every `phases/NN-*.md` must include:
 - This phase's job, in scope, out of scope
 - Acceptance criteria
 - Rough next phase
-- SPEC sections touched
+- Spec sections touched
 
 ## Progress tracking
 
