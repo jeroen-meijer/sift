@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.5.0
+
 - feat(search): allow searching for samples by BPM, key, type and tags in the search bar
 - feat(ui): move waveform column toggle to column picker
 - fix(ui): improved Snow theme visibility and contrast
