@@ -3,6 +3,8 @@
 export const THEMES = ["nocturne", "ink", "graphite", "snow"] as const;
 export type ThemeId = (typeof THEMES)[number];
 
+export const DEFAULT_THEME: ThemeId = "graphite";
+
 export interface ThemeInfo {
   id: ThemeId;
   /** Four chips: ground, accent, text, danger. */
@@ -17,9 +19,9 @@ export interface ThemeInfo {
 }
 
 /**
- * Built-in palettes. Nocturne is Sift's default. Ink, Graphite, and Snow
- * follow Monospace VS Code themes. Display names and blurbs live in
- * `locales/en/settings.json` under `appearance.themes`.
+ * Built-in palettes. Graphite is the default. Ink, Graphite, and Snow follow
+ * Monospace VS Code themes; Nocturne is Sift's own. Display names and blurbs
+ * live in `locales/en/settings.json` under `appearance.themes`.
  */
 export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
   nocturne: {
@@ -64,13 +66,13 @@ export const THEME_INFO: Record<ThemeId, ThemeInfo> = {
   },
 };
 
-/** Older installs stored `dark-default`; treat it as Nocturne. */
+/** Older installs stored `dark-default` (Nocturne). Unknown ids get the default. */
 export function normalizeThemeId(raw: string | null | undefined): ThemeId {
   if (raw === "dark-default" || raw === "nocturne") return "nocturne";
   if (raw != null && (THEMES as readonly string[]).includes(raw)) {
     return raw as ThemeId;
   }
-  return "nocturne";
+  return DEFAULT_THEME;
 }
 
 let lerpArmed = false;
@@ -79,7 +81,7 @@ let lerpArmed = false;
  * Apply a theme. The first call snaps (startup); later calls lerp via
  * registered `@property` color tokens on `html.theme-lerp`.
  */
-export function applyTheme(theme = "nocturne") {
+export function applyTheme(theme: string = DEFAULT_THEME) {
   const id = normalizeThemeId(theme);
   const root = document.documentElement;
   if (lerpArmed && root.dataset.theme !== id) {

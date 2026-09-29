@@ -1,5 +1,7 @@
 ## Upcoming
 
+- feat(ui): new installs start in the Graphite theme. Your current theme stays as it is
+
 ## 0.5.0
 
 - feat(search): allow searching for samples by BPM, key, type and tags in the search bar

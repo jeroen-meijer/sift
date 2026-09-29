@@ -8,7 +8,7 @@ looked all-green, how MiniMeters and DJ apps color waves, and what to try next.
 
 Peakfile **v7** stores four u8 weights per bucket from moodbar STFT energy:
 
-| Band | Hz range | Theme token | Default (Nocturne) |
+| Band | Hz range | Theme token | Nocturne |
 | --- | --- | --- | --- |
 | Bass | &lt; 200 | `--color-wave-bass` | pink `#ff3d8a` |
 | Low-mid | 200-1500 | `--color-wave-low-mid` (legacy `--color-wave-mid`) | green `#2ee89a` |

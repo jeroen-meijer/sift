@@ -6,10 +6,11 @@ describe("theme", () => {
     expect(THEMES).toEqual(["nocturne", "ink", "graphite", "snow"]);
   });
 
-  it("maps the legacy dark-default id to nocturne", () => {
+  it("maps dark-default to nocturne and unknown ids to the graphite default", () => {
     expect(normalizeThemeId("dark-default")).toBe("nocturne");
     expect(normalizeThemeId("ink")).toBe("ink");
-    expect(normalizeThemeId("nope")).toBe("nocturne");
+    expect(normalizeThemeId("nope")).toBe("graphite");
+    expect(normalizeThemeId(null)).toBe("graphite");
   });
 
   it("applyTheme sets data-theme to a known id", () => {
