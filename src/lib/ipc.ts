@@ -4,6 +4,7 @@ import type { ColumnWidths, TableColumn } from "./columnWidths";
 import { DEFAULT_COLUMN_WIDTHS } from "./columnWidths";
 import { DEFAULT_COLUMN_ORDER } from "./columnOrder";
 import { profiled } from "./profile";
+import { DEFAULT_THEME } from "../theme";
 
 export type { ColumnWidths, ResizableColumn, TableColumn } from "./columnWidths";
 
@@ -228,7 +229,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   clips_dir: "",
   column_widths: { ...DEFAULT_COLUMN_WIDTHS },
   column_order: [...DEFAULT_COLUMN_ORDER],
-  theme: "nocturne",
+  theme: DEFAULT_THEME,
   splice_enabled: true,
   splice_db_path: null,
 };

@@ -2,7 +2,7 @@
  * Theme tokens. Shared geometry / motion live on :root; each
  * `[data-theme="…"]` block owns the color ramps. Components use var(--…) only.
  *
- * Nocturne is the default (legacy id: dark-default).
+ * Graphite is the default. Nocturne keeps its legacy id dark-default.
  * Ink / Graphite / Snow follow the Monospace VS Code theme collection.
  * `--color-on-accent` is paint on accent-strong fills (switch/toggle knobs,
  * slider thumbs); same role as `button.foreground` in those themes.
@@ -38,74 +38,74 @@
 
 /*
  * Register color tokens as interpolatable `<color>` values. initial-value
- * matches Nocturne. With `html.theme-lerp`, theme switches animate.
+ * matches Graphite. With `html.theme-lerp`, theme switches animate.
  */
-@property --color-ink { syntax: "<color>"; inherits: true; initial-value: #100f1a; }
-@property --color-bg-deep { syntax: "<color>"; inherits: true; initial-value: #0d0e15; }
-@property --color-bg-input { syntax: "<color>"; inherits: true; initial-value: #101220; }
-@property --color-bg-sidebar { syntax: "<color>"; inherits: true; initial-value: #12141f; }
-@property --color-bg-toolbar { syntax: "<color>"; inherits: true; initial-value: #181a28; }
-@property --color-sunken { syntax: "<color>"; inherits: true; initial-value: #191b27; }
-@property --color-bg { syntax: "<color>"; inherits: true; initial-value: #161826; }
-@property --color-bg-detail { syntax: "<color>"; inherits: true; initial-value: #1b1d2b; }
-@property --color-bg-title { syntax: "<color>"; inherits: true; initial-value: #1c1e2c; }
-@property --color-elevated { syntax: "<color>"; inherits: true; initial-value: #22242f; }
-@property --color-surface { syntax: "<color>"; inherits: true; initial-value: #232532; }
-@property --color-surface-hover { syntax: "<color>"; inherits: true; initial-value: #2b2e3d; }
-@property --color-neutral-100 { syntax: "<color>"; inherits: true; initial-value: #f3f5fe; }
-@property --color-neutral-200 { syntax: "<color>"; inherits: true; initial-value: #e4e7f5; }
-@property --color-neutral-250 { syntax: "<color>"; inherits: true; initial-value: #dedfe6; }
-@property --color-neutral-300 { syntax: "<color>"; inherits: true; initial-value: #cfd3e5; }
-@property --color-neutral-400 { syntax: "<color>"; inherits: true; initial-value: #b2b6ca; }
-@property --color-neutral-500 { syntax: "<color>"; inherits: true; initial-value: #9397ab; }
-@property --color-neutral-600 { syntax: "<color>"; inherits: true; initial-value: #75798c; }
-@property --color-neutral-700 { syntax: "<color>"; inherits: true; initial-value: #595d6c; }
-@property --color-neutral-800 { syntax: "<color>"; inherits: true; initial-value: #3f424d; }
-@property --color-neutral-850 { syntax: "<color>"; inherits: true; initial-value: #31333d; }
-@property --color-neutral-900 { syntax: "<color>"; inherits: true; initial-value: #292b31; }
-@property --color-accent-100 { syntax: "<color>"; inherits: true; initial-value: #f5f4ff; }
-@property --color-accent-200 { syntax: "<color>"; inherits: true; initial-value: #e7e5fe; }
-@property --color-accent-300 { syntax: "<color>"; inherits: true; initial-value: #d2cefd; }
-@property --color-accent-400 { syntax: "<color>"; inherits: true; initial-value: #b5abfc; }
-@property --color-accent-500 { syntax: "<color>"; inherits: true; initial-value: #968ae0; }
-@property --color-accent-600 { syntax: "<color>"; inherits: true; initial-value: #796cbf; }
-@property --color-accent-700 { syntax: "<color>"; inherits: true; initial-value: #5d5294; }
-@property --color-accent-800 { syntax: "<color>"; inherits: true; initial-value: #423a6a; }
-@property --color-accent-900 { syntax: "<color>"; inherits: true; initial-value: #2b2741; }
-@property --color-text { syntax: "<color>"; inherits: true; initial-value: #e9e9ed; }
-@property --color-text-selected { syntax: "<color>"; inherits: true; initial-value: #e7e5fe; }
-@property --color-text-muted { syntax: "<color>"; inherits: true; initial-value: #9397ab; }
-@property --color-text-dim { syntax: "<color>"; inherits: true; initial-value: #75798c; }
-@property --color-text-dim-2 { syntax: "<color>"; inherits: true; initial-value: #6d6f7c; }
-@property --color-text-faint { syntax: "<color>"; inherits: true; initial-value: #5b5f70; }
-@property --color-text-ghost { syntax: "<color>"; inherits: true; initial-value: #4a4e5d; }
-@property --color-count-selected { syntax: "<color>"; inherits: true; initial-value: #8b84ad; }
-@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #9184d9; }
-@property --color-accent-soft { syntax: "<color>"; inherits: true; initial-value: #b5abfc; }
-@property --color-accent-strong { syntax: "<color>"; inherits: true; initial-value: #796cbf; }
-@property --color-on-accent { syntax: "<color>"; inherits: true; initial-value: #f3f5fe; }
-@property --color-accent-fill { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 14%); }
-@property --color-accent-fill-strong { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 16%); }
-@property --color-accent-fill-row { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 15%); }
-@property --color-danger { syntax: "<color>"; inherits: true; initial-value: #d4837d; }
-@property --color-danger-text { syntax: "<color>"; inherits: true; initial-value: #e08b85; }
-@property --color-danger-ink { syntax: "<color>"; inherits: true; initial-value: #c9736d; }
-@property --color-danger-border { syntax: "<color>"; inherits: true; initial-value: #a8524c; }
-@property --color-danger-fill { syntax: "<color>"; inherits: true; initial-value: rgb(168 82 76 / 14%); }
-@property --color-ok { syntax: "<color>"; inherits: true; initial-value: #7fbf95; }
-@property --color-ok-text { syntax: "<color>"; inherits: true; initial-value: #a9cdb6; }
-@property --color-ok-fill { syntax: "<color>"; inherits: true; initial-value: rgb(95 154 114 / 10%); }
-@property --color-divider { syntax: "<color>"; inherits: true; initial-value: rgb(233 233 237 / 9%); }
-@property --color-border { syntax: "<color>"; inherits: true; initial-value: rgb(233 233 237 / 13%); }
-@property --color-hairline { syntax: "<color>"; inherits: true; initial-value: rgb(233 233 237 / 4%); }
-@property --color-wave-ink { syntax: "<color>"; inherits: true; initial-value: #7b71b8; }
-@property --color-row-wave { syntax: "<color>"; inherits: true; initial-value: #6a6d80; }
-@property --color-row-wave-sel { syntax: "<color>"; inherits: true; initial-value: #b9b0f0; }
-@property --color-wave-bass { syntax: "<color>"; inherits: true; initial-value: #ff3d8a; }
-@property --color-wave-low-mid { syntax: "<color>"; inherits: true; initial-value: #2ee89a; }
-@property --color-wave-high-mid { syntax: "<color>"; inherits: true; initial-value: #40c8e8; }
-@property --color-wave-mid { syntax: "<color>"; inherits: true; initial-value: #2ee89a; }
-@property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #8b7cff; }
+@property --color-ink { syntax: "<color>"; inherits: true; initial-value: #050505; }
+@property --color-bg-deep { syntax: "<color>"; inherits: true; initial-value: #0a0a0a; }
+@property --color-bg-input { syntax: "<color>"; inherits: true; initial-value: #1a1a1a; }
+@property --color-bg-sidebar { syntax: "<color>"; inherits: true; initial-value: #0e0e0e; }
+@property --color-bg-toolbar { syntax: "<color>"; inherits: true; initial-value: #141414; }
+@property --color-sunken { syntax: "<color>"; inherits: true; initial-value: #161616; }
+@property --color-bg { syntax: "<color>"; inherits: true; initial-value: #121212; }
+@property --color-bg-detail { syntax: "<color>"; inherits: true; initial-value: #181818; }
+@property --color-bg-title { syntax: "<color>"; inherits: true; initial-value: #0a0a0a; }
+@property --color-elevated { syntax: "<color>"; inherits: true; initial-value: #1e1e1e; }
+@property --color-surface { syntax: "<color>"; inherits: true; initial-value: #242424; }
+@property --color-surface-hover { syntax: "<color>"; inherits: true; initial-value: #2e2e2e; }
+@property --color-neutral-100 { syntax: "<color>"; inherits: true; initial-value: #f5f5f5; }
+@property --color-neutral-200 { syntax: "<color>"; inherits: true; initial-value: #e8e8e8; }
+@property --color-neutral-250 { syntax: "<color>"; inherits: true; initial-value: #e2e2e2; }
+@property --color-neutral-300 { syntax: "<color>"; inherits: true; initial-value: #cfcfcf; }
+@property --color-neutral-400 { syntax: "<color>"; inherits: true; initial-value: #b0b0b0; }
+@property --color-neutral-500 { syntax: "<color>"; inherits: true; initial-value: #8f8f8f; }
+@property --color-neutral-600 { syntax: "<color>"; inherits: true; initial-value: #6b6b6b; }
+@property --color-neutral-700 { syntax: "<color>"; inherits: true; initial-value: #5c5c5c; }
+@property --color-neutral-800 { syntax: "<color>"; inherits: true; initial-value: #3d3d3d; }
+@property --color-neutral-850 { syntax: "<color>"; inherits: true; initial-value: #333333; }
+@property --color-neutral-900 { syntax: "<color>"; inherits: true; initial-value: #2a2a2a; }
+@property --color-accent-100 { syntax: "<color>"; inherits: true; initial-value: #f0f0f0; }
+@property --color-accent-200 { syntax: "<color>"; inherits: true; initial-value: #e2e2e2; }
+@property --color-accent-300 { syntax: "<color>"; inherits: true; initial-value: #c4c4c4; }
+@property --color-accent-400 { syntax: "<color>"; inherits: true; initial-value: #b8b8b8; }
+@property --color-accent-500 { syntax: "<color>"; inherits: true; initial-value: #989898; }
+@property --color-accent-600 { syntax: "<color>"; inherits: true; initial-value: #808080; }
+@property --color-accent-700 { syntax: "<color>"; inherits: true; initial-value: #707070; }
+@property --color-accent-800 { syntax: "<color>"; inherits: true; initial-value: #454545; }
+@property --color-accent-900 { syntax: "<color>"; inherits: true; initial-value: #2a2a2a; }
+@property --color-text { syntax: "<color>"; inherits: true; initial-value: #e2e2e2; }
+@property --color-text-selected { syntax: "<color>"; inherits: true; initial-value: #f5f5f5; }
+@property --color-text-muted { syntax: "<color>"; inherits: true; initial-value: #8f8f8f; }
+@property --color-text-dim { syntax: "<color>"; inherits: true; initial-value: #6b6b6b; }
+@property --color-text-dim-2 { syntax: "<color>"; inherits: true; initial-value: #5c5c5c; }
+@property --color-text-faint { syntax: "<color>"; inherits: true; initial-value: #454545; }
+@property --color-text-ghost { syntax: "<color>"; inherits: true; initial-value: #333333; }
+@property --color-count-selected { syntax: "<color>"; inherits: true; initial-value: #9a9a9a; }
+@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #989898; }
+@property --color-accent-soft { syntax: "<color>"; inherits: true; initial-value: #c4c4c4; }
+@property --color-accent-strong { syntax: "<color>"; inherits: true; initial-value: #707070; }
+@property --color-on-accent { syntax: "<color>"; inherits: true; initial-value: #f5f5f5; }
+@property --color-accent-fill { syntax: "<color>"; inherits: true; initial-value: rgb(152 152 152 / 16%); }
+@property --color-accent-fill-strong { syntax: "<color>"; inherits: true; initial-value: rgb(152 152 152 / 20%); }
+@property --color-accent-fill-row { syntax: "<color>"; inherits: true; initial-value: rgb(152 152 152 / 16%); }
+@property --color-danger { syntax: "<color>"; inherits: true; initial-value: #f57f6c; }
+@property --color-danger-text { syntax: "<color>"; inherits: true; initial-value: #f76769; }
+@property --color-danger-ink { syntax: "<color>"; inherits: true; initial-value: #e05555; }
+@property --color-danger-border { syntax: "<color>"; inherits: true; initial-value: #c44545; }
+@property --color-danger-fill { syntax: "<color>"; inherits: true; initial-value: rgb(245 127 108 / 14%); }
+@property --color-ok { syntax: "<color>"; inherits: true; initial-value: #52b87a; }
+@property --color-ok-text { syntax: "<color>"; inherits: true; initial-value: #66ce98; }
+@property --color-ok-fill { syntax: "<color>"; inherits: true; initial-value: rgb(23 184 119 / 12%); }
+@property --color-divider { syntax: "<color>"; inherits: true; initial-value: rgb(226 226 226 / 9%); }
+@property --color-border { syntax: "<color>"; inherits: true; initial-value: rgb(226 226 226 / 13%); }
+@property --color-hairline { syntax: "<color>"; inherits: true; initial-value: rgb(226 226 226 / 4%); }
+@property --color-wave-ink { syntax: "<color>"; inherits: true; initial-value: #8a8a8a; }
+@property --color-row-wave { syntax: "<color>"; inherits: true; initial-value: #5c5c5c; }
+@property --color-row-wave-sel { syntax: "<color>"; inherits: true; initial-value: #c4c4c4; }
+@property --color-wave-bass { syntax: "<color>"; inherits: true; initial-value: #ff4a4a; }
+@property --color-wave-low-mid { syntax: "<color>"; inherits: true; initial-value: #4ade80; }
+@property --color-wave-high-mid { syntax: "<color>"; inherits: true; initial-value: #38bdf8; }
+@property --color-wave-mid { syntax: "<color>"; inherits: true; initial-value: #4ade80; }
+@property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #8b9cf7; }
 
 /* Smooth lerp when data-theme flips (skipped on first paint and reduced-motion). */
 html.theme-lerp {
@@ -184,9 +184,8 @@ html.theme-lerp {
   }
 }
 
-/* --- Nocturne (default; legacy alias dark-default) --- */
+/* --- Nocturne (legacy alias dark-default) --- */
 
-:root,
 [data-theme="nocturne"],
 [data-theme="dark-default"] {
   --color-ink: #100f1a;
@@ -343,8 +342,9 @@ html.theme-lerp {
   --color-wave-treble: #9a7dff;
 }
 
-/* --- Graphite (Monospace Graphite) --- */
+/* --- Graphite (default; Monospace Graphite) --- */
 
+:root:not([data-theme]),
 [data-theme="graphite"] {
   --color-ink: #050505;
   --color-bg-deep: #0a0a0a;

@@ -51,7 +51,7 @@ pub fn ensure_defaults(conn: &mut SqliteConnection, paths: &AppPaths) -> AppResu
             "date_created": 110
         },
         "column_order": ["name", "source", "type", "bpm", "key", "wave", "tags", "date_added", "date_created"],
-        "theme": "nocturne",
+        "theme": "graphite",
         "locale": "en",
         "splice_enabled": true,
         "splice_db_path": null
