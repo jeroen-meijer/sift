@@ -18,31 +18,34 @@
 /* --- omni bar --- */
 
 .omni-bar {
-  height: var(--omnibar-height);
+  min-height: var(--omnibar-height);
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 6px 12px;
   background: var(--color-bg-toolbar);
   border-bottom: 1px solid var(--color-divider);
 }
 
 .omni-field {
+  position: relative;
   flex: 1;
   min-width: 0;
-  height: 32px;
+  min-height: 32px;
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 0 9px;
+  padding: 3px 9px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-input);
 }
 
-.omni-field:focus-within {
+.omni-field:focus-within,
+.omni-field.editing {
   border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .omni-icon {
@@ -54,9 +57,9 @@
   flex: 1;
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-  overflow: hidden;
 }
 
 .omni-chip {
@@ -64,13 +67,23 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 21px;
-  padding: 0 5px 0 7px;
+  min-height: 22px;
+  max-width: 100%;
+  padding: 2px 5px 2px 7px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface);
   font-size: 11px;
-  white-space: nowrap;
+}
+
+.omni-chip.selected,
+.omni-chip.pending {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+.omni-chip.pending {
+  border-style: dashed;
 }
 
 .omni-chip-pre {
@@ -92,8 +105,38 @@
   border-radius: 2px;
 }
 
-/* The chip's inline switch: 16 × 9 track, 6px knob. */
-.omni-chip-toggle {
+.omni-tag-chip-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  line-height: 1.3;
+}
+
+.omni-tag-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.omni-tag-part.excl {
+  color: var(--color-danger-ink);
+}
+
+.omni-tag-not-pre {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-danger-ink);
+}
+
+.omni-tag-join {
+  color: var(--color-text-dim);
+  margin: 0 1px;
+}
+
+/* Shared chip + editor switch (half/double, relative). */
+.omni-toggle {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -104,17 +147,32 @@
   background: transparent;
   font-size: 10px;
   color: var(--color-text-faint);
+  cursor: pointer;
 }
 
-.omni-chip-track {
+.omni-editor .omni-toggle {
+  margin-left: 0;
+  padding: 0;
+  border-left: 0;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.omni-editor .omni-toggle:hover {
+  color: var(--color-text);
+}
+
+.omni-toggle-track {
   position: relative;
   width: 16px;
   height: 9px;
   border-radius: 5px;
   background: var(--color-neutral-850);
+  flex: none;
 }
 
-.omni-chip-knob {
+.omni-toggle-knob {
   position: absolute;
   top: 1.5px;
   left: 1.5px;
@@ -127,17 +185,21 @@
     background 0.12s ease-out;
 }
 
-.omni-chip-toggle.on {
+.omni-toggle.on {
   color: var(--color-accent-soft);
 }
 
-.omni-chip-toggle.on .omni-chip-track {
+.omni-editor .omni-toggle.on {
+  color: var(--color-text);
+}
+
+.omni-toggle.on .omni-toggle-track {
   background: var(--color-accent-strong);
 }
 
-.omni-chip-toggle.on .omni-chip-knob {
+.omni-toggle.on .omni-toggle-knob {
   left: 8.5px;
-  background: var(--color-neutral-100);
+  background: var(--color-on-accent);
 }
 
 .omni-chip-x,
@@ -175,36 +237,44 @@
   font-family: var(--font-body);
 }
 
+.omni-type-seg {
+  flex: none;
+  display: flex;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.omni-type-seg button {
+  height: 100%;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.omni-type-seg button:hover {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  color: var(--color-text);
+}
+
+.omni-type-seg button.on {
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  color: var(--color-text-selected);
+}
+
 .omni-actions {
   flex: none;
   display: flex;
   align-items: center;
   gap: 2px;
   padding-left: 4px;
-}
-
-.omni-tool-btn {
-  height: 28px;
-  padding: 0 9px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 11.5px;
-}
-
-.omni-tool-btn:hover {
-  background: color-mix(in srgb, var(--color-text) 5%, transparent);
-  color: var(--color-text);
-}
-
-.omni-tool-btn.on {
-  border-color: var(--color-accent);
-  background: var(--color-accent-fill);
-  color: var(--color-accent-soft);
 }
 
 .omni-icon-btn {
@@ -241,6 +311,420 @@
 
 .popover button:hover .omni-column-mark {
   color: inherit;
+}
+
+/* Omni editors / suggestions */
+
+.omni-editor-anchor {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: 300px;
+  max-width: 100%;
+}
+
+.omni-editor-anchor.right {
+  left: auto;
+  right: 0;
+}
+
+.omni-editor {
+  border-radius: 9px;
+  background: var(--color-bg-input);
+  box-shadow:
+    0 0 0 1px var(--color-text-ghost),
+    0 18px 44px rgb(0 0 0 / 72%);
+  overflow: hidden;
+}
+
+.omni-editor-header {
+  padding: 8px 12px 0;
+}
+
+.omni-editor-body {
+  padding: 11px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.omni-editor-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 12px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 11%, transparent);
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-bg-input));
+}
+
+.omni-editor-hint {
+  font-size: 10.5px;
+  color: var(--color-text-faint);
+  line-height: 1.5;
+}
+
+.omni-editor-syntax {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--color-text-ghost);
+}
+
+.omni-editor-syntax .mono {
+  font-size: 11px;
+  color: var(--color-accent-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.omni-editor-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.omni-bpm-fields {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.omni-bpm-input {
+  width: 52px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
+.omni-bpm-sep {
+  color: var(--color-text-dim);
+}
+
+.omni-bpm-slack {
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+
+.omni-bpm-hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 48px;
+}
+
+.omni-bpm-bin {
+  flex: 1;
+  min-width: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-neutral-850);
+}
+
+.omni-bpm-bin.in {
+  background: var(--color-accent);
+}
+
+.omni-bpm-slider .range-slider,
+.omni-editor .range-slider {
+  width: 100%;
+  flex: none;
+  height: 14px;
+}
+
+.omni-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.omni-key-input {
+  flex: 1;
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
+.omni-key-read {
+  min-width: 72px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--color-accent-soft);
+}
+
+.omni-piano {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.omni-piano-row {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.omni-piano-cell {
+  display: flex;
+}
+
+.omni-piano-cell.span2 {
+  grid-column: span 2;
+}
+
+.omni-piano-key {
+  flex: 1;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  background: var(--color-surface);
+  color: var(--color-neutral-300);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
+  padding: 0;
+}
+
+.omni-piano-key span {
+  font-size: 8.5px;
+  color: var(--color-text-dim);
+}
+
+.omni-piano-key.on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  color: var(--color-text-selected);
+}
+
+.omni-piano-key.on span {
+  color: var(--color-accent-soft);
+}
+
+.omni-piano-key.zero {
+  border-color: color-mix(in srgb, var(--color-text) 6%, transparent);
+  background: transparent;
+  color: var(--color-text-ghost);
+}
+
+.omni-piano-key.zero span {
+  color: var(--color-neutral-800);
+}
+
+.omni-key-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.omni-key-mode {
+  flex: 1;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+}
+
+.omni-key-mode.on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  color: var(--color-text-selected);
+}
+
+.omni-tag-search {
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.omni-tag-list {
+  max-height: 236px;
+  overflow-y: auto;
+  margin: 0 -4px;
+}
+
+.omni-tag-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 25px;
+  padding: 0 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-neutral-400);
+}
+
+.omni-tag-row.hi {
+  background: var(--color-accent-fill-strong);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+.omni-tag-pad {
+  flex: none;
+}
+
+.omni-tag-check {
+  flex: none;
+  color: var(--color-text-faint);
+}
+
+.omni-tag-check.on {
+  color: var(--color-accent);
+}
+
+.omni-tag-check.excl {
+  color: var(--color-danger-ink);
+}
+
+.omni-tag-name {
+  color: var(--color-text);
+}
+
+.omni-tag-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--color-text-faint);
+}
+
+.omni-tag-not {
+  font-size: 10px;
+  color: var(--color-text-dim);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  background: transparent;
+}
+
+.omni-tag-not:hover {
+  color: var(--color-danger-ink);
+  border-color: var(--color-danger-ink);
+}
+
+.omni-type-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  outline: none;
+}
+
+.omni-type-picks {
+  display: flex;
+  gap: 5px;
+}
+
+.omni-type-pick {
+  flex: 1;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  background: var(--color-surface);
+  color: var(--color-neutral-300);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.omni-type-pick.on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  color: var(--color-text-selected);
+}
+
+.omni-type-pick .mono {
+  font-size: 9.5px;
+  opacity: 0.6;
+}
+
+.omni-suggest {
+  position: fixed;
+  z-index: 35;
+  max-height: 280px;
+  overflow-y: auto;
+  border-radius: 9px;
+  background: var(--color-bg-input);
+  box-shadow:
+    0 0 0 1px var(--color-text-ghost),
+    0 18px 44px rgb(0 0 0 / 72%);
+  padding: 6px 0;
+}
+
+.omni-suggest-section {
+  padding: 4px 12px 6px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.omni-suggest-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-neutral-300);
+  font-size: 12px;
+  text-align: left;
+}
+
+.omni-suggest-row.hi,
+.omni-suggest-row:hover {
+  background: var(--color-accent-fill-strong);
+}
+
+.omni-suggest-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.omni-suggest-hint {
+  font-size: 10.5px;
+  color: var(--color-text-dim);
+}
+
+.omni-suggest-footer {
+  padding: 8px 12px 4px;
+  font-size: 10.5px;
+  color: var(--color-text-dim-2);
+  line-height: 1.4;
+  border-top: 1px solid var(--color-divider);
+  margin-top: 4px;
+  white-space: normal;
+}
+
+.cell-badge {
+  margin-left: 4px;
+  font-size: 9px;
+  color: var(--color-accent-soft);
+  opacity: 0.85;
 }
 
 /* --- sidebar --- */

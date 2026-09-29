@@ -4,7 +4,7 @@ import type { OptionalColumn } from "./omni";
  * Content columns that participate in order / visibility. Fav stays outside.
  * `source` is fixed-width (like fav); the rest are resizable fr tracks.
  */
-export type TableColumn = "name" | OptionalColumn | "wave";
+export type TableColumn = "name" | OptionalColumn;
 
 /** Columns the user can drag to resize (fav and source stay fixed). */
 export type ResizableColumn = Exclude<TableColumn, "source">;

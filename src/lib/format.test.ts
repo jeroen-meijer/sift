@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { beatsBetween, formatBytes, formatCount, formatDb, formatSpan, formatTime } from "./format";
+import {
+  beatsBetween,
+  formatBytes,
+  formatCount,
+  formatDb,
+  formatSpan,
+  formatTime,
+  formatTransportTime,
+} from "./format";
 
 describe("formatBytes", () => {
   it("prints one decimal below 10 and whole numbers above", () => {
@@ -27,6 +35,14 @@ describe("formatTime", () => {
 
   it("clamps negatives to zero", () => {
     expect(formatTime(-3)).toBe("0:00.00");
+  });
+});
+
+describe("formatTransportTime", () => {
+  it("zero-pads minutes", () => {
+    expect(formatTransportTime(0)).toBe("00:00.00");
+    expect(formatTransportTime(0.47)).toBe("00:00.47");
+    expect(formatTransportTime(64.5)).toBe("01:04.50");
   });
 });
 

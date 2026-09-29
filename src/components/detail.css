@@ -535,6 +535,57 @@
   color: var(--color-text-muted);
 }
 
+.transport-playback {
+  gap: 8px;
+}
+
+.transport-play {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0;
+}
+
+.transport-play:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
+}
+
+.transport-play:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.transport-play svg.transport-play-icon {
+  /* Play triangle is optically heavy on the right; shrink + shift left to match pause. */
+  width: 11px;
+  height: 11px;
+  transform: translateX(-0.5px);
+}
+
+.transport-time {
+  font-size: 11px;
+  color: var(--color-neutral-400);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.transport-time-sep {
+  color: var(--color-text-faint);
+}
+
+.transport-rule {
+  width: 1px;
+  height: 14px;
+  flex: none;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
 .transport-label {
   font-size: 10px;
   letter-spacing: 0.08em;

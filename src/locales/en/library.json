@@ -67,6 +67,8 @@
   },
   "transport": {
     "snap": "Snap",
+    "play": "Play",
+    "pause": "Pause",
     "loopPreview": "Loop preview",
     "previewGain": "Preview gain",
     "hint": {

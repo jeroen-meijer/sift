@@ -20,6 +20,18 @@ Obey [docs/README.md](docs/README.md) for layout, naming, no frontmatter, single
 
 After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run `bun run docs:check` before you finish. Details: [Lint and validate](docs/README.md#lint-and-validate).
 
+## Testing (agents)
+
+Canonical: [docs/reference/testing.md](docs/reference/testing.md). Cursor also loads [`.cursor/rules/testing.mdc`](.cursor/rules/testing.mdc).
+
+When you build or change a feature, or the user asks you to test, verify, or check it:
+
+1. Read `docs/reference/testing.md` (layers, how to add each kind, commands).
+2. Add or extend automated coverage at the cheapest layer that can fail the claim (Rust nextest beside code, Vitest next to the module, WDIO under `e2e/specs/browser/` or `e2e/specs/tauri/`).
+3. Run that layer before you claim the work is done.
+4. Prefer leaving tests in the repo over a one-off manual poke. Do not say "tested in the real app" unless `bun run test:e2e:tauri` ran (or an agreed `tauri:dev` checklist).
+5. Never ship Cargo feature `e2e` on release or normal `tauri:dev` builds.
+
 ## Settled tooling
 
 | Layer | Choice |
@@ -35,10 +47,12 @@ After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run `bu
 | Frontend lint | ESLint flat + `typescript-eslint` `strictTypeChecked` + `stylisticTypeChecked` |
 | Frontend types | `tsc --noEmit` (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) |
 | Frontend tests | Vitest (`src/**/*.{test,spec}.{ts,tsx}`) |
+| Renderer E2E | WebdriverIO browser mode (`e2e/`, `bun run test:e2e:browser`) |
+| Desktop E2E | WebdriverIO + `@wdio/tauri-service` embedded (`bun run build:e2e:app` then `test:e2e:tauri`) |
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
 | Docs lint | `markdownlint-cli2` (`.markdownlint-cli2.jsonc`) + `tool/check-docs.py` via `bun run docs:check` |
 | Package manager | Bun |
-| CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest · docs:check); Bun+Rust caches; publish on macOS/Windows |
+| CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest · e2e-browser · docs:check); Bun+Rust caches; publish on macOS/Windows |
 | Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (installers + updater + `latest.json`) |
 
 ## Commands
@@ -58,6 +72,8 @@ bacon clippy
 bun run lint
 bun run typecheck
 bun run test
+bun run test:e2e:browser
+bun run build:e2e:app && bun run test:e2e:tauri
 bun run bench
 bun run docs:check
 bun run build
@@ -70,7 +86,7 @@ bun run version:sync
 bun run version:set 0.2.0
 ```
 
-Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`. Watch Clippy: `cd src-tauri && bacon clippy`.
+Testing layers and agent verify playbook: [docs/reference/testing.md](docs/reference/testing.md). Soft perf budgets: `cargo nextest run -E 'test(/^perf_/)' --no-capture`. Watch Clippy: `cd src-tauri && bacon clippy`.
 
 `.vscode/settings.json` runs rust-analyzer Clippy with `-D warnings` and rustfmt on save. Reload the window if diagnostics look stale.
 
@@ -109,6 +125,7 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 - Prefer crates / React packages over custom DSP/OS code.
 - Diesel for DB; no hand-written SQL migrations outside `src-tauri/migrations/`.
 - Integer boundary: `crate::ids` helpers, not bare `as` (clippy `as_conversions` deny).
+- Theme chrome colors only in theme token files; components use `var(--color-*)`. Details: [docs/reference/tech-stack.md](docs/reference/tech-stack.md#locales-and-themes-editability).
 - Before push: `bun run preflight` when Rust, frontend, or CI-related files changed. Do not push a "fix CI" commit for fmt/clippy/eslint/tsc failures that preflight would have caught.
 - No commit/push unless asked (except when the user explicitly requests autonomous delivery).
 - No AI-tool credit in commits, PRs, or docs.

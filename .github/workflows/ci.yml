@@ -75,3 +75,20 @@ jobs:
 
       - name: Docs
         run: bun run docs:check
+
+  e2e-browser:
+    name: wdio browser e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun dependencies
+        uses: ./.github/actions/setup-bun-deps
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Browser E2E
+        run: bun run test:e2e:browser
+        env:
+          CI: "true"

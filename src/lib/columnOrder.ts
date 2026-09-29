@@ -57,17 +57,15 @@ export function reorderColumn(
 }
 
 /**
- * Visible content columns in user order. Hidden optional columns and the wave
- * column (when waveforms are off) are filtered out; order of the rest is kept.
+ * Visible content columns in user order. Hidden optional columns are filtered
+ * out; name always stays. Order of the rest is kept.
  */
 export function visibleOrderedColumns(
   order: readonly TableColumn[],
   hidden: ReadonlySet<OptionalColumn>,
-  showWaveforms: boolean,
 ): TableColumn[] {
   const merged = mergeColumnOrder(order);
   return merged.filter((column) => {
-    if (column === "wave") return showWaveforms;
     if (column === "name") return true;
     return !hidden.has(column);
   });

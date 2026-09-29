@@ -1,5 +1,10 @@
 ## Upcoming
 
+- feat(search): allow searching for samples by BPM, key, type and tags in the search bar
+- feat(ui): move waveform column toggle to column picker
+- fix(ui): improved Snow theme visibility and contrast
+- feat(detail): play/pause and position / duration on the transport under the waveform
+
 ## 0.4.3
 
 - feat(app): Intel Mac builds alongside Apple Silicon (separate DMG + in-app updates)

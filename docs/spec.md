@@ -101,7 +101,7 @@ You may choose libraries and storage internals. Product rules below (DB-only met
 
 ### Not on the roadmap
 
-- Dedicated query language
+- Free-form query language without visual editors (typed triggers that open editors are in §4.11)
 
 ---
 
@@ -270,13 +270,14 @@ Drag origin decides the payload:
 - Must: Omni search field (ADSR-style): free text and structured chips in one control (folder, BPM range, tags, key, …).
 - Must: Free text is fuzzy (name and other agreed text fields).
 - Must: Highlight matching text in results (e.g. name column).
-- Must: Tag chips with hierarchy-aware autocomplete.
+- Must: Tag chips with hierarchy-aware autocomplete. All tags live in **one** TAG chip (includes joined by `+`, excludes with `NOT`).
 - Must: BPM range chip; half/double-time include toggle default Off, inline (not settings-only), persists.
 - Must: Key chip; enharmonics always match (`Gb` ≡ `F#`); relative major/minor include toggle default Off, inline, persists.
 - Must: Folder click → removable folder chip.
-- Should: One-shot / loop type filter.
-- Not on roadmap: Query language.
-- Later: Saved searches (persist omni text + chips). Smart/auto-updating collections can wait for that pass or after.
+- Must: Short typed triggers (`#`, `b:`/`bpm:`, `k:`/`key:`, `tag:`, `type:`) that open visual editors. Paste/Enter parse the canonical form. Nobody has to learn syntax to use the editors.
+- Should: One-shot / loop type filter (toolbar segmented control).
+- Should: Find similar from the sample context menu (BPM ±3 and exact key).
+- Later: Saved searches (persist the canonical typed form). Smart/auto-updating collections can wait for that pass or after.
 
 ### 4.12 Filesystem watching and indexing
 

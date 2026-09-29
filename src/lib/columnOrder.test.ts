@@ -45,9 +45,9 @@ describe("columnOrder", () => {
     expect(reorderColumn(order, "name", 2).slice(0, 3)).toEqual(["type", "bpm", "name"]);
   });
 
-  it("visibleOrderedColumns respects hidden columns and waveform toggle", () => {
+  it("visibleOrderedColumns respects hidden columns including wave", () => {
     const order = ["type", "name", "bpm", "key", "wave", "tags"] as const;
-    expect(visibleOrderedColumns(order, new Set(["bpm", "tags"]), true)).toEqual([
+    expect(visibleOrderedColumns(order, new Set(["bpm", "tags"]))).toEqual([
       "type",
       "name",
       "key",
@@ -56,13 +56,9 @@ describe("columnOrder", () => {
       "date_added",
       "date_created",
     ]);
-    expect(visibleOrderedColumns(order, new Set(["source", "date_added", "date_created"]), false)).toEqual([
-      "type",
-      "name",
-      "bpm",
-      "key",
-      "tags",
-    ]);
+    expect(
+      visibleOrderedColumns(order, new Set(["source", "date_added", "date_created", "wave"])),
+    ).toEqual(["type", "name", "bpm", "key", "tags"]);
   });
 
   it("dropIndexFromClientX picks the slot from midpoints", () => {
@@ -78,7 +74,7 @@ describe("columnOrder", () => {
 
   it("reorderByVisibleDrop writes through to the full order", () => {
     const full = [...DEFAULT_COLUMN_ORDER];
-    const visible = visibleOrderedColumns(full, new Set(["tags"]), true);
+    const visible = visibleOrderedColumns(full, new Set(["tags"]));
     const next = reorderByVisibleDrop(full, visible, "type", 0);
     expect(next[0]).toBe("type");
     expect(next.indexOf("tags")).toBeGreaterThan(next.indexOf("wave"));

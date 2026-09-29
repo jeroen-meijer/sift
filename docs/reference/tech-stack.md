@@ -103,6 +103,7 @@ Exact versions pinned at scaffold time. Rechecked 2026-09-22: the set below is s
 - Virtualized table (e.g. TanStack Virtual) for large result sets
 - Canvas (or WebGL) waveform views driven by peak buffers from Rust
 - Bun for scripts
+- Tests: Vitest under `src/`; WebdriverIO under `e2e/` (browser mode + native embedded). How-to: [testing.md](testing.md). Research: [e2e-testing.md](../research/e2e-testing.md).
 - i18n: `i18next` + `react-i18next`. Playbook: [localization.md](localization.md). Strings only in `src/locales/<lang>/…` JSON. Components use keys (`t("…")`), never user-facing literals.
 - Theming: CSS variables (or a small token module) owned by `src/themes/<name>.css` (or equivalent). Components reference `var(--…)` / token names only. v1 ships one dark theme file; new themes are new files + a registry entry.
 
@@ -140,7 +141,7 @@ src/
 
 Rules:
 
-1. No hex colors or user-visible English in `.tsx` except tests/Storybook fixtures.
+1. No hex / rgb colors or user-visible English in components (`.tsx`, component `.css`) except tests/fixtures. Chrome colors live only in theme token files (`src/styles/tokens.css` today). UI CSS uses `var(--color-*)` / `color-mix(...)` against those tokens. Tag taxonomy swatches (`src/lib/tagColors.ts`) are separate product data, not theme chrome.
 2. Rust error strings that surface in the UI get a stable error code; the UI maps code → locale string.
 3. Tag taxonomy defaults may ship as data (JSON/YAML), not as translated UI chrome; product copy for dialogs still goes through locales.
 4. Waveform/canvas draws read theme tokens (CSS variables or a JS token object synced from the same theme file) so a theme change recolors peaks without code edits.

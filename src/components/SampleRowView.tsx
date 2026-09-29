@@ -5,6 +5,8 @@ import type { TableColumn } from "../lib/columnWidths";
 import { formatShortDate } from "../lib/format";
 import type { SampleRow } from "../lib/ipc";
 import { analysisStore } from "../lib/liveStores";
+import type { OmniKey } from "../lib/omni";
+import { bpmMatchBadge, keyMatchIsRelativeOnly } from "../lib/omniMatch";
 import { highlightRanges } from "../lib/searchHighlight";
 import { useStoreSelector } from "../lib/store";
 import { tagPalette } from "../lib/tagColors";
@@ -54,6 +56,8 @@ interface Props {
   playing: boolean;
   colored: boolean;
   highlightText: string;
+  bpmFilter?: { min: number | null; max: number | null; halfDouble: boolean } | undefined;
+  keyFilter?: { key: OmniKey | null; relative: boolean } | undefined;
   /** Row waveform canvas width in CSS px. */
   waveWidth: number;
   handlers: SampleRowHandlers;
@@ -73,11 +77,24 @@ export const SampleRowView = memo(function SampleRowView({
   playing,
   colored,
   highlightText,
+  bpmFilter,
+  keyFilter,
   waveWidth,
   handlers,
 }: Props) {
   const { t } = useTranslation("common");
   const analyzing = useStoreSelector(analysisStore, (s) => s.activeIds.has(sample.id));
+  const bpmBadge = bpmMatchBadge(
+    sample.bpm,
+    bpmFilter?.min ?? null,
+    bpmFilter?.max ?? null,
+    bpmFilter?.halfDouble ?? false,
+  );
+  const showRel = keyMatchIsRelativeOnly(
+    sample.key_name,
+    keyFilter?.key ?? null,
+    keyFilter?.relative ?? false,
+  );
 
   const renderCell = (column: TableColumn) => {
     switch (column) {
@@ -114,13 +131,27 @@ export const SampleRowView = memo(function SampleRowView({
       case "bpm":
         return (
           <div key={column} className="col mono-cell" data-col={column}>
-            {sample.bpm == null ? EM_DASH : Math.round(sample.bpm)}
+            {sample.bpm == null ? (
+              EM_DASH
+            ) : (
+              <>
+                {Math.round(sample.bpm)}
+                {bpmBadge ? <span className="cell-badge">{bpmBadge}</span> : null}
+              </>
+            )}
           </div>
         );
       case "key":
         return (
           <div key={column} className="col mono-cell" data-col={column}>
-            {sample.key_name ?? EM_DASH}
+            {sample.key_name == null ? (
+              EM_DASH
+            ) : (
+              <>
+                {sample.key_name}
+                {showRel ? <span className="cell-badge">rel</span> : null}
+              </>
+            )}
           </div>
         );
       case "date_added":

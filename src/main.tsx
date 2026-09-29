@@ -12,6 +12,11 @@ void warmProfile();
 applyTheme("nocturne");
 bootMark("fe.theme_default");
 
+// Native WDIO e2e builds only (`VITE_E2E=1` via build:e2e:app). Keeps release bundles clean.
+if (import.meta.env.VITE_E2E === "1") {
+  void import("@wdio/tauri-plugin");
+}
+
 const root = document.getElementById("root");
 if (!root) {
   throw new Error("Root element #root not found");

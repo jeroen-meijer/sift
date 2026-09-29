@@ -48,12 +48,21 @@ pub fn run() {
     let app_state = AppState::init().expect("failed to initialize Sift app state");
     crate::profile_log::event("boot.app_state_init", state_start.elapsed(), "");
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_process::init());
+
+    // e2e builds only: embedded WebDriver + WDIO bridge for @wdio/tauri-service.
+    // Gated so release binaries never expose a remote-control listener.
+    #[cfg(feature = "e2e")]
+    let builder = builder
+        .plugin(tauri_plugin_wdio::init())
+        .plugin(tauri_plugin_wdio_webdriver::init());
+
+    builder
         .manage(app_state)
         .setup(|app| {
             let setup_start = Instant::now();

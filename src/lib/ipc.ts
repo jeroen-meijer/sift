@@ -118,9 +118,13 @@ export interface SampleQuery {
   text: string | null;
   tag_path: string | null;
   tag_paths: string[];
+  tag_exclude_paths: string[];
   bpm_min: number | null;
   bpm_max: number | null;
   key: string | null;
+  /** Match both maj and min when `key` is a root-only spelling. */
+  key_either: boolean;
+  sample_type: string | null;
   half_double: boolean;
   relative_key: boolean;
   favorites_only: boolean;

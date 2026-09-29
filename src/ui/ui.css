@@ -32,7 +32,7 @@
 
 .switch.on .switch-knob {
   left: 17.5px;
-  background: var(--color-neutral-100);
+  background: var(--color-on-accent);
 }
 
 /* --- segmented --- */
@@ -131,8 +131,10 @@
   height: 11px;
   border: 0;
   border-radius: 50%;
-  background: var(--color-neutral-300);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 60%);
+  background: var(--color-on-accent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-text) 18%, transparent),
+    0 1px 3px rgb(0 0 0 / 35%);
   cursor: pointer;
 }
 

@@ -17,19 +17,49 @@
     "restore": "Restore"
   },
   "omni": {
-    "placeholder": "Search names, or add folder / tag / BPM / key filters",
+    "placeholder": "Search names, or type # b: k: for filters",
     "chip": {
       "folder": "folder",
       "tag": "tag",
       "bpm": "bpm",
-      "key": "key"
+      "key": "key",
+      "type": "type",
+      "not": "not"
     },
     "halfDouble": "half / double",
     "relative": "relative",
-    "waveforms": "Waveforms",
-    "rowWaveforms": "Row waveforms",
     "favoritesOnly": "Favorites only",
-    "columns": "Columns"
+    "columns": "Columns",
+    "type": {
+      "label": "Sample type",
+      "all": "All",
+      "loops": "Loops",
+      "oneShots": "One-shots"
+    },
+    "suggest": {
+      "filters": "Filters",
+      "tag": "Tag",
+      "bpm": "BPM range",
+      "key": "Key",
+      "addTag": "Add tag {{path}}",
+      "footer": "Typing # b: or k: opens the editor straight away · ⌫ selects the last chip"
+    },
+    "editor": {
+      "bpmMin": "Min BPM",
+      "bpmMax": "Max BPM",
+      "bpmSlack": "±2",
+      "bpmKeys": "Tab or – → max · Tab / ↵ / Space confirms · H half/double · Esc cancels",
+      "keyPlaceholder": "a, f#m, 8a…",
+      "keyKeys": "↵ / Tab / Space confirms · Esc cancels",
+      "modeEither": "Either",
+      "modeMaj": "Major",
+      "modeMin": "Minor",
+      "includeRelative": "Include relative ({{key}})",
+      "tagSearch": "Find tags…",
+      "tagKeys": "↑↓ · ↵/, toggle · ⇧↵ exclude · Tab/Space add and close · ⌫ remove last · Esc cancels",
+      "tagNot": "Exclude (⇧↵)",
+      "typeKeys": "L loops · O one-shots · ←/→ switch · ↵ / Tab / Space confirms · Esc cancels"
+    }
   },
   "statusBar": {
     "roots_one": "{{count}} root",
@@ -54,6 +84,7 @@
     "setType": "Set type",
     "setBpm": "Set BPM",
     "setKey": "Set key",
+    "findSimilar": "Find similar",
     "showParent": "Show only files from parent folder",
     "reveal": "Reveal in Finder",
     "revealWindows": "Show in Explorer",

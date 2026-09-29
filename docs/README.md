@@ -9,7 +9,7 @@ How Sift docs are laid out, named, and maintained. Agents and humans follow this
 | [spec.md](spec.md) | Living product rules |
 | [decisions.md](decisions.md) | Requirements Q&A history |
 | [known-issues.md](known-issues.md) | Open bugs and dogfood notes |
-| [reference/](reference/) | Durable how-to and facts (stack, localization, taxonomy) |
+| [reference/](reference/) | Durable how-to and facts (stack, localization, taxonomy, [testing](reference/testing.md)) |
 | [research/](research/) | Investigations and evidence; distill into spec/reference/decisions when settled |
 | [plans/](plans/) | Historical v1 phase plan |
 | [design/](design/) | Claude Design export and visual gaps |

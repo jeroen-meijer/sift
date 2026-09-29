@@ -18,6 +18,13 @@ export function formatTime(secs: number): string {
   return `${minutes}:${(safe - minutes * 60).toFixed(2).padStart(5, "0")}`;
 }
 
+/** `00:04.36`. Transport clock. Minutes are always shown as two digits. */
+export function formatTransportTime(secs: number): string {
+  const safe = Number.isFinite(secs) && secs > 0 ? secs : 0;
+  const minutes = Math.floor(safe / 60);
+  return `${String(minutes).padStart(2, "0")}:${(safe - minutes * 60).toFixed(2).padStart(5, "0")}`;
+}
+
 /** `−4.5 dB` with a real minus sign, the way the design prints it. */
 export function formatDb(db: number): string {
   if (db > 0) return `+${db.toFixed(1)} dB`;

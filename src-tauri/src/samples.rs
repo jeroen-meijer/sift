@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use diesel::dsl::{exists, sql};
+use diesel::dsl::{exists, not, sql};
 use diesel::prelude::*;
 use diesel::sql_types::{Bool, Text};
 use diesel::sqlite::SqliteConnection;
@@ -53,12 +53,16 @@ pub struct SampleDto {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Query {
     pub folder_prefix: Option<String>,
     pub text: Option<String>,
     pub tag_path: Option<String>,
     #[serde(default)]
     pub tag_paths: Vec<String>,
+    /// Samples must not have these tags (or any descendant path).
+    #[serde(default)]
+    pub tag_exclude_paths: Vec<String>,
     pub bpm_min: Option<f64>,
     pub bpm_max: Option<f64>,
     pub key: Option<String>,
@@ -67,6 +71,9 @@ pub struct Query {
     pub half_double: bool,
     #[serde(default)]
     pub relative_key: bool,
+    /// When true with a root-only key, match both major and minor enharmonic forms.
+    #[serde(default)]
+    pub key_either: bool,
     #[serde(default)]
     pub favorites_only: bool,
     #[serde(default)]
@@ -290,6 +297,17 @@ pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec
         ));
     }
 
+    for tag_path in query.tag_exclude_paths.iter().filter(|s| !s.is_empty()) {
+        let like = format!("{tag_path}/%");
+        let tp = tag_path.clone();
+        q = q.filter(not(exists(
+            sample_tags_dsl::sample_tags
+                .inner_join(tags_dsl::tags)
+                .filter(sample_tags_dsl::sample_id.eq(samples_dsl::id))
+                .filter(tags_dsl::path.eq(tp).or(tags_dsl::path.like(like))),
+        )));
+    }
+
     if query.bpm_min.is_some() || query.bpm_max.is_some() {
         let min = query.bpm_min.unwrap_or(0.0);
         let max = query.bpm_max.unwrap_or(f64::MAX);
@@ -318,7 +336,7 @@ pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec
     }
 
     if let Some(key) = query.key.as_deref().filter(|s| !s.is_empty()) {
-        let keys = key_match_set(key, query.relative_key);
+        let keys = key_match_set(key, query.relative_key, query.key_either);
         if !keys.is_empty() {
             // Keys are controlled pitch tokens (a-z / # / m); safe to embed.
             let list = keys
@@ -363,7 +381,8 @@ pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec
 }
 
 /// Normalized lowercase key tokens that should match `key` (enharmonics + optional relatives).
-fn key_match_set(key: &str, relative: bool) -> Vec<String> {
+/// When `either` is true, both major and minor forms of the root are included.
+fn key_match_set(key: &str, relative: bool, either: bool) -> Vec<String> {
     let normalized = normalize_key_token(key);
     if normalized.is_empty() {
         return Vec::new();
@@ -375,11 +394,30 @@ fn key_match_set(key: &str, relative: bool) -> Vec<String> {
         }
     };
 
-    for equiv in enharmonic_forms(&normalized) {
-        push(equiv.clone());
-        if relative && let Some(rel) = relative_of(&equiv) {
-            for e in enharmonic_forms(&rel) {
-                push(e);
+    let seeds: Vec<String> = if either {
+        let root = normalized
+            .strip_suffix('m')
+            .unwrap_or(&normalized)
+            .to_string();
+        if root.is_empty() {
+            vec![normalized]
+        } else {
+            vec![root.clone(), format!("{root}m")]
+        }
+    } else {
+        vec![normalized]
+    };
+
+    for seed in seeds {
+        for equiv in enharmonic_forms(&seed) {
+            push(equiv.clone());
+            if relative
+                && !either
+                && let Some(rel) = relative_of(&equiv)
+            {
+                for e in enharmonic_forms(&rel) {
+                    push(e);
+                }
             }
         }
     }
@@ -1154,5 +1192,143 @@ mod tests {
     fn get_samples_empty_input() {
         let mut conn = crate::db::test_conn();
         assert!(get_samples(&mut conn, &[]).unwrap().is_empty());
+    }
+
+    fn filter_query(extra: serde_json::Value) -> Query {
+        let mut base = serde_json::json!({
+            "folder_prefix": null,
+            "text": null,
+            "tag_path": null,
+            "bpm_min": null,
+            "bpm_max": null,
+            "key": null,
+            "sample_type": null,
+            "limit": null,
+            "offset": null,
+        });
+        if let (Some(obj), Some(extra_obj)) = (base.as_object_mut(), extra.as_object()) {
+            for (k, v) in extra_obj {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
+        serde_json::from_value(base).unwrap()
+    }
+
+    #[test]
+    fn list_samples_half_double_bpm() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        for (name, bpm) in [
+            ("direct.wav", 90.0),
+            ("double.wav", 180.0),
+            ("other.wav", 120.0),
+        ] {
+            diesel::insert_into(samples_dsl::samples)
+                .values((
+                    samples_dsl::root_id.eq(root_id),
+                    samples_dsl::path.eq(format!("/lib/{name}")),
+                    samples_dsl::filename.eq(name),
+                    samples_dsl::parent_path.eq("/lib"),
+                    samples_dsl::extension.eq("wav"),
+                    samples_dsl::bpm.eq(Some(bpm)),
+                ))
+                .execute(&mut conn)
+                .unwrap();
+        }
+
+        let off = filter_query(serde_json::json!({
+            "bpm_min": 88.0,
+            "bpm_max": 92.0,
+            "half_double": false,
+        }));
+        let mut off_names: Vec<_> = list_samples(&mut conn, &off)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.filename)
+            .collect();
+        off_names.sort();
+        assert_eq!(off_names, vec!["direct.wav".to_string()]);
+
+        let on = filter_query(serde_json::json!({
+            "bpm_min": 88.0,
+            "bpm_max": 92.0,
+            "half_double": true,
+        }));
+        let mut on_names: Vec<_> = list_samples(&mut conn, &on)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.filename)
+            .collect();
+        on_names.sort();
+        assert_eq!(
+            on_names,
+            vec!["direct.wav".to_string(), "double.wav".to_string()]
+        );
+    }
+
+    #[test]
+    fn list_samples_key_enharmonic_and_relative() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        for (name, key) in [
+            ("fs.wav", "F#"),
+            ("gb.wav", "Gb"),
+            ("ebmin.wav", "Ebm"),
+            ("other.wav", "C"),
+        ] {
+            diesel::insert_into(samples_dsl::samples)
+                .values((
+                    samples_dsl::root_id.eq(root_id),
+                    samples_dsl::path.eq(format!("/lib/{name}")),
+                    samples_dsl::filename.eq(name),
+                    samples_dsl::parent_path.eq("/lib"),
+                    samples_dsl::extension.eq("wav"),
+                    samples_dsl::key_name.eq(Some(key)),
+                ))
+                .execute(&mut conn)
+                .unwrap();
+        }
+
+        let enh = filter_query(serde_json::json!({ "key": "F#" }));
+        let mut enh_names: Vec<_> = list_samples(&mut conn, &enh)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.filename)
+            .collect();
+        enh_names.sort();
+        assert_eq!(enh_names, vec!["fs.wav".to_string(), "gb.wav".to_string()]);
+
+        let rel = filter_query(serde_json::json!({
+            "key": "F#",
+            "relative_key": true,
+        }));
+        let mut rel_names: Vec<_> = list_samples(&mut conn, &rel)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.filename)
+            .collect();
+        rel_names.sort();
+        assert_eq!(
+            rel_names,
+            vec![
+                "ebmin.wav".to_string(),
+                "fs.wav".to_string(),
+                "gb.wav".to_string()
+            ]
+        );
     }
 }

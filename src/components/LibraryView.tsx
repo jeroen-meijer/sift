@@ -24,7 +24,9 @@ import { bootMark, isProfileOn, profileEvent, profileMark, useRenderTiming } fro
 import { useStableCallback } from "../lib/useStableCallback";
 import { DetailPane } from "./DetailPane";
 import { FolderSidebar } from "./FolderSidebar";
-import { EMPTY_OMNI, omniHasQuery, type OmniState, type OptionalColumn } from "../lib/omni";
+import { EMPTY_OMNI, omniHasQuery, toggleTagInclude, type OmniState, type OptionalColumn } from "../lib/omni";
+import { storedKeyToOmni } from "../lib/omniKey";
+import { omniToSampleQuery } from "../lib/omniToQuery";
 import { OmniSearch } from "./OmniSearch";
 import { SampleMenu, type SampleAction } from "./SampleMenu";
 import { type FolderAction } from "./FolderMenu";
@@ -86,18 +88,25 @@ export function LibraryView({
   const [omni, setOmni] = useState<OmniState>(EMPTY_OMNI);
   const [samples, setSamples] = useState<SampleRow[]>([]);
   const [samplesLoading, setSamplesLoading] = useState(true);
+  const [editorKind, setEditorKind] = useState<"tag" | "bpm" | "key" | "type" | null>(null);
+  const [facetRows, setFacetRows] = useState<SampleRow[]>([]);
+  const omniInputRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [focusedId, setFocusedId] = useState<number | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<OptionalColumn>>(() => {
-    /* Date added is macOS-only; hide by default elsewhere. */
+    /* Date added is macOS-only; hide by default elsewhere. Wave follows row_waveforms. */
     const isMac =
       typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    return isMac ? new Set() : new Set<OptionalColumn>(["date_added"]);
+    const hidden = new Set<OptionalColumn>();
+    if (!isMac) hidden.add("date_added");
+    if (!settings.row_waveforms) hidden.add("wave");
+    return hidden;
   });
   const [peaks, setPeaks] = useState<PeakData | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
   const [clipPath, setClipPath] = useState<string | null>(null);
   /** Scrubbing a row wave must not be overwritten by play-on-select from 0. */
   const skipPlayOnSelect = useRef(false);
@@ -177,22 +186,16 @@ export function LibraryView({
     if (samplesRef.current.length === 0) setSamplesLoading(true);
     try {
       const t0 = performance.now();
-      const rows = await ipc.listSamples({
-        folder_prefix: omni.folder,
-        text: omni.text || null,
-        tag_path: omni.tags[0] ?? null,
-        tag_paths: omni.tags,
-        bpm_min: omni.bpmMin,
-        bpm_max: omni.bpmMax,
-        key: omni.key,
-        half_double: settings.half_double_bpm,
-        relative_key: settings.relative_key,
-        favorites_only: favoritesOnly,
-        sort_column: settings.sort_column,
-        sort_direction: settings.sort_direction,
-        limit: LIST_SAMPLES_LIMIT,
-        offset: 0,
-      });
+      const rows = await ipc.listSamples(
+        omniToSampleQuery(omni, {
+          favoritesOnly,
+          halfDouble: settings.half_double_bpm,
+          relativeKey: settings.relative_key,
+          sortColumn: settings.sort_column,
+          sortDirection: settings.sort_direction,
+          limit: LIST_SAMPLES_LIMIT,
+        }),
+      );
       const applyAt = performance.now();
       setSamples(rows);
       if (!firstListBootLogged) {
@@ -251,6 +254,73 @@ export function LibraryView({
   useEffect(() => {
     void refreshSamples().catch(console.error);
   }, [refreshSamples, refreshToken]);
+
+  /* Facet counts for open editors: same filters minus that dimension. */
+  useEffect(() => {
+    if (editorKind == null || editorKind === "type") {
+      setFacetRows([]);
+      return;
+    }
+    const omit = editorKind;
+    let alive = true;
+    void ipc
+      .listSamples(
+        omniToSampleQuery(omni, {
+          favoritesOnly,
+          halfDouble: settings.half_double_bpm,
+          relativeKey: settings.relative_key,
+          sortColumn: settings.sort_column,
+          sortDirection: settings.sort_direction,
+          limit: LIST_SAMPLES_LIMIT,
+          omit,
+        }),
+      )
+      .then((rows) => {
+        if (alive) setFacetRows(rows);
+      })
+      .catch(console.error);
+    return () => {
+      alive = false;
+    };
+  }, [
+    editorKind,
+    omni,
+    favoritesOnly,
+    settings.half_double_bpm,
+    settings.relative_key,
+    settings.sort_column,
+    settings.sort_direction,
+  ]);
+
+  const facetBpms = useMemo(
+    () => facetRows.map((r) => r.bpm).filter((b): b is number => b != null && b > 0),
+    [facetRows],
+  );
+  const facetRootCounts = useMemo(() => {
+    const counts = Array.from({ length: 12 }, () => 0);
+    for (const row of facetRows) {
+      if (!row.key_name) continue;
+      const key = storedKeyToOmni(row.key_name);
+      if (!key) continue;
+      counts[key.pitchClass] = (counts[key.pitchClass] ?? 0) + 1;
+    }
+    return counts;
+  }, [facetRows]);
+  const facetTagCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of facetRows) {
+      for (const tag of row.tags) {
+        map.set(tag.path, (map.get(tag.path) ?? 0) + 1);
+        /* Also credit ancestors so Drums counts Kick samples. */
+        const parts = tag.path.split("/");
+        for (let i = 1; i < parts.length; i++) {
+          const ancestor = parts.slice(0, i).join("/");
+          map.set(ancestor, (map.get(ancestor) ?? 0) + 1);
+        }
+      }
+    }
+    return map;
+  }, [facetRows]);
 
   /* fe.list_commit: from setSamples to the table committed (profile builds). */
   useLayoutEffect(() => {
@@ -396,6 +466,7 @@ export function LibraryView({
   useEffect(() => {
     if (playingId == null) {
       playheadStore.set(null);
+      setPreviewPlaying(false);
       return;
     }
     let pollTimer = 0;
@@ -421,6 +492,7 @@ export function LibraryView({
           anchorSecs = state.position_secs;
           anchorAt = performance.now();
           moving = state.playing;
+          setPreviewPlaying((prev) => (prev === state.playing ? prev : state.playing));
           if (!state.playing && state.position_secs <= 0) setPlayingId(null);
         })
         .catch(() => undefined);
@@ -594,6 +666,20 @@ export function LibraryView({
           setFavoritesOnly(false);
           setOmni({ ...EMPTY_OMNI, folder: sample.parent_path });
           break;
+        case "findSimilar":
+          setOmni((prev) => {
+            let next = { ...prev };
+            if (sample.bpm != null && sample.bpm > 0) {
+              const rounded = Math.round(sample.bpm);
+              next = { ...next, bpmMin: rounded - 3, bpmMax: rounded + 3 };
+            }
+            if (sample.key_name) {
+              const key = storedKeyToOmni(sample.key_name);
+              if (key) next = { ...next, key };
+            }
+            return next;
+          });
+          break;
         case "reveal":
           void revealItemInDir(sample.path).catch(console.error);
           break;
@@ -717,6 +803,12 @@ export function LibraryView({
       }
       if (primaryModHeld(e)) return;
 
+      if (e.key === "/" && !e.shiftKey) {
+        e.preventDefault();
+        omniInputRef.current?.focus();
+        return;
+      }
+
       if (matchesBinding(e, keys.favorite) && focused) {
         e.preventDefault();
         e.stopPropagation();
@@ -834,13 +926,22 @@ export function LibraryView({
   /* Changing folder or tag clears the multi-selection but keeps the detail
    * pane on the sample you picked (it may keep playing). */
   const onSelectFolder = useStableCallback((path: string) => {
-    setOmni((prev) => ({ ...prev, folder: path, tags: [] }));
+    setOmni((prev) => ({ ...prev, folder: path }));
     setSelectedIds(new Set());
   });
   const onSelectTag = useStableCallback((path: string | null) => {
-    setOmni((prev) => ({ ...prev, tags: path ? [path] : [] }));
+    if (path == null) {
+      setOmni((prev) => ({ ...prev, tagsInclude: [], tagsExclude: [] }));
+    } else {
+      setOmni((prev) => toggleTagInclude(prev, path));
+    }
     setSelectedIds(new Set());
   });
+  const onEditorKindChange = useStableCallback(
+    (kind: "tag" | "bpm" | "key" | "type" | null) => {
+      setEditorKind(kind);
+    },
+  );
   const onRemoveRoot = useStableCallback((node: FolderNode) => {
     setDialog({ kind: "removeRoot", node });
   });
@@ -880,9 +981,6 @@ export function LibraryView({
   const onToggleRelativeKey = useStableCallback(() => {
     onSettingChange("relative_key", !settings.relative_key);
   });
-  const onToggleWaveforms = useStableCallback(() => {
-    onSettingChange("row_waveforms", !settings.row_waveforms);
-  });
   const onToggleFavoritesOnly = useStableCallback(() => {
     setFavoritesOnly((on) => !on);
   });
@@ -890,6 +988,9 @@ export function LibraryView({
     setHiddenColumns((prev) => {
       const next = new Set(prev);
       if (!next.delete(column)) next.add(column);
+      if (column === "wave") {
+        onSettingChange("row_waveforms", !next.has("wave"));
+      }
       return next;
     });
   });
@@ -899,6 +1000,7 @@ export function LibraryView({
       type: t("table.column.type"),
       bpm: t("table.column.bpm"),
       key: t("table.column.key"),
+      wave: t("table.column.waveform"),
       tags: t("table.column.tags"),
       date_added: t("table.column.dateAdded"),
       date_created: t("table.column.dateCreated"),
@@ -1003,6 +1105,31 @@ export function LibraryView({
     }
   });
   const onDetailDragClip = useStableCallback(dragClip);
+  const onPlayPause = useStableCallback(() => {
+    if (focusedId == null || !focused || focused.missing || focused.availability !== "local") {
+      return;
+    }
+    if (playingId === focusedId) {
+      void ipc
+        .playbackState()
+        .then((state) => {
+          if (state.playing) {
+            void ipc.pause().catch(console.error);
+            return;
+          }
+          if (state.position_secs > 0) {
+            void ipc.resume().catch(console.error);
+            return;
+          }
+          const region = loopRegion(focused, selection);
+          play(focusedId, region?.start ?? 0, region);
+        })
+        .catch(console.error);
+      return;
+    }
+    const region = loopRegion(focused, selection);
+    play(focusedId, region?.start ?? 0, region);
+  });
   const onSnapChange = useStableCallback((snap: AppSettings["snap"]) => {
     onSettingChange("snap", snap);
   });
@@ -1032,7 +1159,11 @@ export function LibraryView({
           folders={folders}
           tags={tags}
           selectedPath={omni.folder}
-          selectedTagPath={omni.tags[0] ?? null}
+          selectedTagPath={
+            omni.tagsInclude.length === 1 && omni.tagsExclude.length === 0
+              ? (omni.tagsInclude[0] ?? null)
+              : omni.tagsInclude[0] ?? null
+          }
           onSelectFolder={onSelectFolder}
           onSelectTag={onSelectTag}
           onAddRoot={onAddRoot}
@@ -1046,17 +1177,21 @@ export function LibraryView({
             value={omni}
             onChange={setOmni}
             folders={folders}
+            tags={tags}
             halfDouble={settings.half_double_bpm}
             relativeKey={settings.relative_key}
             onToggleHalfDouble={onToggleHalfDouble}
             onToggleRelativeKey={onToggleRelativeKey}
-            showWaveforms={settings.row_waveforms}
-            onToggleWaveforms={onToggleWaveforms}
             favoritesOnly={favoritesOnly}
             onToggleFavoritesOnly={onToggleFavoritesOnly}
             hiddenColumns={hiddenColumns}
             onToggleColumn={onToggleColumn}
             columnLabels={columnLabels}
+            facetBpms={facetBpms}
+            facetRootCounts={facetRootCounts}
+            facetTagCounts={facetTagCounts}
+            onEditorKindChange={onEditorKindChange}
+            inputRef={omniInputRef}
           />
 
           <SampleTable
@@ -1065,7 +1200,6 @@ export function LibraryView({
             loading={samplesLoading}
             selectedIds={selectedIds}
             playingId={playingId}
-            showWaveforms={settings.row_waveforms}
             coloredWaveforms={settings.colored_waveforms}
             hiddenColumns={hiddenColumns}
             columnWidths={columnWidths}
@@ -1073,6 +1207,15 @@ export function LibraryView({
             sortColumn={settings.sort_column}
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
+            bpmFilter={{
+              min: omni.bpmMin,
+              max: omni.bpmMax,
+              halfDouble: settings.half_double_bpm,
+            }}
+            keyFilter={{
+              key: omni.key,
+              relative: settings.relative_key,
+            }}
             hoverPreviewHeld={hoverPreviewHeld}
             scrollApiRef={tableScrollRef}
             onSelect={onSelectRow}
@@ -1099,6 +1242,7 @@ export function LibraryView({
             waveformMode={settings.waveform_view}
             coloredWaveforms={settings.colored_waveforms}
             playheadActive={playingId != null && playingId === focusedId}
+            playing={previewPlaying && playingId === focusedId}
             selection={selection}
             loopPreview={settings.loop_preview}
             gainDb={settings.preview_gain_db}
@@ -1110,6 +1254,7 @@ export function LibraryView({
             onSelect={onDetailSelect}
             clipReady={clipPath != null}
             onDragClip={onDetailDragClip}
+            onPlayPause={onPlayPause}
             onSnapChange={onSnapChange}
             onLoopChange={onLoopChange}
             onGainChange={onGainChange}

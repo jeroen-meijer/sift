@@ -61,7 +61,6 @@ function renderTable(props: Partial<React.ComponentProps<typeof SampleTable>> = 
       indexedCount={4402}
       selectedIds={new Set()}
       playingId={null}
-      showWaveforms
       coloredWaveforms
       hiddenColumns={new Set()}
       columnOrder={[...DEFAULT_COLUMN_ORDER]}
@@ -123,8 +122,8 @@ describe("SampleTable", () => {
     expect(screen.queryByText("Drums/Kick")).toBeNull();
   });
 
-  it("omits the waveform column entirely when row waveforms are off", () => {
-    renderTable({ showWaveforms: false });
+  it("omits the waveform column when it is hidden", () => {
+    renderTable({ hiddenColumns: new Set(["wave"]) });
     expect(screen.queryByText("Waveform")).toBeNull();
   });
 
@@ -279,7 +278,6 @@ describe("SampleTable", () => {
         indexedCount={1}
         selectedIds={new Set()}
         playingId={null}
-        showWaveforms
         coloredWaveforms
         hiddenColumns={new Set()}
         columnOrder={[...DEFAULT_COLUMN_ORDER]}

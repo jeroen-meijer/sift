@@ -3,7 +3,9 @@
  * `[data-theme="…"]` block owns the color ramps. Components use var(--…) only.
  *
  * Nocturne is the default (legacy id: dark-default).
- * Ink / Graphite / Snow follow Monospace VS Code themes.
+ * Ink / Graphite / Snow follow the Monospace VS Code theme collection.
+ * `--color-on-accent` is paint on accent-strong fills (switch/toggle knobs,
+ * slider thumbs); same role as `button.foreground` in those themes.
  */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
@@ -81,6 +83,7 @@
 @property --color-accent { syntax: "<color>"; inherits: true; initial-value: #9184d9; }
 @property --color-accent-soft { syntax: "<color>"; inherits: true; initial-value: #b5abfc; }
 @property --color-accent-strong { syntax: "<color>"; inherits: true; initial-value: #796cbf; }
+@property --color-on-accent { syntax: "<color>"; inherits: true; initial-value: #f3f5fe; }
 @property --color-accent-fill { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 14%); }
 @property --color-accent-fill-strong { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 16%); }
 @property --color-accent-fill-row { syntax: "<color>"; inherits: true; initial-value: rgb(145 132 217 / 15%); }
@@ -150,6 +153,7 @@ html.theme-lerp {
     --color-accent var(--motion-theme) var(--motion-ease),
     --color-accent-soft var(--motion-theme) var(--motion-ease),
     --color-accent-strong var(--motion-theme) var(--motion-ease),
+    --color-on-accent var(--motion-theme) var(--motion-ease),
     --color-accent-fill var(--motion-theme) var(--motion-ease),
     --color-accent-fill-strong var(--motion-theme) var(--motion-ease),
     --color-accent-fill-row var(--motion-theme) var(--motion-ease),
@@ -232,6 +236,7 @@ html.theme-lerp {
   --color-accent: #9184d9;
   --color-accent-soft: #b5abfc;
   --color-accent-strong: #796cbf;
+  --color-on-accent: #f3f5fe;
   --color-accent-fill: rgb(145 132 217 / 14%);
   --color-accent-fill-strong: rgb(145 132 217 / 16%);
   --color-accent-fill-row: rgb(145 132 217 / 15%);
@@ -310,6 +315,7 @@ html.theme-lerp {
   --color-accent: #976fe1;
   --color-accent-soft: #b895fd;
   --color-accent-strong: #8964e8;
+  --color-on-accent: #fafbfe;
   --color-accent-fill: rgb(151 111 225 / 16%);
   --color-accent-fill-strong: rgb(151 111 225 / 20%);
   --color-accent-fill-row: rgb(151 111 225 / 16%);
@@ -387,6 +393,7 @@ html.theme-lerp {
   --color-accent: #989898;
   --color-accent-soft: #c4c4c4;
   --color-accent-strong: #707070;
+  --color-on-accent: #f5f5f5;
   --color-accent-fill: rgb(152 152 152 / 16%);
   --color-accent-fill-strong: rgb(152 152 152 / 20%);
   --color-accent-fill-row: rgb(152 152 152 / 16%);
@@ -461,9 +468,12 @@ html.theme-lerp {
   --color-text-ghost: #d1d5da;
   --color-count-selected: #044289;
 
+  /* Accent / progress / focus from Monospace Snow; filled controls use the same
+   * blue with white on-accent (button.foreground), not the dark accent-700. */
   --color-accent: #0366d6;
   --color-accent-soft: #2188ff;
-  --color-accent-strong: #044289;
+  --color-accent-strong: #0366d6;
+  --color-on-accent: #ffffff;
   --color-accent-fill: rgb(3 102 214 / 12%);
   --color-accent-fill-strong: rgb(3 102 214 / 16%);
   --color-accent-fill-row: rgb(3 102 214 / 12%);

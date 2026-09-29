@@ -7,7 +7,16 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  globalIgnores(["dist", "coverage", "node_modules", "src-tauri/target", "src-tauri/gen", "scripts"]),
+  globalIgnores([
+    "dist",
+    "coverage",
+    "node_modules",
+    "src-tauri/target",
+    "src-tauri/gen",
+    "scripts",
+    // WDIO harness (mocha globals / browser); typed via e2e/tsconfig.json
+    "e2e/**",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

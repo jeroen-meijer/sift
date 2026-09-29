@@ -1,0 +1,16 @@
+---
+description: How to add tests and verify Sift changes (all agents)
+alwaysApply: true
+---
+
+# Testing (agents)
+
+Canonical guide: [docs/reference/testing.md](docs/reference/testing.md).
+
+When you build or change a feature, or the user asks you to test, verify, or check it:
+
+1. Read `docs/reference/testing.md`.
+2. Add or extend automated coverage at the cheapest layer that can fail the claim (Rust nextest, Vitest, WDIO browser, WDIO tauri).
+3. Run that layer before you claim done.
+4. Do not invent a one-off harness. Leave tests in the repo.
+5. Never enable Cargo feature `e2e` on release builds.

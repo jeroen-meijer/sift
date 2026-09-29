@@ -47,7 +47,7 @@ Before you push or open a PR:
 bun run preflight
 ```
 
-That runs the same checks as CI here: Rust fmt, clippy, nextest, ESLint, `tsc`, Vitest, and docs checks (`bun run docs:check`).
+That runs the same checks as CI here: Rust fmt, clippy, nextest, ESLint, `tsc`, Vitest, and docs checks (`bun run docs:check`). Browser E2E: `bun run test:e2e:browser`. Full testing map: [docs/reference/testing.md](docs/reference/testing.md).
 
 More detail for agents and maintainers: [AGENTS.md](AGENTS.md). Docs map: [docs/README.md](docs/README.md). Product behavior: [docs/spec.md](docs/spec.md).
 

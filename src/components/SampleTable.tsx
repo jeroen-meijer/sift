@@ -28,7 +28,7 @@ import {
 } from "../lib/flipColumns";
 import { formatCount } from "../lib/format";
 import type { SampleRow, SortColumn, SortDirection } from "../lib/ipc";
-import type { OptionalColumn } from "../lib/omni";
+import type { OmniKey, OptionalColumn } from "../lib/omni";
 import { isProfileOn, profileMark, useRenderTiming } from "../lib/profile";
 
 /** Exposed so LibraryView can keep arrow-key selection on screen. */
@@ -71,7 +71,6 @@ interface Props {
   loading?: boolean;
   selectedIds: Set<number>;
   playingId: number | null;
-  showWaveforms: boolean;
   coloredWaveforms: boolean;
   hiddenColumns: Set<OptionalColumn>;
   columnWidths: ColumnWidths;
@@ -79,6 +78,10 @@ interface Props {
   sortColumn: SortColumn;
   sortDirection: SortDirection;
   highlightText: string;
+  /** Active BPM filter for ×2/÷2 badges. */
+  bpmFilter?: { min: number | null; max: number | null; halfDouble: boolean };
+  /** Active key filter for rel badges. */
+  keyFilter?: { key: OmniKey | null; relative: boolean };
   hoverPreviewHeld: boolean;
   /** Imperative scroll API for arrow-key selection (virtualizer.scrollToIndex). */
   scrollApiRef?: RefObject<SampleTableScrollApi | null>;
@@ -99,7 +102,6 @@ export const SampleTable = memo(function SampleTable({
   loading = false,
   selectedIds,
   playingId,
-  showWaveforms,
   coloredWaveforms,
   hiddenColumns,
   columnWidths,
@@ -107,6 +109,8 @@ export const SampleTable = memo(function SampleTable({
   sortColumn,
   sortDirection,
   highlightText,
+  bpmFilter,
+  keyFilter,
   hoverPreviewHeld,
   scrollApiRef,
   onSelect,
@@ -148,7 +152,8 @@ export const SampleTable = memo(function SampleTable({
   const draftOrderRef = useRef<TableColumn[] | null>(null);
   draftOrderRef.current = draftOrder;
   const effectiveOrder = draftOrder ?? mergeColumnOrder(columnOrder);
-  const columns = visibleOrderedColumns(effectiveOrder, hiddenColumns, showWaveforms);
+  const columns = visibleOrderedColumns(effectiveOrder, hiddenColumns);
+  const showWaveforms = !hiddenColumns.has("wave");
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
   const orderKey = effectiveOrder.join(",");
@@ -573,6 +578,8 @@ export const SampleTable = memo(function SampleTable({
                 playing={playingId === sample.id}
                 colored={coloredWaveforms}
                 highlightText={highlightText}
+                bpmFilter={bpmFilter}
+                keyFilter={keyFilter}
                 waveWidth={waveWidth}
                 handlers={rowHandlers}
               />

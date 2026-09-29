@@ -4,6 +4,7 @@ import {
   FolderOpenIcon,
   FunnelIcon,
   LinkSimpleIcon,
+  MagnifyingGlassIcon,
   MetronomeIcon,
   MusicNotesIcon,
   ShapesIcon,
@@ -27,6 +28,7 @@ export type SampleAction =
   | "type:loop"
   | "type:one-shot"
   | "type:none"
+  | "findSimilar"
   | "showParent"
   | "reveal"
   | "copyPath"
@@ -161,6 +163,13 @@ export function SampleMenu({
       ),
     },
     { kind: "rule" },
+    {
+      kind: "item",
+      id: "findSimilar",
+      label: t("menu.findSimilar"),
+      icon: <MagnifyingGlassIcon size={14} />,
+      disabled: (sample.bpm == null || sample.bpm <= 0) && !sample.key_name,
+    },
     {
       kind: "item",
       id: "showParent",

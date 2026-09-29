@@ -28,8 +28,9 @@ interface Props {
   snap: SnapMode;
   waveformMode: WaveformMode;
   coloredWaveforms: boolean;
-  /** True while this sample plays. */
+  /** Playhead is on this sample (playing or paused mid-file). */
   playheadActive: boolean;
+  playing: boolean;
   selection: Selection | null;
   loopPreview: boolean;
   gainDb: number;
@@ -42,6 +43,7 @@ interface Props {
   onSelect: (selection: Selection | null) => void;
   snapPointer: (secs: number) => number;
   onDragClip: () => void;
+  onPlayPause: () => void;
   onSnapChange: (snap: SnapMode) => void;
   onLoopChange: (on: boolean) => void;
   onGainChange: (db: number) => void;
@@ -166,6 +168,7 @@ export const DetailPane = memo(function DetailPane({
   waveformMode,
   coloredWaveforms,
   playheadActive,
+  playing,
   selection,
   loopPreview,
   gainDb,
@@ -177,6 +180,7 @@ export const DetailPane = memo(function DetailPane({
   onSelect,
   snapPointer,
   onDragClip,
+  onPlayPause,
   onSnapChange,
   onLoopChange,
   onGainChange,
@@ -204,6 +208,14 @@ export const DetailPane = memo(function DetailPane({
     () => (sample ? folderChipLabel(sample.path, roots) : ""),
     [sample, roots],
   );
+
+  const durationSecs = useMemo(() => {
+    const fromSample = (sample?.duration_ms ?? 0) / 1000;
+    const fromPeaks = (peaks?.duration_ms ?? 0) / 1000;
+    return fromSample > 0 ? fromSample : fromPeaks;
+  }, [sample?.duration_ms, peaks?.duration_ms]);
+
+  const canPlay = sample != null && !sample.missing && sample.availability === "local";
 
   if (!sample) {
     return (
@@ -387,6 +399,11 @@ export const DetailPane = memo(function DetailPane({
             />
           </div>
           <TransportBar
+            durationSecs={durationSecs}
+            playing={playing}
+            canPlay={canPlay}
+            playheadActive={playheadActive}
+            onPlayPause={onPlayPause}
             snap={snap}
             onSnapChange={onSnapChange}
             loopPreview={loopPreview}

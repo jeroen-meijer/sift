@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-1967debe-14a7-4f05-a2d5-d024cfb6e67d/styles.css">
+<script src="_ds/nocturne-1967debe-14a7-4f05-a2d5-d024cfb6e67d/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: #0d0e15; color: #e9e9ed; font-family: "Inter", system-ui, sans-serif; }
+  a { color: #9184d9; text-decoration: none; }
+  a:hover { color: #b5abfc; }
+  ::selection { background: rgba(145,132,217,.3); }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: #3f424d; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  input::placeholder { color: #4a4e5d; }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0d0e15;padding:34px 34px 80px;display:flex;flex-direction:column;align-items:flex-start;gap:18px;width:max-content;min-width:100%">
+
+  <div style="width:1280px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+    <div>
+      <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#75798c;margin-bottom:5px">Sift · omni search · round 2</div>
+      <div style="font-weight:500;font-size:29px;letter-spacing:-.02em;line-height:1">Typed triggers, inline editors</div>
+    </div>
+    <div style="text-align:right;font-size:11.5px;color:#75798c;line-height:1.6;font-family:'JetBrains Mono',monospace">
+      <div>Press / anywhere to focus search</div>
+      <div>Earlier round: <a href="Sift Omni Search.dc.html">Sift Omni Search</a></div>
+    </div>
+  </div>
+
+  <div style="width:1280px;display:flex;align-items:center;gap:5px">
+    <sc-for list="{{ variants }}" as="v" hint-placeholder-count="2">
+      <sc-if value="{{ v.active }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ v.go }}" style="font-family:'Inter';font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:pointer;background:rgba(145,132,217,.14);color:#b5abfc;border:1px solid #9184d9;display:flex;align-items:center;gap:7px;white-space:nowrap">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.7">{{ v.id }}</span>{{ v.name }}
+        </button>
+      </sc-if>
+      <sc-if value="{{ v.inactive }}">
+        <button onClick="{{ v.go }}" style="font-family:'Inter';font-size:12px;font-weight:400;padding:6px 12px;border-radius:8px;cursor:pointer;background:transparent;color:#9397ab;border:1px solid rgba(233,233,237,.12);display:flex;align-items:center;gap:7px;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed;border-color:rgba(233,233,237,.24)">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;opacity:.55">{{ v.id }}</span>{{ v.name }}
+        </button>
+      </sc-if>
+    </sc-for>
+    <button onClick="{{ reset }}" style="margin-left:auto;font-family:'Inter';font-size:12px;padding:6px 11px;border-radius:8px;cursor:pointer;background:transparent;color:#75798c;border:1px solid transparent;display:flex;align-items:center;gap:6px" style-hover="color:#e9e9ed;background:rgba(233,233,237,.05)"><i class="ph ph-arrow-counter-clockwise" style="font-size:13px"></i>Reset</button>
+  </div>
+
+  <div style="width:1280px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 26px;padding:2px">
+    <sc-for list="{{ notes }}" as="n" hint-placeholder-count="6">
+      <div>
+        <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9184d9;margin-bottom:5px">{{ n.title }}</div>
+        <div style="font-size:12.5px;line-height:1.55;color:#b2b6ca;text-wrap:pretty">{{ n.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="width:1280px;display:flex;align-items:center;gap:10px;font-size:12px;color:#75798c">
+    <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70">Try</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#cfd3e5">{{ tryit }}</span>
+  </div>
+
+  <div style="position:relative;width:1280px;height:700px;background:#161826;border-radius:11px;box-shadow:0 0 0 1px #3f424d, 0 26px 70px rgba(0,0,0,.7);display:flex;flex-direction:column">
+
+    <div style="height:38px;flex:none;display:flex;align-items:center;padding:0 14px;gap:9px;background:#1c1e2c;border-bottom:1px solid rgba(233,233,237,.09);border-radius:11px 11px 0 0">
+      <div style="display:flex;gap:7px;align-items:center">
+        <div style="width:11px;height:11px;border-radius:50%;background:#e0685f"></div>
+        <div style="width:11px;height:11px;border-radius:50%;background:#dfa53f"></div>
+        <div style="width:11px;height:11px;border-radius:50%;background:#5cb15c"></div>
+      </div>
+      <div style="flex:1;text-align:center;font-size:12px;color:#9397ab">Sift</div>
+      <div style="width:50px"></div>
+    </div>
+
+    <div style="min-height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:10px 12px;background:#181a28;border-bottom:1px solid rgba(233,233,237,.09);position:relative;z-index:5">
+
+      <div ref="{{ wrapRef }}" style="flex:1;min-width:0;position:relative">
+        <div ref="{{ fieldRef }}" onMouseDown="{{ onFieldDown }}" style="position:relative;min-height:32px;display:flex;align-items:center;flex-wrap:wrap;gap:5px;padding:4px 6px 4px 9px;background:#101220;border:1px solid rgba(233,233,237,.13);border-radius:8px;cursor:text">
+          <sc-if value="{{ focusRing }}"><span style="position:absolute;inset:-1px;border-radius:8px;box-shadow:0 0 0 1px #9184d9;pointer-events:none"></span></sc-if>
+          <i class="ph ph-magnifying-glass" style="font-size:14px;color:#75798c;flex:none;margin-right:2px"></i>
+
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="2">
+            <div data-chip="{{ c.id }}" onClick="{{ c.onClick }}" onMouseEnter="{{ c.onEnter }}" onMouseLeave="{{ c.onLeave }}" style="position:relative;flex:none;max-width:100%;display:flex;align-items:center;gap:6px;min-height:22px;padding:2px 5px 2px 7px;background:#232532;border:1px solid rgba(233,233,237,.14);border-radius:6px;font-size:11px;white-space:nowrap;cursor:pointer;user-select:none" style-hover="background:#2a2c3b;border-color:rgba(233,233,237,.28)">
+              <sc-if value="{{ c.active }}"><span style="position:absolute;inset:-1px;border-radius:6px;box-shadow:0 0 0 1px #9184d9, 0 0 0 3px rgba(145,132,217,.22);pointer-events:none"></span></sc-if>
+              <sc-if value="{{ c.pending }}"><span style="position:absolute;inset:-1px;border-radius:6px;border:1px dashed #b5abfc;background:rgba(145,132,217,.08);pointer-events:none"></span></sc-if>
+              <sc-if value="{{ c.isFolder }}"><i class="ph ph-folder" style="font-size:11px;color:#75798c"></i></sc-if>
+              <sc-if value="{{ c.isNeg }}"><span style="color:#c9736d;font-size:10px;letter-spacing:.04em;text-transform:uppercase">not</span></sc-if>
+              <span style="color:#75798c;font-size:10px;letter-spacing:.04em;text-transform:uppercase">{{ c.pre }}</span>
+              <sc-if value="{{ c.plainVal }}"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#e9e9ed">{{ c.val }}</span></sc-if>
+              <sc-if value="{{ c.isTag }}">
+                <span style="display:flex;align-items:center;flex-wrap:wrap;gap:3px 5px;min-width:0">
+                  <sc-for list="{{ c.parts }}" as="pt" hint-placeholder-count="1">
+                    <sc-if value="{{ pt.sep }}"><span style="color:#5b5f70;font-size:10px">+</span></sc-if>
+                    <span style="display:flex;align-items:center;gap:5px"><sc-if value="{{ pt.neg }}"><span style="color:#c9736d;font-size:10px;letter-spacing:.04em;text-transform:uppercase">not</span></sc-if><span style="width:7px;height:7px;border-radius:2px;background:{{ pt.dot }};flex:none"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#e9e9ed">{{ pt.path }}</span></span>
+                  </sc-for>
+                  <sc-if value="{{ c.tagEmpty }}"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#75798c">…</span></sc-if>
+                </span>
+              </sc-if>
+              <sc-if value="{{ c.hasToggle }}">
+                <span onClick="{{ c.onToggle }}" style="display:flex;align-items:center;gap:4px;padding-left:5px;margin-left:1px;border-left:1px solid rgba(233,233,237,.14);color:#5b5f70;font-size:10px;cursor:pointer" style-hover="color:#b2b6ca">
+                  <sc-if value="{{ c.toggleOff }}"><span style="width:16px;height:9px;border-radius:5px;background:#31333d;position:relative;display:inline-block"><span style="position:absolute;top:1.5px;left:1.5px;width:6px;height:6px;border-radius:50%;background:#75798c"></span></span></sc-if>
+                  <sc-if value="{{ c.toggleOn }}"><span style="width:16px;height:9px;border-radius:5px;background:#796cbf;position:relative;display:inline-block"><span style="position:absolute;top:1.5px;left:8.5px;width:6px;height:6px;border-radius:50%;background:#e9e9ed"></span></span></sc-if>
+                  {{ c.toggleLabel }}
+                </span>
+              </sc-if>
+              <i onClick="{{ c.onRemove }}" class="ph ph-x" style="font-size:10px;color:#75798c;cursor:pointer;margin-left:1px;padding:2px;border-radius:3px" style-hover="color:#e9e9ed;background:rgba(233,233,237,.1)"></i>
+            </div>
+          </sc-for>
+
+          <input data-input="1" ref="{{ inputRef }}" value="{{ text }}" onChange="{{ onText }}" onKeyDown="{{ onKey }}" onFocus="{{ onFocus }}" onMouseDown="{{ onInputDown }}" onPaste="{{ onPaste }}" placeholder="{{ placeholder }}" spellcheck="false" style="flex:1;min-width:140px;height:22px;background:transparent;border:0;outline:none;color:#e9e9ed;font-family:'JetBrains Mono',monospace;font-size:12.5px;padding:0 2px">
+
+          <sc-if value="{{ hasAny }}"><i onClick="{{ clearAll }}" title="Clear all" class="ph ph-x-circle" style="font-size:14px;color:#75798c;flex:none;cursor:pointer;padding:0 2px" style-hover="color:#e9e9ed"></i></sc-if>
+        </div>
+
+        <sc-if value="{{ dd.open }}">
+          <div onMouseDown="{{ keepFocus }}" style="position:absolute;left:0;top:calc(100% + 5px);width:480px;z-index:30;background:#1c1e2c;border:1px solid rgba(233,233,237,.14);border-radius:9px;box-shadow:0 18px 44px rgba(0,0,0,.55);overflow:hidden">
+            <div style="padding:9px 12px 5px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70">{{ dd.title }}</div>
+            <div style="padding:0 5px 5px">
+              <sc-for list="{{ dd.rows }}" as="r" hint-placeholder-count="4">
+                <div onMouseDown="{{ r.pick }}" onMouseEnter="{{ r.hover }}" style="position:relative;display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:6px;cursor:pointer">
+                  <sc-if value="{{ r.hi }}"><span style="position:absolute;inset:0;border-radius:6px;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9"></span></sc-if>
+                  <i class="{{ r.icon }}" style="position:relative;font-size:14px;color:#9397ab;width:16px;text-align:center"></i>
+                  <sc-if value="{{ r.hasDot }}"><span style="position:relative;width:8px;height:8px;border-radius:2px;background:{{ r.dot }};flex:none"></span></sc-if>
+                  <span style="position:relative;font-size:12.5px;color:#e9e9ed;white-space:nowrap">{{ r.label }}</span>
+                  <span style="position:relative;font-size:11.5px;color:#75798c;white-space:nowrap">{{ r.sub }}</span>
+                  <span style="position:relative;margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b84ad;white-space:nowrap">{{ r.hint }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ dd.hasRecent }}">
+                <div style="padding:8px 8px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70">Recent</div>
+                <sc-for list="{{ dd.recent }}" as="r" hint-placeholder-count="2">
+                  <div onMouseDown="{{ r.pick }}" onMouseEnter="{{ r.hover }}" style="position:relative;display:flex;align-items:center;gap:9px;height:28px;padding:0 8px;border-radius:6px;cursor:pointer">
+                    <sc-if value="{{ r.hi }}"><span style="position:absolute;inset:0;border-radius:6px;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9"></span></sc-if>
+                    <i class="ph ph-clock-counter-clockwise" style="position:relative;font-size:13px;color:#75798c;width:16px;text-align:center"></i>
+                    <span style="position:relative;font-size:12px;color:#cfd3e5;white-space:nowrap">{{ r.label }}</span>
+                    <span style="position:relative;margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b84ad;white-space:nowrap">{{ r.hint }}</span>
+                  </div>
+                </sc-for>
+              </sc-if>
+            </div>
+            <div style="padding:7px 12px;border-top:1px solid rgba(233,233,237,.08);font-size:11px;color:#6d6f7c;background:#181a28">{{ dd.footer }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ pop.open }}">
+          <div onMouseEnter="{{ popEnter }}" onMouseLeave="{{ popLeave }}" onMouseDown="{{ popDown }}" style="position:absolute;left:{{ pop.left }}px;top:calc(100% + 5px);width:300px;z-index:40;background:#1c1e2c;border:1px solid rgba(233,233,237,.14);border-radius:9px;box-shadow:0 18px 44px rgba(0,0,0,.55);overflow:hidden">
+
+            <sc-if value="{{ pop.isBpm }}">
+              <div style="padding:11px 12px 12px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70">BPM range</span>
+                  <span onClick="{{ pop.onHd }}" style="display:flex;align-items:center;gap:5px;font-size:11px;color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed">
+                    <sc-if value="{{ pop.hdOff }}"><span style="width:22px;height:12px;border-radius:6px;background:#31333d;position:relative;display:inline-block"><span style="position:absolute;top:2px;left:2px;width:8px;height:8px;border-radius:50%;background:#75798c"></span></span></sc-if>
+                    <sc-if value="{{ pop.hdOn }}"><span style="width:22px;height:12px;border-radius:6px;background:#796cbf;position:relative;display:inline-block"><span style="position:absolute;top:2px;left:12px;width:8px;height:8px;border-radius:50%;background:#e9e9ed"></span></span></sc-if>
+                    Half / double
+                  </span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input ref="{{ minRef }}" class="input" value="{{ pop.loRaw }}" onChange="{{ pop.onMin }}" onKeyDown="{{ pop.onMinKey }}" placeholder="min" maxlength="3" style="width:64px;min-height:28px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12.5px;text-align:center">
+                  <span style="color:#5b5f70">–</span>
+                  <input ref="{{ maxRef }}" class="input" value="{{ pop.hiRaw }}" onChange="{{ pop.onMax }}" onKeyDown="{{ pop.onMaxKey }}" placeholder="{{ pop.maxPh }}" maxlength="3" style="width:64px;min-height:28px;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12.5px;text-align:center">
+                  <span style="font-size:11px;color:#5b5f70">{{ pop.bpmNote }}</span>
+                </div>
+                <sc-if value="{{ pop.showHist }}">
+                  <div style="display:flex;align-items:flex-end;gap:1px;height:26px;margin:0 5px -6px">
+                    <sc-for list="{{ pop.hist }}" as="h" hint-placeholder-count="32">
+                      <sc-if value="{{ h.on }}"><div style="flex:1;height:{{ h.h }}%;min-height:1px;background:#9184d9;border-radius:1px 1px 0 0"></div></sc-if>
+                      <sc-if value="{{ h.off }}"><div style="flex:1;height:{{ h.h }}%;min-height:1px;background:#3f424d;border-radius:1px 1px 0 0"></div></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <div ref="{{ trackRef }}" onMouseDown="{{ pop.onTrack }}" style="position:relative;height:16px;cursor:pointer;margin:0 5px">
+                  <div style="position:absolute;left:0;right:0;top:6.5px;height:3px;border-radius:2px;background:#31333d"></div>
+                  <sc-if value="{{ pop.hasRange }}">
+                    <div style="position:absolute;left:{{ pop.loPct }}%;width:{{ pop.wPct }}%;top:6.5px;height:3px;border-radius:2px;background:#796cbf"></div>
+                    <div style="position:absolute;left:{{ pop.loPct }}%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#cfd3e5;box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>
+                    <div style="position:absolute;left:{{ pop.hiPct }}%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#cfd3e5;box-shadow:0 1px 3px rgba(0,0,0,.6)"></div>
+                  </sc-if>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:-7px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#4a4e5d"><span>40</span><span>80</span><span>120</span><span>160</span><span>200</span></div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                  <sc-for list="{{ pop.presets }}" as="p" hint-placeholder-count="6">
+                    <button onMouseDown="{{ keepFocus }}" onClick="{{ p.pick }}" style="height:22px;padding:0 7px;border-radius:5px;border:1px solid rgba(233,233,237,.12);background:#232532;color:#b2b6ca;font-family:'JetBrains Mono',monospace;font-size:10.5px;cursor:pointer" style-hover="border-color:#9184d9;color:#e7e5fe">{{ p.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pop.isKey }}">
+              <div style="padding:11px 12px 12px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70">Key</span>
+                  <input ref="{{ keyRef }}" class="input" value="{{ pop.keyRaw }}" onChange="{{ pop.onKeyRaw }}" onKeyDown="{{ pop.onKeyKey }}" placeholder="{{ pop.keyPh }}" spellcheck="false" style="flex:1;min-height:28px;padding:3px 9px;font-family:'JetBrains Mono',monospace;font-size:12.5px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#b5abfc;min-width:52px;text-align:right">{{ pop.keyRead }}</span>
+                </div>
+                <sc-if value="{{ pop.isKeyA }}">
+                  <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px">
+                    <sc-for list="{{ pop.roots }}" as="k" hint-placeholder-count="12">
+                      <sc-if value="{{ k.on }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="height:30px;border-radius:5px;border:1px solid #9184d9;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'JetBrains Mono',monospace;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#b5abfc">{{ k.alt }}</span></button></sc-if>
+                      <sc-if value="{{ k.off }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="height:30px;border-radius:5px;border:1px solid rgba(233,233,237,.1);background:#232532;color:#cfd3e5;font-family:'JetBrains Mono',monospace;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0" style-hover="border-color:rgba(145,132,217,.6)">{{ k.label }}<span style="font-size:8.5px;color:#5b5f70">{{ k.alt }}</span></button></sc-if>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;border:1px solid rgba(233,233,237,.12);border-radius:7px;overflow:hidden">
+                    <sc-for list="{{ pop.modes }}" as="m" hint-placeholder-count="3">
+                      <sc-if value="{{ m.on }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ m.pick }}" style="flex:1;height:26px;border:0;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'Inter';font-size:11.5px;cursor:pointer">{{ m.label }}</button></sc-if>
+                      <sc-if value="{{ m.off }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ m.pick }}" style="flex:1;height:26px;border:0;background:transparent;color:#9397ab;font-family:'Inter';font-size:11.5px;cursor:pointer" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">{{ m.label }}</button></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ pop.isKeyE }}">
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <div style="display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:3px">
+                      <sc-for list="{{ pop.blacks }}" as="k" hint-placeholder-count="5">
+                        <div style="grid-column:{{ k.col }};display:flex">
+                          <sc-if value="{{ k.on }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:-.02em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#b5abfc">{{ k.sub }}</span></button></sc-if>
+                          <sc-if value="{{ k.some }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;border:1px solid rgba(233,233,237,.12);background:#1a1c28;color:#cfd3e5;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:-.02em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0" style-hover="border-color:rgba(145,132,217,.6)">{{ k.label }}<span style="font-size:8.5px;color:#75798c">{{ k.sub }}</span></button></sc-if>
+                          <sc-if value="{{ k.zero }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;border:1px solid rgba(233,233,237,.06);background:transparent;color:#4a4e5d;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:-.02em;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#3f424d">{{ k.sub }}</span></button></sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:3px">
+                      <sc-for list="{{ pop.whites }}" as="k" hint-placeholder-count="7">
+                        <div style="grid-column:span 2;display:flex">
+                          <sc-if value="{{ k.on }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'JetBrains Mono',monospace;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#b5abfc">{{ k.sub }}</span></button></sc-if>
+                          <sc-if value="{{ k.some }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;border:1px solid rgba(233,233,237,.12);background:#232532;color:#cfd3e5;font-family:'JetBrains Mono',monospace;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0" style-hover="border-color:rgba(145,132,217,.6)">{{ k.label }}<span style="font-size:8.5px;color:#75798c">{{ k.sub }}</span></button></sc-if>
+                          <sc-if value="{{ k.zero }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="flex:1;height:34px;border-radius:6px;border:1px solid rgba(233,233,237,.06);background:transparent;color:#4a4e5d;font-family:'JetBrains Mono',monospace;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#3f424d">{{ k.sub }}</span></button></sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:4px">
+                    <sc-for list="{{ pop.modes }}" as="m" hint-placeholder-count="3">
+                      <sc-if value="{{ m.on }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ m.pick }}" style="flex:1;height:28px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'Inter';font-size:11.5px;cursor:pointer">{{ m.label }}</button></sc-if>
+                      <sc-if value="{{ m.off }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ m.pick }}" style="flex:1;height:28px;border-radius:6px;border:1px solid rgba(233,233,237,.12);background:transparent;color:#9397ab;font-family:'Inter';font-size:11.5px;cursor:pointer" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">{{ m.label }}</button></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ pop.oldKeyGrid }}">
+                  <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px">
+                    <sc-for list="{{ pop.cells }}" as="k" hint-placeholder-count="24">
+                      <sc-if value="{{ k.on }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="height:34px;border-radius:5px;border:1px solid #9184d9;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#b5abfc">{{ k.cam }} · {{ k.count }}</span></button></sc-if>
+                      <sc-if value="{{ k.some }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="height:34px;border-radius:5px;border:1px solid rgba(233,233,237,.1);background:#232532;color:#cfd3e5;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0" style-hover="border-color:rgba(145,132,217,.6)">{{ k.label }}<span style="font-size:8.5px;color:#75798c">{{ k.cam }} · {{ k.count }}</span></button></sc-if>
+                      <sc-if value="{{ k.zero }}"><button onMouseDown="{{ keepFocus }}" onClick="{{ k.pick }}" style="height:34px;border-radius:5px;border:1px solid rgba(233,233,237,.05);background:transparent;color:#4a4e5d;font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0">{{ k.label }}<span style="font-size:8.5px;color:#3f424d">{{ k.cam }}</span></button></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ pop.hasRel }}">
+                  <span onClick="{{ pop.onRel }}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#9397ab;cursor:pointer" style-hover="color:#e9e9ed">
+                    <sc-if value="{{ pop.relOff }}"><span style="width:22px;height:12px;border-radius:6px;background:#31333d;position:relative;display:inline-block"><span style="position:absolute;top:2px;left:2px;width:8px;height:8px;border-radius:50%;background:#75798c"></span></span></sc-if>
+                    <sc-if value="{{ pop.relOn }}"><span style="width:22px;height:12px;border-radius:6px;background:#796cbf;position:relative;display:inline-block"><span style="position:absolute;top:2px;left:12px;width:8px;height:8px;border-radius:50%;background:#e9e9ed"></span></span></sc-if>
+                    Include relative ({{ pop.relName }})
+                  </span>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pop.isTag }}">
+              <div style="padding:10px 10px 6px;display:flex;flex-direction:column;gap:7px">
+                <input ref="{{ tagRef }}" class="input" value="{{ pop.q }}" onChange="{{ pop.onTagQ }}" onKeyDown="{{ pop.onTagKey }}" placeholder="Find tags…" spellcheck="false" style="min-height:28px;padding:3px 9px;font-family:'JetBrains Mono',monospace;font-size:12px">
+                <div style="max-height:236px;overflow-y:auto;margin:0 -4px">
+                  <sc-for list="{{ pop.tags }}" as="t" hint-placeholder-count="8">
+                    <div onMouseDown="{{ keepFocus }}" onClick="{{ t.pick }}" onMouseEnter="{{ t.hover }}" style="position:relative;display:flex;align-items:center;gap:7px;height:25px;padding:0 8px;border-radius:5px;cursor:pointer;font-size:12px;color:#b2b6ca">
+                      <sc-if value="{{ t.hi }}"><span style="position:absolute;inset:0;border-radius:5px;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9"></span></sc-if>
+                      <span style="width:{{ t.pad }}px;flex:none"></span>
+                      <sc-if value="{{ t.checked }}"><i class="ph-fill ph-check-square" style="position:relative;font-size:14px;color:#9184d9"></i></sc-if>
+                      <sc-if value="{{ t.excluded }}"><i class="ph-fill ph-minus-square" style="position:relative;font-size:14px;color:#c9736d"></i></sc-if>
+                      <sc-if value="{{ t.unchecked }}"><i class="ph ph-square" style="position:relative;font-size:14px;color:#5b5f70"></i></sc-if>
+                      <span style="position:relative;width:8px;height:8px;border-radius:2px;flex:none;background:{{ t.dot }}"></span>
+                      <span style="position:relative;color:#e9e9ed">{{ t.label }}</span>
+                      <span style="position:relative;margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5b5f70">{{ t.count }}</span>
+                      <sc-if value="{{ t.showNeg }}"><span onClick="{{ t.pickNeg }}" title="Exclude (⇧↵)" style="position:relative;font-size:10px;color:#75798c;padding:1px 5px;border-radius:4px;border:1px solid rgba(233,233,237,.12)" style-hover="color:#c9736d;border-color:#c9736d">not</span></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pop.isType }}">
+              <div ref="{{ typeRef }}" tabindex="0" onKeyDown="{{ pop.onTypeKey }}" style="padding:11px 12px 12px;display:flex;flex-direction:column;gap:9px;outline:none">
+                <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70">Type</span>
+                <div style="display:flex;gap:5px">
+                  <sc-for list="{{ pop.types }}" as="y" hint-placeholder-count="2">
+                    <sc-if value="{{ y.on }}"><button onClick="{{ y.pick }}" style="flex:1;height:32px;border-radius:6px;border:1px solid #9184d9;background:rgba(145,132,217,.2);color:#e7e5fe;font-family:'Inter';font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="{{ y.icon }}" style="font-size:13px"></i>{{ y.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;opacity:.6">{{ y.k }}</span></button></sc-if>
+                    <sc-if value="{{ y.off }}"><button onClick="{{ y.pick }}" style="flex:1;height:32px;border-radius:6px;border:1px solid rgba(233,233,237,.12);background:#232532;color:#cfd3e5;font-family:'Inter';font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" style-hover="border-color:rgba(145,132,217,.6)"><i class="{{ y.icon }}" style="font-size:13px"></i>{{ y.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;opacity:.5">{{ y.k }}</span></button></sc-if>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="display:flex;flex-direction:column;gap:3px;padding:7px 12px 8px;border-top:1px solid rgba(233,233,237,.08);background:#181a28">
+              <div style="font-size:10.5px;color:#6d6f7c;line-height:1.5">{{ pop.keysHint }}</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#5b5f70">Type it: <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b84ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pop.syntax }}</span></div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ isE }}">
+        <div data-typeseg="1" style="flex:none;display:flex;height:28px;border:1px solid rgba(233,233,237,.13);border-radius:7px;overflow:hidden">
+          <sc-for list="{{ segs }}" as="g" hint-placeholder-count="3">
+            <sc-if value="{{ g.on }}"><button onClick="{{ g.pick }}" style="height:100%;padding:0 10px;border:0;background:rgba(145,132,217,.18);color:#e7e5fe;font-family:'Inter';font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap"><i class="{{ g.icon }}" style="font-size:12px"></i>{{ g.label }}</button></sc-if>
+            <sc-if value="{{ g.off }}"><button onClick="{{ g.pick }}" style="height:100%;padding:0 10px;border:0;background:transparent;color:#9397ab;font-family:'Inter';font-size:11.5px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed"><i class="{{ g.icon }}" style="font-size:12px"></i>{{ g.label }}</button></sc-if>
+          </sc-for>
+        </div>
+        <sc-if value="{{ canMatch }}">
+          <button onClick="{{ matchSelected }}" title="Filter by the selected sample’s BPM ±3 and key (M)" style="flex:none;height:28px;padding:0 9px;display:flex;align-items:center;gap:6px;border-radius:7px;border:1px solid rgba(145,132,217,.5);background:transparent;color:#b5abfc;font-size:11.5px;cursor:pointer;font-family:'Inter';white-space:nowrap" style-hover="background:rgba(145,132,217,.14);border-color:#9184d9"><i class="ph ph-crosshair-simple" style="font-size:14px"></i>Match selected<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;opacity:.6">M</span></button>
+        </sc-if>
+        <sc-if value="{{ cantMatch }}">
+          <button title="Select a sample with BPM or key first" style="flex:none;height:28px;padding:0 9px;display:flex;align-items:center;gap:6px;border-radius:7px;border:1px solid rgba(233,233,237,.1);background:transparent;color:#4a4e5d;font-size:11.5px;cursor:default;font-family:'Inter';white-space:nowrap"><i class="ph ph-crosshair-simple" style="font-size:14px"></i>Match selected<span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;opacity:.6">M</span></button>
+        </sc-if>
+      </sc-if>
+
+      <div style="flex:none;display:flex;align-items:center;gap:2px">
+        <button title="Favorites only" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;border:1px solid transparent;background:transparent;color:#9397ab;cursor:pointer" style-hover="background:rgba(233,233,237,.06);color:#e9e9ed"><i class="ph ph-star" style="font-size:15px"></i></button>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;min-height:0">
+      <div style="width:220px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.09);display:flex;flex-direction:column;min-height:0;border-radius:0 0 0 11px">
+        <div style="height:28px;flex:none;display:flex;align-items:center;padding:0 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70">Folders</div>
+        <div style="flex:none;padding-bottom:8px;font-size:12px">
+          <sc-for list="{{ folders }}" as="t" hint-placeholder-count="10">
+            <div onClick="{{ t.pick }}" style="position:relative;display:flex;align-items:center;gap:6px;height:23px;padding-right:10px;color:#b2b6ca;cursor:pointer;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">
+              <sc-if value="{{ t.on }}"><span style="position:absolute;inset:0;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9"></span></sc-if>
+              <span style="width:{{ t.pad }}px;flex:none"></span>
+              <i class="ph ph-folder" style="position:relative;font-size:13px;color:#75798c;flex:none"></i>
+              <span style="position:relative;overflow:hidden;text-overflow:ellipsis">{{ t.label }}</span>
+              <span style="position:relative;margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a4e5d">{{ t.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px solid rgba(233,233,237,.09)">
+          <div style="height:28px;flex:none;display:flex;align-items:center;padding:0 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b5f70">Tags</div>
+          <div style="flex:1;overflow-y:auto;padding-bottom:8px;font-size:12px">
+            <sc-for list="{{ sideTags }}" as="g" hint-placeholder-count="10">
+              <div onClick="{{ g.pick }}" style="position:relative;display:flex;align-items:center;gap:7px;height:22px;padding-right:10px;color:#b2b6ca;cursor:pointer;white-space:nowrap" style-hover="background:rgba(233,233,237,.05);color:#e9e9ed">
+                <sc-if value="{{ g.on }}"><span style="position:absolute;inset:0;background:rgba(145,132,217,.16);box-shadow:inset 2px 0 0 #9184d9"></span></sc-if>
+                <span style="width:{{ g.pad }}px;flex:none"></span>
+                <span style="position:relative;width:8px;height:8px;border-radius:2px;flex:none;background:{{ g.dot }}"></span>
+                <span style="position:relative;overflow:hidden;text-overflow:ellipsis">{{ g.leaf }}</span>
+                <span style="position:relative;margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a4e5d">{{ g.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+        <div style="height:26px;flex:none;display:grid;grid-template-columns:26px minmax(0,1.5fr) 72px 70px 80px minmax(0,1.3fr);align-items:center;padding-right:12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5b5f70;background:#181a28;border-bottom:1px solid rgba(233,233,237,.1)">
+          <span></span><span>Name</span><span>Type</span><span>BPM</span><span>Key</span><span>Tags</span>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto">
+          <sc-for list="{{ rows }}" as="row" hint-placeholder-count="8">
+            <div onClick="{{ row.pick }}" style="position:relative;display:grid;grid-template-columns:26px minmax(0,1.5fr) 72px 70px 80px minmax(0,1.3fr);align-items:center;height:28px;padding-right:12px;border-bottom:1px solid rgba(233,233,237,.04);cursor:default" style-hover="background:rgba(233,233,237,.045)">
+              <sc-if value="{{ row.selected }}"><div style="position:absolute;inset:0;background:rgba(145,132,217,.15);box-shadow:inset 2px 0 0 #9184d9;pointer-events:none"></div></sc-if>
+              <div style="position:relative;display:grid;place-items:center">
+                <sc-if value="{{ row.fav }}"><i class="ph-fill ph-star" style="font-size:11px;color:#b5abfc"></i></sc-if>
+              </div>
+              <div style="position:relative;font-size:12.5px;color:#e9e9ed;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px">{{ row.pre }}<span style="color:#e7e5fe;background:rgba(145,132,217,.32);border-radius:2px">{{ row.hit }}</span>{{ row.post }}</div>
+              <div style="position:relative;font-size:11px;color:#9397ab">{{ row.type }}</div>
+              <div style="position:relative;display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca">{{ row.bpm }}<sc-if value="{{ row.hasVia }}"><span title="Matched via half / double time" style="font-size:9.5px;color:#b5abfc;padding:0 4px;border-radius:3px;background:rgba(145,132,217,.16)">{{ row.via }}</span></sc-if></div>
+              <div style="position:relative;display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b2b6ca;white-space:nowrap">{{ row.key }}<sc-if value="{{ row.hasKeyVia }}"><span title="Matched as relative key" style="font-size:9.5px;color:#b5abfc;padding:0 4px;border-radius:3px;background:rgba(145,132,217,.16)">rel</span></sc-if></div>
+              <div style="position:relative;display:flex;align-items:center;gap:4px;overflow:hidden">
+                <sc-for list="{{ row.tags }}" as="tg" hint-placeholder-count="1">
+                  <span style="flex:none;font-size:10.5px;padding:1px 6px;border-radius:4px;background:{{ tg.bg }};color:{{ tg.fg }};white-space:nowrap">{{ tg.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noRows }}">
+            <div style="padding:60px 24px;text-align:center;font-size:12.5px;color:#5b5f70">No samples match these filters.</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:28px;flex:none;display:flex;align-items:center;padding:0 12px;gap:14px;background:#12141f;border-top:1px solid rgba(233,233,237,.09);font-size:11px;color:#5b5f70;font-family:'JetBrains Mono',monospace;border-radius:0 0 11px 11px">
+      <span>{{ count }}</span>
+      <span style="margin-left:auto;display:flex;gap:7px;align-items:center;white-space:nowrap;overflow:hidden">as text <span style="color:#8b84ad">{{ asText }}</span></span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  NOTES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+  ALT = ['', 'Db', '', 'D#', '', '', 'Gb', '', 'G#', '', 'A#', ''];
+  PRESETS = ['70-80', '85-95', '88-92', '120-128', '140', '170-175'];
+  nid = 10;
+  inputRef = React.createRef(); fieldRef = React.createRef(); wrapRef = React.createRef(); trackRef = React.createRef();
+  minRef = React.createRef(); maxRef = React.createRef(); keyRef = React.createRef(); tagRef = React.createRef(); typeRef = React.createRef();
+  state = Object.assign({ variant: 'E' }, this.fresh());
+
+  fresh() {
+    return {
+      filters: [{ id: 1, kind: 'bpm', lo: 85, hi: 95, hd: false }, { id: 2, kind: 'key', pc: 9, mode: null, rel: false }],
+      text: '', focus: false, quiet: false, sel: -1, hi: -1, pop: null, prefs: { hd: false, rel: false },
+      typeSeg: null, selRow: null, recent: [], hoverChip: null
+    };
+  }
+  isE() { return this.state.variant === 'E'; }
+
+  NOTES_A() {
+    return [
+      { title: 'Trigger', body: 'Typing bpm: key: tag: or type: replaces the word with a live chip and opens its editor when you type the colon. Focusing the empty field lists the same four, and clicking one does the same thing.' },
+      { title: 'BPM', body: 'Min is focused. Tab or – moves to max; Tab, Enter or Space confirms; Esc cancels. With no max you get that exact BPM. H toggles half / double.' },
+      { title: 'Key & type', body: 'Key: type a, f#m or bbmin; it’s read as you type, and the grid and mode are there for the mouse. Type: L or O (or ← →), then Enter.' },
+      { title: 'Tags: multi-select, AND', body: 'One chip holds every tag, and results need all of them. Type to narrow the list. Enter or comma adds the highlighted tag and keeps the picker open; Tab or Space adds it and closes. ⌫ on an empty query removes the last tag.' },
+      { title: 'Already active', body: 'Typing bpm: while a BPM chip exists reopens that chip with min selected, so you just type over it. Same for key: type: tag:.' },
+      { title: 'Click & keys', body: 'Click a chip to open its editor; click outside or confirm to close it. In an empty field ⌫ selects the last chip and ⌫ again deletes it. ← → move between chips, Enter opens one.' }
+    ];
+  }
+  NOTES_E() {
+    return [
+      { title: '1 · Shorter triggers', body: '# opens tags and b: / k: open BPM and key. You type prefixes more than anything else, so they should be short. The full words still work.' },
+      { title: '2 · Click to edit, hover only hints', body: 'Popovers that open on hover also open when you’re only heading for the text or a chip’s ×. Here a click or Enter opens the editor.' },
+      { title: '3 · Live counts everywhere', body: 'Each editor shows counts under the other active filters: a BPM histogram, a piano-layout key picker with per-key counts, per-tag counts. Dead options are dimmed, so you don’t build a search with no results.' },
+      { title: '4 · One tag chip, plus exclude', body: 'Every tag goes into a single TAG chip that wraps when it gets long. Results must have all included tags. ⇧↵ or “not” excludes a tag, e.g. no Vocals.' },
+      { title: '5 · Type is a toolbar toggle', body: 'Type only has two values, so a chip is overkill. All / Loops / One-shots sits beside the field. type: and the word loop still work.' },
+      { title: '6 · Tolerance, Camelot, Match', body: 'A single BPM means ±2, since detected tempos are rarely exact. k:8a works. Select a sample and press M to filter by its BPM ±3 and key. Recent filters show in the empty dropdown.' }
+    ];
+  }
+
+  DATA() {
+    const P = '/Users/alex/Samples/Packs';
+    return [
+      { n: '808_sub_hit_A.wav', t: 'one-shot', b: '', k: 'A', g: ['Drums/Kick/808'], f: true, p: P + '/Drums/Kicks' },
+      { n: 'bass_wobble_140_F#.wav', t: 'loop', b: '140', k: 'F# min', g: ['Synths/Bass'], p: P + '/Synths/Bass' },
+      { n: 'bass_line_94_F#m.wav', t: 'loop', b: '94', k: 'F# min', g: ['Synths/Bass', 'Genre/Funk'], p: P + '/Synths/Bass' },
+      { n: 'break_amen_170.wav', t: 'loop', b: '170', k: '', g: ['Drums/Breaks'], p: P + '/Drums/Breaks' },
+      { n: 'break_dusty_92.wav', t: 'loop', b: '92', k: '', g: ['Drums/Breaks', 'Genre/Funk'], p: P + '/Drums/Breaks' },
+      { n: 'clap_wide_stack.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Clap'], p: P + '/Drums/Claps' },
+      { n: 'hat_closed_micro.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Hats'], p: P + '/Drums/Hats' },
+      { n: 'hat_open_124.wav', t: 'loop', b: '124', k: '', g: ['Drums/Hats'], p: P + '/Drums/Hats' },
+      { n: 'kick_808_long_A.wav', t: 'one-shot', b: '88', k: 'A', g: ['Drums/Kick/808'], p: P + '/Drums/Kicks' },
+      { n: 'kick_dusty_lofi.wav', t: 'one-shot', b: '94', k: 'A', g: ['Drums/Kick', 'FX/Lo-fi'], p: P + '/Drums/Kicks' },
+      { n: 'kick_punch_95_Gb.wav', t: 'one-shot', b: '95', k: 'Gb min', g: ['Drums/Kick'], p: P + '/Drums/Kicks' },
+      { n: 'kick_sub_round_A.wav', t: 'one-shot', b: '91', k: 'A', g: ['Drums/Kick/808'], p: P + '/Drums/Kicks' },
+      { n: 'kick_tight_90.wav', t: 'one-shot', b: '90', k: '', g: ['Drums/Kick'], p: P + '/Drums/Kicks' },
+      { n: 'loop_funk_110_Gm.wav', t: 'loop', b: '110', k: 'G min', g: ['Drums/Breaks', 'Genre/Funk'], p: P + '/Drums/Breaks' },
+      { n: 'loop_guitar_180_A.wav', t: 'loop', b: '180', k: 'A', g: ['Genre/Funk'], p: P + '/Loops' },
+      { n: 'loop_pad_46_A.wav', t: 'loop', b: '46', k: 'A', g: ['Synths/Pad', 'FX/Reverb'], p: P + '/Synths/Pads' },
+      { n: 'loop_rhodes_92_Am.wav', t: 'loop', b: '92', k: 'A min', g: ['Keys/Rhodes', 'FX/Lo-fi'], p: P + '/Keys' },
+      { n: 'night_tram_amb.flac', t: 'one-shot', b: '', k: '', g: ['Field/City', 'Ambience'], p: '/Volumes/SFX/Field/City/Night' },
+      { n: 'rim_dry_close.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Snare'], p: P + '/Drums/Snares' },
+      { n: 'shaker_swing_122.wav', t: 'loop', b: '122', k: '', g: ['Drums/Hats'], p: P + '/Drums/Hats' },
+      { n: 'snare_room_verb.wav', t: 'one-shot', b: '', k: '', g: ['Drums/Snare', 'FX/Reverb'], f: true, p: P + '/Drums/Snares' },
+      { n: 'sub_drop_C.wav', t: 'one-shot', b: '', k: 'C', g: ['Synths/Bass'], p: P + '/Synths/Bass' },
+      { n: 'vocal_take_03_comp.aiff', t: 'one-shot', b: '', k: 'D min', g: ['Vocals'], p: '~/Music/Recorded Takes/2026-03 Vocals' },
+      { n: 'vox_chop_90_Am.wav', t: 'loop', b: '90', k: 'A min', g: ['Vocals', 'FX/Lo-fi'], p: P + '/Vocals' }
+    ];
+  }
+  FOLDERS() {
+    return [['Packs', 'Packs', 0], ['Drums', 'Packs/Drums', 12], ['Kicks', 'Packs/Drums/Kicks', 24], ['Breaks', 'Packs/Drums/Breaks', 24],
+      ['Hats', 'Packs/Drums/Hats', 24], ['Snares', 'Packs/Drums/Snares', 24], ['Synths', 'Packs/Synths', 12], ['Keys', 'Packs/Keys', 12],
+      ['Loops', 'Packs/Loops', 12], ['Vocals', 'Packs/Vocals', 12], ['Recorded Takes', 'Recorded Takes', 0], ['SFX', 'SFX', 0]];
+  }
+  tagColor(path) {
+    const m = {
+      Drums: ['#39305a', '#cdc4f5', '#8a7ad0'], Synths: ['#1f3a45', '#bfe3ef', '#5f8fa8'],
+      FX: ['#453721', '#f1ddba', '#a88a5f'], Field: ['#26402f', '#c4e4ce', '#5f9a72'],
+      Ambience: ['#2b3348', '#c7d3ec', '#7f849b'], Vocals: ['#452a38', '#f1cadb', '#a86b80'],
+      Genre: ['#322b56', '#d2caf6', '#6d78b8'], Keys: ['#3a2f45', '#e3cdf1', '#9a7ab0']
+    };
+    const c = m[(path || '').split('/')[0]] || ['#31333d', '#cfd3e5', '#75798c'];
+    return { label: path, bg: c[0], fg: c[1], dot: c[2] };
+  }
+  allTags() {
+    if (this._tags) return this._tags;
+    const set = {};
+    this.DATA().forEach(d => d.g.forEach(t => { const p = t.split('/'); for (let i = 1; i <= p.length; i++) set[p.slice(0, i).join('/')] = 1; }));
+    this._tags = Object.keys(set).sort();
+    return this._tags;
+  }
+  hasTag(d, p) { return d.g.some(t => t === p || t.startsWith(p + '/')); }
+  tagMatches(q) {
+    q = (q || '').toLowerCase(); const all = this.allTags();
+    if (!q) return all;
+    return all.filter(p => p.toLowerCase().split('/').some(s => s.startsWith(q)) || p.toLowerCase().startsWith(q));
+  }
+  resolveTag(v) {
+    v = v.toLowerCase(); const all = this.allTags();
+    return all.find(p => p.toLowerCase() === v) || all.find(p => p.toLowerCase().endsWith('/' + v)) || this.tagMatches(v)[0] || null;
+  }
+
+  parseKey(s, defMode) {
+    s = (s || '').trim();
+    if (this.isE()) {
+      const c = /^(\d{1,2})([ab])$/i.exec(s);
+      if (c && +c[1] >= 1 && +c[1] <= 12) { const n = +c[1] - 1; return /a/i.test(c[2]) ? { pc: (8 + 7 * n) % 12, mode: 'min' } : { pc: (11 + 7 * n) % 12, mode: 'maj' }; }
+    }
+    const m = /^([a-g])(#|♯|b|♭)?\s*(major|maj|minor|min|m)?$/i.exec(s);
+    if (!m) return null;
+    let pc = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 }[m[1].toLowerCase()];
+    if (m[2]) pc += (m[2] === '#' || m[2] === '♯') ? 1 : -1;
+    pc = (pc + 12) % 12;
+    const mode = m[3] ? (/^m(in(or)?)?$/i.test(m[3]) ? 'min' : 'maj') : defMode;
+    return { pc, mode };
+  }
+  camelot(pc, mode) { const n = ((((pc - (mode === 'min' ? 8 : 11)) * 7) % 12) + 12) % 12 + 1; return n + (mode === 'min' ? 'A' : 'B'); }
+  dataKey(d) { return d.k ? this.parseKey(d.k.replace(' ', ''), 'maj') : null; }
+  parseBpm(v) {
+    const m = /^(\d{2,3})(?:[-–](\d{2,3}))?$/.exec((v || '').trim());
+    if (!m) return null;
+    let a = +m[1], b = m[2] ? +m[2] : a;
+    if (a > b) { const t = a; a = b; b = t; }
+    if (a < 20 || b > 300) return null;
+    if (!m[2] && this.isE()) { a -= 2; b += 2; }
+    return { lo: a, hi: b };
+  }
+  parseType(v) {
+    v = (v || '').toLowerCase();
+    if (/^loops?$/.test(v)) return 'loop';
+    if (/^(one-?shots?|shots?)$/.test(v)) return 'one-shot';
+    return null;
+  }
+  keyRawOf(f) { return f.pc == null ? '' : this.NOTES[f.pc].toLowerCase() + (f.mode === 'min' ? 'm' : f.mode === 'maj' ? 'maj' : ''); }
+  bpmLabel(f) { return f.lo == null ? '…' : f.lo === f.hi ? String(f.lo) : f.lo + '–' + f.hi; }
+  keyLabel(f) { return f.pc == null ? '…' : this.NOTES[f.pc] + (f.mode ? ' ' + f.mode : ''); }
+  relOf(f) { return f.mode === 'maj' ? { pc: (f.pc + 9) % 12, mode: 'min' } : { pc: (f.pc + 3) % 12, mode: 'maj' }; }
+
+  TRIG() {
+    return this.isE()
+      ? { bpm: 'bpm', b: 'bpm', key: 'key', k: 'key', tag: 'tag', type: 'type' }
+      : { bpm: 'bpm', key: 'key', tag: 'tag', type: 'type' };
+  }
+  ser(f) {
+    const E = this.isE();
+    if (f.kind === 'bpm') return (E ? 'b:' : 'bpm:') + (f.lo == null ? '' : f.lo === f.hi ? f.lo : f.lo + '-' + f.hi);
+    if (f.kind === 'key') return (E ? 'k:' : 'key:') + this.keyRawOf(f);
+    if (f.kind === 'tag') return E ? f.paths.map(p => '#' + p.toLowerCase()).concat((f.negPaths || []).map(p => '-#' + p.toLowerCase())).join(' ') : 'tag:' + f.paths.map(p => p.toLowerCase()).join(',');
+    if (f.kind === 'type') return 'type:' + (f.value || '');
+    return 'folder:' + f.path;
+  }
+  emptyF(kind) {
+    const pr = this.state.prefs;
+    if (kind === 'bpm') return { kind, lo: null, hi: null, hd: pr.hd };
+    if (kind === 'key') return { kind, pc: null, mode: null, rel: pr.rel };
+    if (kind === 'tag') return { kind, paths: [], negPaths: [] };
+    return { kind, value: null };
+  }
+  isEmptyF(f) {
+    if (!f) return true;
+    if (f.kind === 'bpm') return f.lo == null;
+    if (f.kind === 'key') return f.pc == null;
+    if (f.kind === 'tag') return !f.paths.length && !(f.negPaths || []).length;
+    if (f.kind === 'type') return !f.value;
+    return false;
+  }
+
+  match(d, f) {
+    if (this.isEmptyF(f)) return true;
+    if (f.kind === 'bpm') {
+      if (!d.b) return false; const b = +d.b;
+      if (b >= f.lo && b <= f.hi) return true;
+      if (f.hd && b * 2 >= f.lo && b * 2 <= f.hi) return '×2';
+      if (f.hd && b / 2 >= f.lo && b / 2 <= f.hi) return '÷2';
+      return false;
+    }
+    if (f.kind === 'key') {
+      const k = this.dataKey(d); if (!k) return false;
+      if (!f.mode) return k.pc === f.pc;
+      if (k.pc === f.pc && k.mode === f.mode) return true;
+      if (f.rel) { const r = this.relOf(f); if (k.pc === r.pc && k.mode === r.mode) return 'rel'; }
+      return false;
+    }
+    if (f.kind === 'tag') return f.paths.every(p => this.hasTag(d, p)) && !(f.negPaths || []).some(p => this.hasTag(d, p));
+    if (f.kind === 'type') return d.t === f.value;
+    if (f.kind === 'folder') return ('/' + d.p + '/').indexOf('/' + f.path + '/') >= 0;
+    return true;
+  }
+  words(text) { return (text || '').split(/\s+/).filter(w => w && w.indexOf(':') < 0 && w[0] !== '#').map(w => w.toLowerCase()); }
+  passes(d, skip) {
+    const s = this.state;
+    const ln = d.n.toLowerCase();
+    if (!this.words(s.text).every(w => ln.indexOf(w) >= 0)) return false;
+    if (this.isE() && s.typeSeg && d.t !== s.typeSeg) return false;
+    return s.filters.every(f => (skip && skip(f)) || this.match(d, f));
+  }
+
+  lastTok(t) { const i = t.lastIndexOf(' '); return t.slice(i + 1); }
+  dropLast(t) { const i = t.lastIndexOf(' '); return i < 0 ? '' : t.slice(0, i + 1); }
+  clean(t) { return /^\s*$/.test(t) ? '' : t; }
+  focusInput() { const i = this.inputRef.current; if (i) i.focus(); }
+
+  parseToken(tok) {
+    const E = this.isE();
+    let neg = false;
+    if (E && tok[0] === '-') { neg = true; tok = tok.slice(1); }
+    if (E && tok[0] === '#' && tok.length > 1) tok = 'tag:' + tok.slice(1);
+    const m = /^([a-z]+):(.+)$/i.exec(tok || '');
+    if (!m) return null;
+    const kind = this.TRIG()[m[1].toLowerCase()] || (m[1].toLowerCase() === 'folder' ? 'folder' : null);
+    if (!kind) return null;
+    const v = m[2], pr = this.state.prefs;
+    if (kind === 'bpm') { const b = this.parseBpm(v); return b && { kind, lo: b.lo, hi: b.hi, hd: pr.hd }; }
+    if (kind === 'key') { const k = this.parseKey(v, null); return k && { kind, pc: k.pc, mode: k.mode, rel: pr.rel }; }
+    if (kind === 'tag') { const ps = v.split(',').map(x => this.resolveTag(x)).filter(Boolean); return ps.length ? { kind, paths: ps, neg } : null; }
+    if (kind === 'type') { const t = this.parseType(v); return t && { kind, value: t }; }
+    return { kind: 'folder', path: v };
+  }
+  merge(st, f) {
+    const E = this.isE();
+    let filters = st.filters.slice(); const out = {};
+    if (f.kind === 'type' && E) { out.typeSeg = f.value; return out; }
+    if (f.kind === 'folder') { filters = filters.filter(x => x.kind !== 'folder'); filters.unshift(Object.assign({}, f, { id: ++this.nid })); out.filters = filters; return out; }
+    if (f.kind === 'tag') {
+      const add = (x, list) => { const pos = x.paths.slice(), neg = (x.negPaths || []).slice(); list.forEach(p => { const a = f.neg ? neg : pos, b = f.neg ? pos : neg; if (b.indexOf(p) >= 0) b.splice(b.indexOf(p), 1); if (a.indexOf(p) < 0) a.push(p); }); return Object.assign({}, x, { paths: pos, negPaths: neg }); };
+      const ex = filters.find(x => x.kind === 'tag');
+      if (ex) filters = filters.map(x => x === ex ? add(x, f.paths) : x);
+      else filters.push(add({ id: ++this.nid, kind: 'tag', paths: [], negPaths: [] }, f.paths));
+      out.filters = filters; return out;
+    }
+    const i = filters.findIndex(x => x.kind === f.kind);
+    if (i >= 0) filters[i] = Object.assign({}, f, { id: filters[i].id });
+    else filters.push(Object.assign({}, f, { id: ++this.nid }));
+    out.filters = filters;
+    return out;
+  }
+  commitAll() {
+    this.setState(s => {
+      let st = { filters: s.filters, typeSeg: s.typeSeg }; const rest = [];
+      s.text.split(/\s+/).forEach(w => {
+        if (!w) return;
+        const f = this.parseToken(w);
+        if (f) st = Object.assign({}, st, this.merge(st, f)); else rest.push(w);
+      });
+      return Object.assign(st, { text: rest.join(' '), hi: -1 });
+    });
+  }
+  pushRecent(recent, f) {
+    if (!this.isE() || this.isEmptyF(f)) return recent;
+    const text = this.ser(f);
+    const label = f.kind === 'bpm' ? 'BPM ' + this.bpmLabel(f) : f.kind === 'key' ? 'Key ' + this.keyLabel(f) : f.kind === 'tag' ? 'Tags ' + f.paths.concat((f.negPaths || []).map(p => 'not ' + p)).join(' + ') : f.kind;
+    return [{ text, label, f: JSON.parse(JSON.stringify(f)) }].concat(recent.filter(r => r.text !== text)).slice(0, 4);
+  }
+
+  setTextHi(t) { this.setState({ text: t, hi: -1, sel: -1, focus: true, quiet: false }); }
+
+  suggest(text) {
+    const E = this.isE(), s = this.state;
+    const tok = this.lastTok(text || ''), t = tok.toLowerCase();
+    const out = { rows: [], recent: [], title: '', footer: '' };
+    const kinds = E
+      ? [{ k: 'tag', label: 'Tag', icon: 'ph ph-tag', trig: '#', words: ['tag'] }, { k: 'bpm', label: 'BPM range', icon: 'ph ph-metronome', trig: 'b:', words: ['bpm', 'b'] }, { k: 'key', label: 'Key', icon: 'ph ph-music-notes', trig: 'k:', words: ['key', 'k'] }]
+      : [{ k: 'tag', label: 'Tag', icon: 'ph ph-tag', trig: 'tag:', words: ['tag'] }, { k: 'bpm', label: 'BPM range', icon: 'ph ph-metronome', trig: 'bpm:', words: ['bpm'] }, { k: 'key', label: 'Key', icon: 'ph ph-music-notes', trig: 'key:', words: ['key'] }, { k: 'type', label: 'Type', icon: 'ph ph-shapes', trig: 'type:', words: ['type'] }];
+    const open = k => () => { this.setState({ text: this.clean(this.dropLast(this.state.text)) }); this.openEditor(k, 'click'); };
+    if (!t) {
+      out.title = 'Add a filter: click, or type the prefix';
+      out.rows = kinds.map(p => ({ icon: p.icon, label: p.label, sub: '', hint: p.trig, pick: open(p.k) }));
+      if (E) out.recent = s.recent.map(r => ({ label: r.label, hint: r.text, pick: () => this.setState(st => Object.assign(this.merge(st, r.f), { focus: true })) }));
+      out.footer = E ? 'Typing # b: or k: opens the editor straight away · ⌫ selects the last chip' : 'Typing the prefix and : opens its editor straight away · ⌫ selects the last chip';
+      return out;
+    }
+    if (t.indexOf(':') >= 0 || t[0] === '#') return out;
+    kinds.filter(p => p.words.some(w => w.startsWith(t) && w !== t)).forEach(p => out.rows.push({ icon: p.icon, label: p.label, sub: 'filter', hint: p.trig, pick: open(p.k) }));
+    if (t.length >= 2) this.tagMatches(t).slice(0, 4).forEach(p => out.rows.push({
+      icon: 'ph ph-tag', dot: this.tagColor(p).dot, label: p, sub: 'add as tag', hint: E ? '#' + p.toLowerCase() : 'tag:' + p.toLowerCase(),
+      pick: () => this.setState(st => Object.assign(this.merge(st, { kind: 'tag', paths: [p], neg: false }), { text: this.clean(this.dropLast(st.text)), hi: -1 }))
+    }));
+    if (out.rows.length) { out.title = 'Or turn “' + tok + '” into a filter'; out.footer = 'Enter searches names · ↓ then Enter picks'; }
+    return out;
+  }
+  ddAll() {
+    const s = this.state;
+    if (!s.focus || s.pop) return null;
+    if (s.quiet && !s.text) return null;
+    const sg = this.suggest(s.text);
+    if (!sg.rows.length && !sg.recent.length) return null;
+    sg.all = sg.rows.concat(sg.recent);
+    return sg;
+  }
+
+  onText = e => { this.setState({ text: e.target.value, hi: -1, sel: -1, focus: true, quiet: false, pop: null }); };
+  onFocus = () => { if (!this.state.focus) this.setState({ focus: true }); };
+  onInputDown = () => { this.setState({ quiet: false, focus: true, sel: -1 }); if (this.state.pop) this.confirmPop(true); };
+  onPaste = () => setTimeout(() => this.commitAll(), 0);
+
+  onKey = e => {
+    const s = this.state, E = this.isE(), text = s.text;
+    const tok = this.lastTok(text).toLowerCase();
+    if (e.key === ':' && this.TRIG()[tok]) {
+      e.preventDefault();
+      const kind = this.TRIG()[tok];
+      this.setState({ text: this.clean(this.dropLast(text)) });
+      this.openEditor(kind, 'type');
+      return;
+    }
+    if (E && e.key === '#' && tok === '') { e.preventDefault(); this.openEditor('tag', 'type'); return; }
+    const atStart = e.target.selectionStart === 0 && e.target.selectionEnd === 0;
+    const sg = this.ddAll(); const rows = sg ? sg.all : [];
+    if (e.key === 'ArrowDown' && rows.length) { e.preventDefault(); this.setState({ hi: Math.min(rows.length - 1, s.hi + 1) }); return; }
+    if (e.key === 'ArrowUp' && rows.length) { e.preventDefault(); this.setState({ hi: Math.max(-1, s.hi - 1) }); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (s.sel >= 0 && s.filters[s.sel]) { const f = s.filters[s.sel]; this.openEditor(f.kind, 'click', f.id); return; }
+      if (rows.length && s.hi >= 0) { rows[s.hi].pick(); return; }
+      this.commitAll(); this.setState({ quiet: true }); return;
+    }
+    if (e.key === ' ') { const f = this.parseToken(this.lastTok(text)); if (f) { e.preventDefault(); this.setState(st => Object.assign(this.merge(st, f), { text: this.clean(this.dropLast(st.text)) })); } return; }
+    if (e.key === 'Backspace' && !text) {
+      e.preventDefault();
+      if (!s.filters.length) return;
+      if (s.sel >= 0) { const id = s.filters[s.sel].id; this.setState(st => ({ filters: st.filters.filter(f => f.id !== id), sel: Math.min(st.sel, st.filters.length - 2) })); return; }
+      this.setState({ sel: s.filters.length - 1 }); return;
+    }
+    if (e.key === 'Delete' && s.sel >= 0) { e.preventDefault(); const id = s.filters[s.sel].id; this.setState(st => ({ filters: st.filters.filter(f => f.id !== id), sel: -1 })); return; }
+    if (e.key === 'ArrowLeft' && atStart && s.filters.length) { e.preventDefault(); this.setState({ sel: s.sel < 0 ? s.filters.length - 1 : Math.max(0, s.sel - 1) }); return; }
+    if (e.key === 'ArrowRight' && s.sel >= 0) { e.preventDefault(); const n = s.sel + 1; this.setState({ sel: n >= s.filters.length ? -1 : n }); return; }
+    if (e.key === 'Escape') { this.setState({ sel: -1, focus: false, hi: -1 }); }
+  };
+
+  anchorLeft(sel) {
+    const f = this.fieldRef.current; if (!f) return 0;
+    if (!sel) return Math.max(0, f.clientWidth - 300);
+    const el = f.querySelector(sel);
+    if (!el) return 0;
+    const x = el.getBoundingClientRect().left - f.getBoundingClientRect().left;
+    return Math.max(0, Math.min(x, f.clientWidth - 300));
+  }
+
+  openEditor(kind, via, fid) {
+    const s = this.state, E = this.isE();
+    if (s.pop) this.confirmPop(true, true);
+    clearTimeout(this.tOpen); clearTimeout(this.tClose);
+    const base = { kind, via, pinned: via !== 'hover', left: 0, q: '', qhi: -1, freshHi: via === 'type' };
+    if (E && kind === 'type') {
+      this.setState({ pop: Object.assign(base, { fid: 'seg', anchor: null, orig: this.state.typeSeg }), sel: -1, focus: false }, () => this.afterOpen());
+      return;
+    }
+    this.setState(st => {
+      let filters = st.filters, id = fid, isNew = false;
+      if (id == null) { const ex = filters.find(f => f.kind === kind); if (ex) id = ex.id; }
+      if (id == null) { const nf = Object.assign(this.emptyF(kind), { id: ++this.nid }); filters = filters.concat([nf]); id = nf.id; isNew = true; }
+      const f = filters.find(x => x.id === id);
+      const pop = Object.assign(base, {
+        fid: id, anchorId: id, anchor: '[data-chip="' + id + '"]', isNew, orig: isNew ? null : JSON.parse(JSON.stringify(f)),
+        loRaw: f.lo != null ? String(f.lo) : '', hiRaw: f.hi != null && f.hi !== f.lo ? String(f.hi) : '', keyRaw: this.keyRawOf(f)
+      });
+      return { filters, pop, sel: -1, focus: false };
+    }, () => this.afterOpen());
+  }
+  afterOpen() {
+    const p = this.state.pop; if (!p) return;
+    this.setState({ pop: Object.assign({}, p, { left: this.anchorLeft(p.anchor) }) });
+    if (p.via !== 'hover') this.focusPop();
+  }
+  focusPop() {
+    const p = this.state.pop; if (!p) return;
+    const r = p.kind === 'bpm' ? this.minRef : p.kind === 'key' ? this.keyRef : p.kind === 'tag' ? this.tagRef : this.typeRef;
+    const el = r.current;
+    if (el) { el.focus(); if (el.select) el.select(); }
+  }
+  tgt() { const p = this.state.pop; return p ? this.state.filters.find(f => f.id === p.fid) : null; }
+  patchT(obj) {
+    this.setState(s => {
+      const p = s.pop; if (!p) return null;
+      const out = { filters: s.filters.map(f => f.id === p.fid ? Object.assign({}, f, obj) : f) };
+      if ('hd' in obj || 'rel' in obj) out.prefs = Object.assign({}, s.prefs, 'hd' in obj ? { hd: obj.hd } : { rel: obj.rel });
+      return out;
+    });
+  }
+  setPop(obj) { this.setState(s => s.pop ? { pop: Object.assign({}, s.pop, obj) } : null); }
+
+  confirmPop(noFocus, sync) {
+    const s = this.state, p = s.pop; if (!p) return;
+    let filters = s.filters, recent = s.recent;
+    if (p.fid !== 'seg' && p.fid !== 'tags') {
+      const f = filters.find(x => x.id === p.fid);
+      if (this.isEmptyF(f)) filters = p.isNew || !p.orig ? filters.filter(x => x.id !== p.fid) : filters.map(x => x.id === p.fid ? p.orig : x);
+      else recent = this.pushRecent(recent, f);
+    } else if (p.fid === 'tags') {
+      filters.filter(f => f.kind === 'tag' && !(p.orig || []).some(o => o.id === f.id)).forEach(f => { recent = this.pushRecent(recent, f); });
+    }
+    const upd = { pop: null, filters, recent, quiet: true };
+    this.setState(upd);
+    if (!noFocus) this.focusInput();
+  }
+  cancelPop() {
+    const s = this.state, p = s.pop; if (!p) return;
+    const upd = { pop: null, quiet: true };
+    if (p.fid === 'seg') upd.typeSeg = p.orig;
+    else if (p.fid === 'tags') upd.filters = p.orig;
+    else upd.filters = p.isNew ? s.filters.filter(x => x.id !== p.fid) : s.filters.map(x => x.id === p.fid ? p.orig : x);
+    this.setState(upd);
+    this.focusInput();
+  }
+
+  bpmFromRaw(lr, hr) {
+    const L = parseInt(lr, 10), H = parseInt(hr, 10);
+    if (!(L >= 20 && L <= 300)) return { lo: null, hi: null };
+    if (!(H >= 20 && H <= 300)) return this.isE() ? { lo: L - 2, hi: L + 2 } : { lo: L, hi: L };
+    return L <= H ? { lo: L, hi: H } : { lo: H, hi: L };
+  }
+  setBpmRaw(lr, hr, extra) {
+    this.setState(s => {
+      const p = s.pop; if (!p) return null;
+      const v = this.bpmFromRaw(lr, hr);
+      return { pop: Object.assign({}, p, { loRaw: lr, hiRaw: hr }, extra || {}), filters: s.filters.map(f => f.id === p.fid ? Object.assign({}, f, v) : f) };
+    });
+  }
+  focusMax() { const m = this.maxRef.current; if (m) { m.focus(); m.select(); } }
+  focusMin() { const m = this.minRef.current; if (m) { m.focus(); m.select(); } }
+  toggleHd() { const t = this.tgt(); if (t) this.patchT({ hd: !t.hd }); }
+  onMin = e => { const v = e.target.value.replace(/\D/g, '').slice(0, 3); const p = this.state.pop; this.setBpmRaw(v, p.freshHi ? '' : p.hiRaw, { freshHi: false }); };
+  onMax = e => { const v = e.target.value.replace(/\D/g, '').slice(0, 3); this.setBpmRaw(this.state.pop.loRaw, v); };
+  onMinKey = e => {
+    const k = e.key;
+    if (k === '-' || k === '–' || (k === 'Tab' && !e.shiftKey)) { e.preventDefault(); this.focusMax(); return; }
+    if (k === 'Enter' || k === ' ') { e.preventDefault(); this.confirmPop(); return; }
+    if (k === 'Escape') { e.preventDefault(); this.cancelPop(); return; }
+    if (k === 'h' || k === 'H') { e.preventDefault(); this.toggleHd(); return; }
+    if (k.length === 1 && !/\d/.test(k) && !e.metaKey && !e.ctrlKey) e.preventDefault();
+  };
+  onMaxKey = e => {
+    const k = e.key;
+    if ((k === 'Tab' && !e.shiftKey) || k === 'Enter' || k === ' ') { e.preventDefault(); this.confirmPop(); return; }
+    if (k === 'Tab' && e.shiftKey) { e.preventDefault(); this.focusMin(); return; }
+    if (k === 'Backspace' && !e.target.value) { e.preventDefault(); this.focusMin(); return; }
+    if (k === 'Escape') { e.preventDefault(); this.cancelPop(); return; }
+    if (k === 'h' || k === 'H') { e.preventDefault(); this.toggleHd(); return; }
+    if (k.length === 1 && !/\d/.test(k) && !e.metaKey && !e.ctrlKey) e.preventDefault();
+  };
+  onTrack = e => {
+    e.preventDefault();
+    const tr = this.trackRef.current; if (!tr) return;
+    const r = tr.getBoundingClientRect();
+    const at = x => Math.round(40 + Math.max(0, Math.min(1, (x - r.left) / r.width)) * 160);
+    const t0 = this.tgt(); const v = at(e.clientX);
+    const lo0 = t0.lo == null ? v : t0.lo, hi0 = t0.hi == null ? v : t0.hi;
+    const dl = Math.abs(v - lo0), dh = Math.abs(v - hi0);
+    const h = dl < dh ? 'lo' : dl > dh ? 'hi' : (v < lo0 ? 'lo' : 'hi');
+    const set = x => {
+      const c = this.tgt(); if (!c) return;
+      const val = at(x), lo = c.lo == null ? val : c.lo, hi = c.hi == null ? val : c.hi;
+      const nlo = h === 'lo' ? Math.min(val, hi) : lo, nhi = h === 'hi' ? Math.max(val, lo) : hi;
+      this.setBpmRaw(String(nlo), String(nhi), { freshHi: false });
+    };
+    set(e.clientX);
+    const mv = ev => set(ev.clientX);
+    const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  };
+
+  onKeyRaw = e => {
+    const raw = e.target.value;
+    const k = this.parseKey(raw, null);
+    this.setPop({ keyRaw: raw });
+    if (k) this.patchT({ pc: k.pc, mode: k.mode });
+    else if (!raw.trim()) this.patchT({ pc: null, mode: null });
+  };
+  onKeyKey = e => {
+    const k = e.key;
+    if (k === 'Enter' || k === 'Tab' || k === ' ') { e.preventDefault(); this.confirmPop(); return; }
+    if (k === 'Escape') { e.preventDefault(); this.cancelPop(); }
+  };
+  setKey(pc, mode) {
+    this.patchT({ pc, mode });
+    this.setPop({ keyRaw: this.keyRawOf({ pc, mode }) });
+    const el = this.keyRef.current; if (el) el.focus();
+  }
+
+  selTags() {
+    const s = this.state, p = s.pop;
+    const f = p && s.filters.find(x => x.id === p.fid); const m = {};
+    (f ? f.paths : []).forEach(x => { m[x] = 'pos'; });
+    (f ? f.negPaths || [] : []).forEach(x => { m[x] = 'neg'; });
+    return m;
+  }
+  setTag(path, neg, mode) {
+    this.setState(s => {
+      const p = s.pop; if (!p) return null;
+      const filters = s.filters.map(f => {
+        if (f.id !== p.fid) return f;
+        const pos = f.paths.filter(x => x !== path), negs = (f.negPaths || []).filter(x => x !== path);
+        const was = f.paths.indexOf(path) >= 0 ? 'pos' : (f.negPaths || []).indexOf(path) >= 0 ? 'neg' : null;
+        const want = neg ? 'neg' : 'pos';
+        if (!(was === want && mode === 'toggle')) (neg ? negs : pos).push(path);
+        return Object.assign({}, f, { paths: pos, negPaths: negs });
+      });
+      return { filters, pop: Object.assign({}, p, { q: '', qhi: -1 }) };
+    });
+    const el = this.tagRef.current; if (el) el.focus();
+  }
+  popLastTag() {
+    this.setState(s => {
+      const p = s.pop; if (!p) return null;
+      return { filters: s.filters.map(f => f.id !== p.fid ? f : (f.negPaths || []).length ? Object.assign({}, f, { negPaths: f.negPaths.slice(0, -1) }) : Object.assign({}, f, { paths: f.paths.slice(0, -1) })) };
+    });
+  }
+  onTagQ = e => { const q = e.target.value; this.setPop({ q, qhi: q ? 0 : -1 }); };
+  onTagKey = e => {
+    const p = this.state.pop; if (!p) return;
+    const list = this.tagMatches(p.q); const k = e.key;
+    if (k === 'ArrowDown') { e.preventDefault(); this.setPop({ qhi: Math.min(list.length - 1, p.qhi + 1) }); return; }
+    if (k === 'ArrowUp') { e.preventDefault(); this.setPop({ qhi: Math.max(-1, p.qhi - 1) }); return; }
+    if (k === 'Enter' || k === ',') {
+      e.preventDefault();
+      if (p.qhi >= 0 && list[p.qhi]) this.setTag(list[p.qhi], this.isE() && e.shiftKey, 'toggle');
+      else if (k === 'Enter') this.confirmPop();
+      return;
+    }
+    if (k === 'Tab' || k === ' ') {
+      e.preventDefault();
+      if (p.q && p.qhi >= 0 && list[p.qhi]) { this.setTag(list[p.qhi], false, 'add'); setTimeout(() => this.confirmPop(), 0); }
+      else this.confirmPop();
+      return;
+    }
+    if (k === 'Backspace' && !p.q) { e.preventDefault(); this.popLastTag(); return; }
+    if (k === 'Escape') { e.preventDefault(); this.cancelPop(); }
+  };
+
+  setType(v) {
+    const p = this.state.pop; if (!p) return;
+    if (p.fid === 'seg') this.setState({ typeSeg: v }); else this.patchT({ value: v });
+  }
+  curType() { const p = this.state.pop; if (!p) return null; if (p.fid === 'seg') return this.state.typeSeg; const t = this.tgt(); return t ? t.value : null; }
+  onTypeKey = e => {
+    const k = e.key.toLowerCase();
+    if (k === 'l') { e.preventDefault(); this.setType('loop'); return; }
+    if (k === 'o' || k === 's') { e.preventDefault(); this.setType('one-shot'); return; }
+    if (k === 'arrowleft' || k === 'arrowright') { e.preventDefault(); this.setType(this.curType() === 'loop' ? 'one-shot' : 'loop'); return; }
+    if (k === 'enter' || k === 'tab' || k === ' ') { e.preventDefault(); this.confirmPop(); return; }
+    if (k === 'escape') { e.preventDefault(); this.cancelPop(); }
+  };
+
+  chipClick(f) {
+    if (f.kind === 'folder') return;
+    this.openEditor(f.kind, 'click', f.id);
+  }
+  chipEnter(f) {
+    this.setState({ hoverChip: f.id });
+  }
+  chipLeave() {
+    this.setState({ hoverChip: null });
+  }
+  popEnter = () => {};
+  popLeave = () => {};
+  popDown = () => { const p = this.state.pop; if (p && !p.pinned) this.setPop({ pinned: true }); };
+
+  matchSelected = () => {
+    const d = this.DATA().find(x => x.n === this.state.selRow); if (!d) return;
+    this.setState(s => {
+      let filters = s.filters.filter(f => f.kind !== 'bpm' && f.kind !== 'key');
+      if (d.b) { const b = +d.b; filters = filters.concat([{ id: ++this.nid, kind: 'bpm', lo: b - 3, hi: b + 3, hd: s.prefs.hd }]); }
+      const k = this.dataKey(d);
+      if (k) filters = filters.concat([{ id: ++this.nid, kind: 'key', pc: k.pc, mode: k.mode, rel: s.prefs.rel }]);
+      return { filters, pop: null };
+    });
+  };
+
+  componentDidMount() {
+    this.onDocDown = e => {
+      const w = this.wrapRef.current;
+      if (w && w.contains(e.target)) return;
+      const s = this.state;
+      if (s.pop) this.confirmPop(true);
+      if (s.focus || s.sel >= 0) this.setState({ focus: false, sel: -1, hi: -1 });
+    };
+    document.addEventListener('mousedown', this.onDocDown);
+    this.onGlobalKey = e => {
+      const a = document.activeElement;
+      if (a && /INPUT|TEXTAREA/.test(a.tagName)) return;
+      if (e.key === '/') { e.preventDefault(); this.focusInput(); }
+      if ((e.key === 'm' || e.key === 'M') && this.isE()) { e.preventDefault(); this.matchSelected(); }
+    };
+    window.addEventListener('keydown', this.onGlobalKey);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('mousedown', this.onDocDown);
+    window.removeEventListener('keydown', this.onGlobalKey);
+  }
+
+  renderVals() {
+    const s = this.state, E = this.isE(), data = this.DATA(), filters = s.filters, p = s.pop;
+    const variants = [['E', 'Final']].map(v => ({
+      id: v[0], name: v[1], active: s.variant === v[0], inactive: s.variant !== v[0],
+      go: () => { this._tags = null; this.setState(Object.assign(this.fresh(), { variant: v[0] })); }
+    }));
+
+    const chips = filters.map((f, i) => {
+      const isBpm = f.kind === 'bpm', isKeyT = f.kind === 'key' && !!f.mode;
+      const on = isBpm ? !!f.hd : !!f.rel;
+      const inGroup = false;
+      return {
+        id: f.id, pre: f.kind, isFolder: f.kind === 'folder', isNeg: false,
+        plainVal: f.kind !== 'tag', isTag: f.kind === 'tag',
+        val: isBpm ? this.bpmLabel(f) : f.kind === 'key' ? this.keyLabel(f) : f.kind === 'type' ? (f.value || '…') : f.path,
+        parts: f.kind === 'tag' ? f.paths.map(x => ({ path: x, neg: false })).concat((f.negPaths || []).map(x => ({ path: x, neg: true }))).map((x, j) => ({ path: x.path, neg: x.neg, dot: this.tagColor(x.path).dot, sep: j > 0 })) : [],
+        tagEmpty: this.isEmptyF(f) && f.kind === 'tag',
+        hasToggle: (isBpm && f.lo != null) || isKeyT, toggleOn: on, toggleOff: !on, toggleLabel: isBpm ? 'half / double' : 'relative',
+        pending: !!p && p.fid === f.id && this.isEmptyF(f),
+        active: s.sel === i || (!!p && (p.fid === f.id || inGroup)),
+        pencil: s.hoverChip === f.id && f.kind !== 'folder' && !(p && p.fid === f.id),
+        onClick: () => this.chipClick(f), onEnter: () => this.chipEnter(f), onLeave: () => this.chipLeave(),
+        onToggle: e => {
+          e.stopPropagation();
+          const key = isBpm ? 'hd' : 'rel';
+          this.setState(st => ({ filters: st.filters.map(x => x.id === f.id ? Object.assign({}, x, { [key]: !x[key] }) : x), prefs: Object.assign({}, st.prefs, { [key]: !f[key] }) }));
+        },
+        onRemove: e => { e.stopPropagation(); this.setState(st => ({ filters: st.filters.filter(x => x.id !== f.id), pop: st.pop && (st.pop.fid === f.id) ? null : st.pop, sel: -1 })); }
+      };
+    });
+
+    const sg = this.ddAll();
+    const mk = off => (r, i) => ({
+      icon: r.icon, label: r.label, sub: r.sub, hint: r.hint, hasDot: !!r.dot, dot: r.dot || '', hi: s.hi === i + off,
+      pick: e => { e.preventDefault(); r.pick(); }, hover: () => { if (s.hi !== i + off) this.setState({ hi: i + off }); }
+    });
+    const dd = sg ? { open: true, title: sg.title, footer: sg.footer, rows: sg.rows.map(mk(0)), recent: sg.recent.map(mk(sg.rows.length)), hasRecent: sg.recent.length > 0 } : { open: false };
+
+    let pop = { open: false };
+    const t = p && p.fid !== 'seg' && p.fid !== 'tags' ? filters.find(f => f.id === p.fid) : null;
+    const kind = p ? p.kind : null;
+    if (p && (t || p.fid === 'seg' || p.fid === 'tags')) {
+      pop = { open: true, left: p.left, isBpm: kind === 'bpm', isKey: kind === 'key', isTag: kind === 'tag', isType: kind === 'type' };
+      if (kind === 'bpm') {
+        const pct = v => Math.max(0, Math.min(100, (v - 40) / 160 * 100));
+        const has = t.lo != null;
+        Object.assign(pop, {
+          loRaw: p.loRaw, hiRaw: p.hiRaw, onMin: this.onMin, onMax: this.onMax, onMinKey: this.onMinKey, onMaxKey: this.onMaxKey,
+          maxPh: 'max', bpmNote: has && !p.hiRaw ? (E ? '±2' : 'exact') : 'BPM',
+          hdOn: !!t.hd, hdOff: !t.hd, onHd: () => this.toggleHd(),
+          hasRange: has, loPct: has ? pct(t.lo) : 0, hiPct: has ? pct(t.hi) : 0, wPct: has ? Math.max(0, pct(t.hi) - pct(t.lo)) : 0, onTrack: this.onTrack,
+          presets: this.PRESETS.map(x => { const m = /^(\d+)(?:-(\d+))?$/.exec(x); const lo = +m[1], hi = m[2] ? +m[2] : lo; return { label: x.replace('-', '–'), pick: () => { this.setBpmRaw(String(lo), lo === hi ? '' : String(hi), { freshHi: false }); } }; }),
+          keysHint: 'Tab or – → max · Tab / ↵ / Space confirms · H half/double · Esc cancels',
+          syntax: this.ser(t) + (t.lo == null ? '89-95' : '')
+        });
+        if (E) {
+          const pool = data.filter(d => d.b && this.passes(d, f => f.id === t.id));
+          const bins = []; for (let i = 0; i < 32; i++) bins.push(0);
+          pool.forEach(d => { const i = Math.floor((+d.b - 40) / 5); if (i >= 0 && i < 32) bins[i]++; });
+          const mx = Math.max(1, ...bins);
+          pop.showHist = true;
+          pop.hist = bins.map((c, i) => { const lo = 40 + i * 5, inR = has && lo + 5 > t.lo && lo <= t.hi; return { h: c ? Math.max(12, c / mx * 100) : 0, on: inR && c > 0, off: !(inR && c > 0) }; });
+        }
+      }
+      if (kind === 'key') {
+        const r = t.mode && t.pc != null ? this.relOf(t) : null;
+        Object.assign(pop, {
+          keyRaw: p.keyRaw, onKeyRaw: this.onKeyRaw, onKeyKey: this.onKeyKey, keyPh: E ? 'a, f#m, 8a…' : 'a, f#m, bbmin…',
+          keyRead: t.pc == null ? '' : this.keyLabel(t) + (E && t.mode ? ' · ' + this.camelot(t.pc, t.mode) : ''),
+          isKeyA: !E, isKeyE: E,
+          hasRel: !!t.mode && t.pc != null, relOn: !!t.rel, relOff: !t.rel, onRel: () => this.patchT({ rel: !t.rel }), relName: r ? this.keyLabel(r) : '',
+          keysHint: '↵ / Tab / Space confirms · Esc cancels · enharmonics match (gb = f#)',
+          syntax: this.ser(t) + (t.pc == null ? 'amaj' : '')
+        });
+        if (!E) {
+          pop.roots = this.NOTES.map((n, pc) => ({ label: n, alt: this.ALT[pc] || ' ', on: t.pc === pc, off: t.pc !== pc, pick: () => this.setKey(pc, t.mode) }));
+          pop.modes = [['Either', null], ['Major', 'maj'], ['Minor', 'min']].map(m => ({ label: m[0], on: t.mode === m[1], off: t.mode !== m[1], pick: () => this.setKey(t.pc == null ? 9 : t.pc, m[1]) }));
+        } else {
+          const pool = data.filter(d => this.passes(d, f => f.kind === 'key'));
+          const cell = pc => {
+            const c = pool.filter(d => { const k = this.dataKey(d); return k && k.pc === pc && (!t.mode || k.mode === t.mode); }).length;
+            const on = t.pc === pc;
+            return { label: this.NOTES[pc], sub: String(c), on, some: !on && c > 0, zero: !on && c === 0, pick: () => this.setKey(pc, t.mode) };
+          };
+          pop.whites = [0, 2, 4, 5, 7, 9, 11].map(cell);
+          pop.blacks = [[1, '2 / span 2', 'C#/Db'], [3, '4 / span 2', 'D#/Eb'], [6, '8 / span 2', 'F#/Gb'], [8, '10 / span 2', 'G#/Ab'], [10, '12 / span 2', 'A#/Bb']].map(b => Object.assign(cell(b[0]), { col: b[1], label: b[2] }));
+          pop.modes = [['Either', null], ['Major', 'maj'], ['Minor', 'min']].map(m => ({ label: m[0], on: t.mode === m[1], off: t.mode !== m[1], pick: () => this.setKey(t.pc == null ? 9 : t.pc, m[1]) }));
+        }
+      }
+      if (kind === 'tag') {
+        const sel = this.selTags();
+        const list = this.tagMatches(p.q);
+        pop.q = p.q; pop.onTagQ = this.onTagQ; pop.onTagKey = this.onTagKey;
+        pop.tags = list.map((x, i) => {
+          const st = sel[x];
+          const cnt = E ? data.filter(d => this.passes(d) && this.hasTag(d, x)).length : data.filter(d => this.hasTag(d, x)).length;
+          return {
+            label: p.q ? x : x.split('/').pop(), pad: p.q ? 0 : (x.split('/').length - 1) * 12, dot: this.tagColor(x).dot, count: cnt,
+            checked: st === 'pos', excluded: st === 'neg', unchecked: !st, hi: i === p.qhi, showNeg: E && st !== 'neg',
+            pick: () => this.setTag(x, false, 'toggle'), pickNeg: e => { e.stopPropagation(); this.setTag(x, true, 'toggle'); },
+            hover: () => { if (p.qhi !== i) this.setPop({ qhi: i }); }
+          };
+        });
+        pop.keysHint = E ? '↵ or , adds & keeps going · ⇧↵ excludes · Tab / Space done · ⌫ removes last' : '↵ or , adds & keeps going · Tab / Space adds & closes · ⌫ removes last · Esc';
+        pop.syntax = (t && !this.isEmptyF(t) ? this.ser(t) : '') || (E ? '#kick #808' : 'tag:kick,808');
+      }
+      if (kind === 'type') {
+        const cur = this.curType();
+        pop.types = [['loop', 'Loop', 'ph ph-repeat', 'L'], ['one-shot', 'One-shot', 'ph ph-lightning', 'O']].map(y => ({ label: y[1], icon: y[2], k: y[3], on: cur === y[0], off: cur !== y[0], pick: () => { this.setType(y[0]); setTimeout(() => this.confirmPop(), 0); } }));
+        pop.keysHint = 'L / O or ← → · ↵ confirms · Esc cancels';
+        pop.syntax = 'type:' + (cur || 'loop');
+      }
+    }
+
+    const words = this.words(s.text);
+    const rows = [];
+    data.forEach(d => {
+      if (!this.passes(d)) return;
+      let via = '', keyVia = false;
+      filters.forEach(f => { const m = this.match(d, f); if (f.kind === 'bpm' && typeof m === 'string') via = m; if (f.kind === 'key' && m === 'rel') keyVia = true; });
+      const ln = d.n.toLowerCase();
+      let pre = d.n, hit = '', post = '';
+      if (words.length) { const at = ln.indexOf(words[0]); pre = d.n.slice(0, at); hit = d.n.slice(at, at + words[0].length); post = d.n.slice(at + words[0].length); }
+      rows.push({
+        pre, hit, post, fav: !!d.f, type: d.t, bpm: d.b || '—', key: d.k || '—', hasVia: !!via, via, hasKeyVia: keyVia,
+        selected: s.selRow === d.n, pick: () => this.setState({ selRow: d.n }),
+        tags: d.g.map(g => this.tagColor(g))
+      });
+    });
+
+    const folderF = filters.find(f => f.kind === 'folder');
+    const folders = this.FOLDERS().map(x => ({
+      label: x[0], pad: x[2], on: !!folderF && folderF.path === x[1],
+      count: data.filter(d => ('/' + d.p + '/').indexOf('/' + x[1] + '/') >= 0).length,
+      pick: () => this.setState(st => folderF && folderF.path === x[1] ? { filters: st.filters.filter(f => f.kind !== 'folder') } : this.merge(st, { kind: 'folder', path: x[1] }))
+    }));
+    const sideTags = this.allTags().map(x => {
+      const on = filters.some(f => f.kind === 'tag' && f.paths.indexOf(x) >= 0);
+      return {
+        leaf: x.split('/').pop(), pad: 10 + (x.split('/').length - 1) * 12, dot: this.tagColor(x).dot,
+        count: data.filter(d => this.hasTag(d, x)).length, on,
+        pick: () => this.setState(st => {
+          if (!on) return this.merge(st, { kind: 'tag', paths: [x], neg: false });
+          return { filters: st.filters.map(f => f.kind === 'tag' ? Object.assign({}, f, { paths: f.paths.filter(y => y !== x) }) : f).filter(f => f.kind !== 'tag' || !this.isEmptyF(f)) };
+        })
+      };
+    });
+
+    const selD = data.find(d => d.n === s.selRow);
+    const canMatch = !!selD && (!!selD.b || !!selD.k);
+    const segs = [[null, 'All', 'ph ph-rows'], ['loop', 'Loops', 'ph ph-repeat'], ['one-shot', 'One-shots', 'ph ph-lightning']].map(g => ({ label: g[1], icon: g[2], on: s.typeSeg === g[0], off: s.typeSeg !== g[0], pick: () => this.setState({ typeSeg: g[0] }) }));
+    const asText = filters.filter(f => !this.isEmptyF(f)).map(f => this.ser(f)).concat(E && s.typeSeg ? ['type:' + s.typeSeg] : []).concat(words).join(' ') || '—';
+
+    return {
+      variants, notes: E ? this.NOTES_E() : this.NOTES_A(),
+      tryit: E ? 'b:92 ⎵ k:8a ⎵ #funk ↵ #voc ⇧↵ ⎵   ·   click a row, press M' : 'bpm:89-95 ⎵ key:amaj ⎵ tag:kick , 808 ⎵   ·   then type bpm: again',
+      isE: E, chips, text: s.text, placeholder: filters.length ? '' : (E ? 'Search names, or type # b: k:' : 'Search names, or type bpm: key: tag: type:'),
+      inputRef: this.inputRef, fieldRef: this.fieldRef, wrapRef: this.wrapRef, trackRef: this.trackRef,
+      minRef: this.minRef, maxRef: this.maxRef, keyRef: this.keyRef, tagRef: this.tagRef, typeRef: this.typeRef,
+      onText: this.onText, onKey: this.onKey, onFocus: this.onFocus, onInputDown: this.onInputDown, onPaste: this.onPaste,
+      onFieldDown: e => { if (e.target === this.fieldRef.current) { e.preventDefault(); if (this.state.pop) this.confirmPop(true); this.focusInput(); this.setState({ focus: true, quiet: false, sel: -1 }); } },
+      keepFocus: e => e.preventDefault(),
+      focusRing: s.focus || !!p,
+      hasAny: filters.length > 0 || !!s.text,
+      clearAll: e => { e.stopPropagation(); this.setState({ filters: [], text: '', pop: null, sel: -1, typeSeg: null }); this.focusInput(); },
+      dd, pop, popEnter: this.popEnter, popLeave: this.popLeave, popDown: this.popDown,
+      segs, canMatch, cantMatch: !canMatch, matchSelected: this.matchSelected,
+      rows, noRows: rows.length === 0, count: rows.length + ' of ' + data.length + ' samples',
+      folders, sideTags, asText,
+      reset: () => this.setState(this.fresh())
+    };
+  }
+}
+</script>
+</body>
+</html>
