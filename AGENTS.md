@@ -99,6 +99,10 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 `CHANGELOG.md` → `## Upcoming` is the **user-facing draft for the next release**, not a commit diary.
 
 - Write for someone who installs the next version. Conventional prefixes (`feat` / `fix` / `perf` / …) are fine; the rest of the line should read as a product note.
+- Lead with what the user can do or notice. Prefer “allow searching for samples by BPM…” over “typed omni filters with chip editors…”.
+- No implementation jargon: skip omni, dual-range, on-accent, theme tokens, token names, and theme ids unless the user picks themes by those names.
+- One distinct surface per bullet when they are separate (search vs column picker vs transport). Do not semicolon-stack unrelated polish onto one feat.
+- Fix lines name the symptom (“improved Snow theme visibility and contrast”), not the patch (“knobs use on-accent white”).
 - Unshipped work: edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
 - After a release: only then does a later bugfix get its own Upcoming line.
 - Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn unless it changes what users notice.
