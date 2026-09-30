@@ -98,6 +98,8 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 
 `CHANGELOG.md` → `## Upcoming` is the **user-facing draft for the next release**, not a commit diary.
 
+Pull request and commit titles/bodies: [docs/reference/pull-requests.md](docs/reference/pull-requests.md).
+
 - Write for someone who installs the next version. Conventional prefixes (`feat` / `fix` / `perf` / …) are fine; the rest of the line should read as a product note.
 - Lead with what the user can do or notice. Prefer “allow searching for samples by BPM…” over “typed omni filters with chip editors…”.
 - No implementation jargon: skip omni, dual-range, on-accent, theme tokens, token names, and theme ids unless the user picks themes by those names.

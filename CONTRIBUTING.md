@@ -19,8 +19,10 @@ Skip commentary on how the code was written, including with AI. Bugs and ideas t
 Bug fixes, changes that fit the product, and docs that help users or contributors are welcome.
 
 - Keep each PR to one clear change.
+- Title and body: [docs/reference/pull-requests.md](docs/reference/pull-requests.md) (types, scopes, and the GitHub PR template).
 - Say what you changed and how you checked it (manual steps, `bun run preflight`, or targeted tests).
 - Match the style already in the repo. When you extend something, leave it looking like one design, not a bolt-on.
+- Update `CHANGELOG.md` → `## Upcoming` for user-visible work.
 
 I may decline style-only PRs, speculative refactors, or work outside product scope.
 
