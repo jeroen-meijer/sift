@@ -619,7 +619,7 @@ pub fn analyze_sample(
     let detail = seq.is_multiple_of(ANALYZE_DETAIL_EVERY);
 
     // Catalog enrich before decode so empty fields fill without peaks work.
-    let _ = db.with_conn(|conn| enrich::enrich_sample(conn, sample_id, false));
+    let _ = enrich::enrich_sample(db, sample_id, false);
 
     let gate = db
         .with_conn(|conn| load_sample_gate(conn, sample_id))?

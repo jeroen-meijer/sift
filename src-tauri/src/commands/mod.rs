@@ -90,8 +90,12 @@ pub async fn set_setting(app: AppHandle, key: String, value: Value) -> AppResult
                     settings::set(conn, "splice_db_path", &Value::String(path.clone()))
                 });
             }
-            let n = crate::analyze::refresh_metadata_all(&app, &state.db).unwrap_or(0);
-            let _ = n; // library-changed is emitted inside refresh when rows change
+            let db = state.db.clone();
+            let _ = std::thread::Builder::new()
+                .name("sift-splice-refresh".into())
+                .spawn(move || {
+                    let _ = crate::analyze::refresh_metadata_all(&app, &db);
+                });
         }
         Ok(())
     })
@@ -179,13 +183,10 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<AddRootOutcome>
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 let index_start = std::time::Instant::now();
                 crate::analyze::work::start(&index_app, 0);
-                let scanned = db
-                    .with_conn(|conn| {
-                        indexer::index_root(conn, root_id, |progress| {
-                            tick_index_progress(&index_app, &progress);
-                        })
-                    })
-                    .map_or(0, |p| p.scanned);
+                let scanned = indexer::index_root(&db, root_id, |progress| {
+                    tick_index_progress(&index_app, &progress);
+                })
+                .map_or(0, |p| p.scanned);
                 crate::analyze::work::finish(&index_app, scanned);
                 index_app.state::<crate::state::AppState>().changes.push(
                     &index_app,
@@ -256,13 +257,10 @@ pub async fn reindex_root(app: AppHandle, root_id: i64) -> AppResult<()> {
             .spawn(move || {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 crate::analyze::work::start(&app, 0);
-                let scanned = db
-                    .with_conn(|conn| {
-                        indexer::index_root(conn, root_id, |progress| {
-                            tick_index_progress(&app, &progress);
-                        })
-                    })
-                    .map_or(0, |p| p.scanned);
+                let scanned = indexer::index_root(&db, root_id, |progress| {
+                    tick_index_progress(&app, &progress);
+                })
+                .map_or(0, |p| p.scanned);
                 crate::analyze::work::finish(&app, scanned);
                 app.state::<crate::state::AppState>()
                     .changes
@@ -289,13 +287,11 @@ pub async fn reindex_all(app: AppHandle) -> AppResult<()> {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 crate::analyze::work::start(&app, 0);
                 let mut scanned = 0u64;
-                let _ = db.with_conn(|conn| {
-                    indexer::index_all_roots(conn, |progress| {
-                        tick_index_progress(&app, &progress);
-                        if progress.done {
-                            scanned = scanned.saturating_add(progress.scanned);
-                        }
-                    })
+                let _ = indexer::index_all_roots(&db, |progress| {
+                    tick_index_progress(&app, &progress);
+                    if progress.done {
+                        scanned = scanned.saturating_add(progress.scanned);
+                    }
                 });
                 crate::analyze::work::finish(&app, scanned);
                 app.state::<crate::state::AppState>()
@@ -578,9 +574,7 @@ pub async fn respond_ask_index(app: AppHandle, paths: Vec<String>, index: bool) 
             let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
             let total = u64::try_from(path_bufs.len()).unwrap_or(u64::MAX);
             crate::analyze::work::start(&app, total);
-            let n = state
-                .db
-                .with_conn(|conn| indexer::index_paths(conn, &path_bufs))?;
+            let n = indexer::index_paths(&state.db, &path_bufs)?;
             crate::analyze::work::finish(&app, n);
             if n > 0 {
                 state.changes.push(&app, "ask-index", true, &[]);

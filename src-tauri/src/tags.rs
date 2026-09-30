@@ -5,6 +5,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use serde::Serialize;
 
+use crate::db::escape_like;
 use crate::db::models::{NewTag, SampleTag, Tag, TagReject};
 use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
 use crate::db::schema::samples::dsl as samples_dsl;
@@ -133,6 +134,10 @@ pub fn create_tag(
 }
 
 pub fn rename_tag(conn: &mut SqliteConnection, id: i64, name: &str) -> AppResult<()> {
+    conn.transaction(|conn| rename_tag_inner(conn, id, name))
+}
+
+fn rename_tag_inner(conn: &mut SqliteConnection, id: i64, name: &str) -> AppResult<()> {
     let name = name.trim();
     if name.is_empty() || name.contains('/') {
         return Err(AppError::msg("invalid tag name"));
@@ -171,6 +176,14 @@ pub fn rename_tag(conn: &mut SqliteConnection, id: i64, name: &str) -> AppResult
 }
 
 pub fn move_tag(conn: &mut SqliteConnection, id: i64, new_parent_id: Option<i64>) -> AppResult<()> {
+    conn.transaction(|conn| move_tag_inner(conn, id, new_parent_id))
+}
+
+fn move_tag_inner(
+    conn: &mut SqliteConnection,
+    id: i64,
+    new_parent_id: Option<i64>,
+) -> AppResult<()> {
     let id = id_from_i64(id)?;
     let (old_path, name, old_parent): (String, String, Option<i32>) = tags_dsl::tags
         .find(id)
@@ -234,7 +247,11 @@ pub fn delete_tag(conn: &mut SqliteConnection, id: i64, cascade: bool) -> AppRes
         .ok_or_else(|| AppError::msg("tag not found"))?;
 
     let child_count: i64 = tags_dsl::tags
-        .filter(tags_dsl::path.like(format!("{path}/%")))
+        .filter(
+            tags_dsl::path
+                .like(format!("{}/%", escape_like(&path)))
+                .escape('\\'),
+        )
         .select(count_star())
         .first(conn)?;
 
@@ -253,6 +270,14 @@ pub fn delete_tag(conn: &mut SqliteConnection, id: i64, cascade: bool) -> AppRes
 }
 
 pub fn set_sample_tags(
+    conn: &mut SqliteConnection,
+    sample_id: i64,
+    tag_ids: &[i64],
+) -> AppResult<()> {
+    conn.transaction(|conn| set_sample_tags_inner(conn, sample_id, tag_ids))
+}
+
+fn set_sample_tags_inner(
     conn: &mut SqliteConnection,
     sample_id: i64,
     tag_ids: &[i64],
@@ -362,8 +387,9 @@ fn rewrite_paths(conn: &mut SqliteConnection, old_path: &str, new_path: &str) ->
         )));
     }
     // Descendants first (longer paths) so unique path constraint stays happy.
+    let like = format!("{}/%", escape_like(old_path));
     let mut kids: Vec<(i32, String)> = tags_dsl::tags
-        .filter(tags_dsl::path.like(format!("{old_path}/%")))
+        .filter(tags_dsl::path.like(like).escape('\\'))
         .select((tags_dsl::id, tags_dsl::path))
         .load(conn)?;
     kids.sort_by_key(|(_, p)| std::cmp::Reverse(p.len()));
@@ -415,9 +441,10 @@ fn ensure_sample(conn: &mut SqliteConnection, id: i32) -> AppResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_sample_tag, create_tag, list_tags};
+    use super::{add_sample_tag, create_tag, list_tags, rename_tag};
     use crate::db::schema::roots::dsl as roots_dsl;
     use crate::db::schema::samples::dsl as samples_dsl;
+    use crate::db::schema::tags::dsl as tags_dsl;
     use diesel::prelude::*;
 
     #[test]
@@ -474,5 +501,27 @@ mod tests {
         let unused_node = tree.iter().find(|n| n.path == "unused").expect("unused");
         assert_eq!(unused_node.sample_count, 0);
         assert_eq!(unused.id, unused_node.id);
+    }
+
+    #[test]
+    fn rename_with_underscore_does_not_touch_sibling() {
+        let mut conn = crate::db::test_conn();
+        let lo_fi = create_tag(&mut conn, "Lo_Fi", None).unwrap();
+        let _child = create_tag(&mut conn, "Lo_Fi/kick", None).unwrap();
+        let _lo_dash = create_tag(&mut conn, "Lo-Fi", None).unwrap();
+        let _dash_child = create_tag(&mut conn, "Lo-Fi/snare", None).unwrap();
+
+        rename_tag(&mut conn, lo_fi.id, "LoFi").unwrap();
+
+        let paths: Vec<String> = tags_dsl::tags
+            .select(tags_dsl::path)
+            .order(tags_dsl::path.asc())
+            .load(&mut conn)
+            .unwrap();
+        assert!(paths.contains(&"LoFi".to_string()));
+        assert!(paths.contains(&"LoFi/kick".to_string()));
+        assert!(paths.contains(&"Lo-Fi".to_string()));
+        assert!(paths.contains(&"Lo-Fi/snare".to_string()));
+        assert!(!paths.iter().any(|p| p.starts_with("Lo_Fi")));
     }
 }

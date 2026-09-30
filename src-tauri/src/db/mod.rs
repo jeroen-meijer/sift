@@ -21,6 +21,22 @@ pub fn utc_now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
+/// Escape `LIKE` wildcards so `%` and `_` in user text match literally (with `ESCAPE '\'`).
+#[allow(
+    clippy::redundant_pub_crate,
+    reason = "crate-private by design; samples and tags share it"
+)]
+pub(crate) fn escape_like(token: &str) -> String {
+    let mut out = String::with_capacity(token.len());
+    for c in token.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// Set when open recovered from a migrate failure by backing up the broken DB.
 #[derive(Debug, Clone)]
 pub struct LibraryRecovery {

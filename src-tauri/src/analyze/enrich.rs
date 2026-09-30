@@ -36,19 +36,8 @@ struct EnrichRow {
     sample_type_source: Option<String>,
 }
 
-/// Apply Splice catalog to one sample. Returns true when any column changed.
-/// When `clear_lost_match` is set (Refresh metadata) and the row was splice but
-/// no longer matches, clears `catalog_source` only.
-pub fn enrich_sample(
-    conn: &mut SqliteConnection,
-    sample_id: i64,
-    clear_lost_match: bool,
-) -> AppResult<bool> {
-    if !splice_enabled(conn)? {
-        return Ok(false);
-    }
-    let id = id_from_i64(sample_id)?;
-    let row: Option<EnrichRow> = samples_dsl::samples
+fn load_enrich_row(conn: &mut SqliteConnection, id: i32) -> AppResult<Option<EnrichRow>> {
+    Ok(samples_dsl::samples
         .find(id)
         .select((
             samples_dsl::path,
@@ -91,25 +80,52 @@ pub fn enrich_sample(
                 key_source,
                 sample_type_source,
             },
-        );
-    let Some(row) = row else {
+        ))
+}
+
+/// Apply Splice catalog to one sample. Returns true when any column changed.
+/// When `clear_lost_match` is set (Refresh metadata) and the row had
+/// `catalog_source` splice but no longer matches, clears `catalog_source` only.
+///
+/// Hash and catalog lookup run outside the app DB mutex.
+pub fn enrich_sample(db: &Db, sample_id: i64, clear_lost_match: bool) -> AppResult<bool> {
+    let id = id_from_i64(sample_id)?;
+    let (enabled, path) = db.with_conn(|conn| {
+        if !splice_enabled(conn)? {
+            return Ok((false, None));
+        }
+        let row = load_enrich_row(conn, id)?;
+        Ok((true, row.map(|r| r.path)))
+    })?;
+    if !enabled {
+        return Ok(false);
+    }
+    let Some(path) = path else {
         return Ok(false);
     };
 
-    let hit = splice::lookup(Path::new(&row.path))?;
-    match hit {
-        Some(hit) => apply_hit(conn, id, &row, &hit),
-        None if clear_lost_match && row.catalog_source.as_deref() == Some("splice") => {
-            diesel::update(samples_dsl::samples.find(id))
-                .set((
-                    samples_dsl::catalog_source.eq(Option::<String>::None),
-                    samples_dsl::updated_at.eq(utc_now()),
-                ))
-                .execute(conn)?;
-            Ok(true)
-        }
-        None => Ok(false),
-    }
+    let hit = splice::lookup(Path::new(&path))?;
+
+    db.with_conn(|conn| {
+        conn.transaction(|conn| {
+            let Some(row) = load_enrich_row(conn, id)? else {
+                return Ok(false);
+            };
+            match hit {
+                Some(ref hit) => apply_hit(conn, id, &row, hit),
+                None if clear_lost_match && row.catalog_source.as_deref() == Some("splice") => {
+                    diesel::update(samples_dsl::samples.find(id))
+                        .set((
+                            samples_dsl::catalog_source.eq(Option::<String>::None),
+                            samples_dsl::updated_at.eq(utc_now()),
+                        ))
+                        .execute(conn)?;
+                    Ok(true)
+                }
+                None => Ok(false),
+            }
+        })
+    })
 }
 
 fn apply_hit(
@@ -210,7 +226,7 @@ pub fn refresh_metadata_all(app: &AppHandle, db: &Db) -> AppResult<u64> {
     let mut changed_ids: Vec<i64> = Vec::new();
     let mut last_emit = Instant::now();
     for (i, sample_id) in ids.iter().copied().enumerate() {
-        let did = db.with_conn(|conn| enrich_sample(conn, sample_id, true))?;
+        let did = enrich_sample(db, sample_id, true)?;
         if did {
             changed = changed.saturating_add(1);
             changed_ids.push(sample_id);
