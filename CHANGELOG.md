@@ -12,7 +12,7 @@
 - fix(ui): library shortcuts stay off while a dialog is open, and menus keep keyboard focus correctly
 - fix(library): undoing a BPM, key, or type change puts the old value back, including values that came from analysis
 - fix(ui): failed actions show a short error toast with a copyable code
-- fix(ui): refer to user-added collections as "libraries" instead of "roots"
+- fix(ui): refer to user-added collections as "libraries"
 - fix(ui): keep snap grids and tag colors readable on Snow and other themes
 
 ## 0.5.0

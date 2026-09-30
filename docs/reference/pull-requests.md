@@ -4,11 +4,11 @@ How to title commits and pull requests in this repo. Agents and humans follow th
 
 ## Workflow
 
-This repo does **not** use Git Flow. There is no `develop` trunk, and no required `feature/` / `release/` / `hotfix/` branch naming.
+Default branch is `main`. Land work by pushing to `main` or opening a pull request against `main`. Topic branches are optional. Use any clear name (`fix/…`, `feat/…`, or a short description).
 
-- Default branch is `main`.
-- Land work by pushing to `main` or opening a pull request against `main`. Topic branches are optional and can use any clear name (`fix/…`, `feat/…`, or a short description).
-- Releases usually run on `main` via `./tool/prepare_release.sh X.Y.Z`. The optional `--pr` path opens a short-lived `chore/release-X.Y.Z` PR into `main` so CI can gate the bump. That is not a Git Flow release branch.
+This repo has no `develop` trunk and no required `feature/` / `release/` / `hotfix/` branch naming.
+
+Releases usually run on `main` via `./tool/prepare_release.sh X.Y.Z`. With `--pr`, that script opens a short-lived `chore/release-X.Y.Z` branch and a PR into `main` so CI can gate the bump.
 
 ## Title shape (commits and PRs)
 
@@ -18,8 +18,8 @@ Same Conventional Commits form for both:
 <type>(optional-scope): <imperative summary>
 ```
 
-- Lowercase after the colon. No trailing period.
-- Imperative verb: add, fix, remove. Not added or adds.
+- Lowercase after the colon. Keep the summary without a final `.`
+- Imperative verb: add, fix, or remove. Not added or adds.
 - Add a scope when it helps (see [Scopes](#scopes)).
 - Breaking change: `feat(library)!: ...` or a `BREAKING CHANGE:` footer.
 - One line. Say what changed. Skip sales language.
@@ -96,7 +96,7 @@ Rules:
 3. Do not add a Test plan section unless the author asked for one.
 4. `### Notes` only for risks, follow-ups, intentional omissions, or merge caveats. Drop the section when empty.
 5. End with a standalone `Closes #N` line when there is a GitHub issue. No punctuation on that line. Omit it when there is no ticket.
-6. No AI-tool credit ("Made with Cursor", "Generated with …", or similar) in the title, body, commits, or comments.
+6. Do not add AI-tool credit in the title, body, commits, or comments.
 7. Run `/humanize` (or match that skill) on the title and body before you open or update the PR.
 
 ## Before you open
@@ -107,4 +107,4 @@ Rules:
 
 ## Voice
 
-Plain and dry. Lead with what the PR does. No em dashes. No "it's not X, it's Y". No hype words (robust, seamless, comprehensive, leverage, and similar). Concrete nouns. Active voice.
+Plain and dry. Open with what the PR does. Prefer periods and commas over dashes. Keep nouns concrete and voice active. Leave out hype and contrast runways.

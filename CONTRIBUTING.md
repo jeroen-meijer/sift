@@ -18,7 +18,7 @@ Skip commentary on how the code was written, including with AI. Bugs and ideas t
 
 Bug fixes, changes that fit the product, and docs that help users or contributors are welcome.
 
-- Land on `main` via a PR or a direct push. This repo does not use Git Flow (`develop`, mandatory `feature/` / `release/` branches, and so on).
+- Land on `main` via a PR or a direct push. No `develop` trunk, and no mandatory `feature/` or `release/` branch names.
 - Keep each PR to one clear change.
 - Title and body: [docs/reference/pull-requests.md](docs/reference/pull-requests.md) (types, scopes, and the GitHub PR template).
 - Say what you changed and how you checked it (manual steps, `bun run preflight`, or targeted tests).
