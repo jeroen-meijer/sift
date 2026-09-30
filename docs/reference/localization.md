@@ -178,6 +178,6 @@ rules to sound specific.
 ## Out of scope here
 
 - Theme tokens and CSS variables → `src/theme/`, theme CSS
-- Changelog / PR / commit prose → `/humanize` and repo commit rules
+- Changelog / PR / commit prose → `/humanize` and [commits-and-pull-requests.md](commits-and-pull-requests.md)
 - Default tag taxonomy data → may ship as data; dialog chrome still goes through
   locales
