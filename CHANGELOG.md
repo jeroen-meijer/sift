@@ -1,5 +1,7 @@
 ## Upcoming
 
+## 0.5.1
+
 - feat(ui): change default theme to Graphite
 - fix(library): if the library database cannot open, Sift saves a backup and shows a recovery dialog
 - fix(library): clear clip cache only empties Sift's default cache folder, never a custom clips folder you chose
