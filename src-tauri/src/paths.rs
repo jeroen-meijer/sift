@@ -37,4 +37,24 @@ impl AppPaths {
             peaks_dir,
         })
     }
+
+    /// Layout under `root` for unit tests (data + cache/clips + cache/peaks).
+    #[cfg(test)]
+    pub fn for_test(root: &std::path::Path) -> Self {
+        let data_dir = root.join("data");
+        let cache_dir = root.join("cache");
+        let clips_dir = cache_dir.join("clips");
+        let peaks_dir = cache_dir.join("peaks");
+        let db_path = data_dir.join("library.sqlite3");
+        fs::create_dir_all(&data_dir).expect("test data dir");
+        fs::create_dir_all(&clips_dir).expect("test clips dir");
+        fs::create_dir_all(&peaks_dir).expect("test peaks dir");
+        Self {
+            data_dir,
+            db_path,
+            cache_dir,
+            clips_dir,
+            peaks_dir,
+        }
+    }
 }

@@ -28,6 +28,8 @@ import { SettingsView } from "./SettingsView";
 import { StatusBar } from "./StatusBar";
 import { TagManagerView } from "./TagManagerView";
 import { TitleBar } from "./TitleBar";
+import { LibraryRecoveryDialog } from "./dialogs/LibraryRecoveryDialog";
+import { OverlapFolderDialog } from "./dialogs/OverlapFolderDialog";
 import { UpdateAvailableDialog } from "./dialogs/UpdateAvailableDialog";
 import { checkForAppUpdate, previewAvailableUpdate, type AvailableUpdate } from "../lib/updates";
 import "../styles/base.css";
@@ -52,6 +54,8 @@ const EMPTY_STATS: DbStats = {
   data_dir: "",
   clips_dir: "",
   clips_bytes: 0,
+  library_backup_path: null,
+  library_open_error: null,
 };
 
 export function App() {
@@ -68,6 +72,12 @@ export function App() {
 
   const [askPaths, setAskPaths] = useState<string[]>([]);
   const [launchUpdate, setLaunchUpdate] = useState<AvailableUpdate | null>(null);
+  const [recoveryDismissed, setRecoveryDismissed] = useState(false);
+  const [overlap, setOverlap] = useState<{
+    reason: "nested" | "containsExisting";
+    newLabel: string;
+    existingLabel: string;
+  } | null>(null);
 
   const mode = shellMode(loaded, stats);
 
@@ -226,9 +236,18 @@ export function App() {
 
   const addRoot = useCallback(() => {
     void open({ directory: true, multiple: false, title: tl("sidebar.addFolder") })
-      .then((selected) => {
+      .then(async (selected) => {
         if (typeof selected !== "string") return;
-        return ipc.addRoot(selected).then(refreshLibrary);
+        const outcome = await ipc.addRoot(selected);
+        if (outcome.kind === "overlap") {
+          setOverlap({
+            reason: outcome.reason,
+            newLabel: outcome.newLabel,
+            existingLabel: outcome.existingLabel,
+          });
+          return;
+        }
+        refreshLibrary();
       })
       .catch(console.error);
   }, [refreshLibrary, tl]);
@@ -251,6 +270,10 @@ export function App() {
 
   const askGroups = groupByFolder(askPaths);
   const liveStats = stats ?? EMPTY_STATS;
+  const showRecovery =
+    !recoveryDismissed &&
+    typeof liveStats.library_backup_path === "string" &&
+    liveStats.library_backup_path.length > 0;
 
   return (
     <div className="app-shell">
@@ -352,6 +375,27 @@ export function App() {
           available={launchUpdate}
           onDismiss={() => {
             setLaunchUpdate(null);
+          }}
+        />
+      ) : null}
+
+      {showRecovery ? (
+        <LibraryRecoveryDialog
+          backupPath={liveStats.library_backup_path ?? ""}
+          migrateError={liveStats.library_open_error ?? ""}
+          onContinue={() => {
+            setRecoveryDismissed(true);
+          }}
+        />
+      ) : null}
+
+      {overlap != null ? (
+        <OverlapFolderDialog
+          reason={overlap.reason}
+          newLabel={overlap.newLabel}
+          existingLabel={overlap.existingLabel}
+          onClose={() => {
+            setOverlap(null);
           }}
         />
       ) : null}

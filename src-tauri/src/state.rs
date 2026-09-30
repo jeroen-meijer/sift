@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::audio::{DecodeCache, PlayerEngine};
 use crate::changes::ChangeCoalescer;
-use crate::db::Db;
+use crate::db::{Db, LibraryRecovery};
 use crate::error::AppResult;
 use crate::paths::AppPaths;
 use crate::undo::UndoStack;
@@ -13,6 +13,8 @@ use crate::watch::{WatchGuard, WatchShared};
 pub struct AppState {
     pub paths: AppPaths,
     pub db: Arc<Db>,
+    /// Present when boot recovered from a migrate failure (backup + error for UI).
+    pub library_recovery: Option<LibraryRecovery>,
     pub player: Mutex<PlayerEngine>,
     /// Decoded PCM LRU for select→play / prefetch (see audition latency in the spec).
     pub decode_cache: Mutex<DecodeCache>,
@@ -31,7 +33,9 @@ pub struct AppState {
 impl AppState {
     pub fn init() -> AppResult<Self> {
         let paths = crate::profile_log::time("boot.paths_resolve", "", AppPaths::resolve)?;
-        let db = crate::profile_log::time("boot.db_open", "", || Db::open(&paths).map(Arc::new))?;
+        let (db, library_recovery) =
+            crate::profile_log::time("boot.db_open", "", || Db::open(&paths))?;
+        let db = Arc::new(db);
         let changes = Arc::new(ChangeCoalescer::default());
         let watch_shared = Arc::new(WatchShared::new(
             Arc::clone(&db),
@@ -73,6 +77,7 @@ impl AppState {
         Ok(Self {
             paths,
             db,
+            library_recovery,
             player: Mutex::new(player),
             decode_cache: Mutex::new(DecodeCache::default()),
             undo: Mutex::new(UndoStack::default()),

@@ -20,6 +20,27 @@ pub struct RootDto {
     pub label: String,
 }
 
+/// Why `add_root` refused a folder (FE maps to locale body templates).
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum OverlapReason {
+    /// New folder is inside an existing library folder.
+    Nested,
+    /// New folder contains an existing library folder.
+    ContainsExisting,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AddRootOutcome {
+    Added(RootDto),
+    Overlap {
+        reason: OverlapReason,
+        new_label: String,
+        existing_label: String,
+    },
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct FolderNode {
     pub path: String,
@@ -52,7 +73,7 @@ pub fn list_roots(conn: &mut SqliteConnection) -> AppResult<Vec<RootDto>> {
     Ok(out)
 }
 
-pub fn add_root(conn: &mut SqliteConnection, path: &str) -> AppResult<RootDto> {
+pub fn add_root(conn: &mut SqliteConnection, path: &str) -> AppResult<AddRootOutcome> {
     let path_buf = PathBuf::from(path);
     if !path_buf.is_dir() {
         return Err(AppError::msg("path is not a directory"));
@@ -64,6 +85,29 @@ pub fn add_root(conn: &mut SqliteConnection, path: &str) -> AppResult<RootDto> {
         .and_then(|s| s.to_str())
         .unwrap_or(&path_str)
         .to_string();
+
+    let existing = list_roots(conn)?;
+    for root in &existing {
+        let existing_path = PathBuf::from(&root.path);
+        if canonical == existing_path {
+            // Same path: upsert label below.
+            continue;
+        }
+        if is_strict_subpath(&canonical, &existing_path) {
+            return Ok(AddRootOutcome::Overlap {
+                reason: OverlapReason::Nested,
+                new_label: label,
+                existing_label: root.label.clone(),
+            });
+        }
+        if is_strict_subpath(&existing_path, &canonical) {
+            return Ok(AddRootOutcome::Overlap {
+                reason: OverlapReason::ContainsExisting,
+                new_label: label,
+                existing_label: root.label.clone(),
+            });
+        }
+    }
 
     diesel::insert_into(roots_dsl::roots)
         .values(NewRoot {
@@ -80,11 +124,17 @@ pub fn add_root(conn: &mut SqliteConnection, path: &str) -> AppResult<RootDto> {
         .select(roots_dsl::id)
         .first(conn)?;
 
-    Ok(RootDto {
+    Ok(AddRootOutcome::Added(RootDto {
         id: id_to_i64(id),
         path: path_str,
         label,
-    })
+    }))
+}
+
+/// True when `child` is strictly inside `parent` (not equal). Component-wise
+/// `Path::starts_with`, same idea as `indexer::find_root_for`.
+fn is_strict_subpath(child: &Path, parent: &Path) -> bool {
+    child.starts_with(parent) && child != parent
 }
 
 pub fn remove_root(conn: &mut SqliteConnection, root_id: i64) -> AppResult<()> {
@@ -252,10 +302,15 @@ fn cmp_tree_paths(a: &str, b: &str) -> std::cmp::Ordering {
 
 #[cfg(test)]
 mod tests {
-    use super::{FOLDER_TREE_FULL_DEPTH, depth_under_root, folder_tree};
+    use super::{
+        AddRootOutcome, FOLDER_TREE_FULL_DEPTH, OverlapReason, add_root, depth_under_root,
+        folder_tree, is_strict_subpath, list_roots,
+    };
     use crate::db::schema::roots::dsl as roots_dsl;
     use crate::db::schema::samples::dsl as samples_dsl;
     use diesel::prelude::*;
+    use std::fs;
+    use std::path::Path;
 
     fn insert_sample(conn: &mut diesel::SqliteConnection, root_id: i32, path: &str) {
         let p = std::path::Path::new(path);
@@ -390,5 +445,66 @@ mod tests {
     fn depth_child() {
         assert_eq!(depth_under_root("/a/b", "/a/b/c"), 1);
         assert_eq!(depth_under_root("/a/b", "/a/b/c/d"), 2);
+    }
+
+    #[test]
+    fn strict_subpath_needs_separator() {
+        assert!(is_strict_subpath(
+            Path::new("/Samples/Splice"),
+            Path::new("/Samples")
+        ));
+        assert!(!is_strict_subpath(
+            Path::new("/SamplesBackup"),
+            Path::new("/Samples")
+        ));
+        assert!(!is_strict_subpath(
+            Path::new("/Samples"),
+            Path::new("/Samples")
+        ));
+    }
+
+    #[test]
+    fn add_root_rejects_nested_and_parent_overlap() {
+        let tmp = tempfile::tempdir().expect("temp");
+        let samples = tmp.path().join("Samples");
+        let splice = samples.join("Splice");
+        fs::create_dir_all(&splice).unwrap();
+
+        let mut conn = crate::db::test_conn();
+        let AddRootOutcome::Added(added) =
+            add_root(&mut conn, samples.to_str().unwrap()).expect("add Samples")
+        else {
+            panic!("expected Added");
+        };
+        assert_eq!(list_roots(&mut conn).unwrap().len(), 1);
+
+        let nested = add_root(&mut conn, splice.to_str().unwrap()).expect("nested outcome");
+        assert!(matches!(
+            nested,
+            AddRootOutcome::Overlap {
+                reason: OverlapReason::Nested,
+                ..
+            }
+        ));
+        assert_eq!(list_roots(&mut conn).unwrap().len(), 1);
+
+        let parent = add_root(&mut conn, tmp.path().to_str().unwrap()).expect("parent outcome");
+        assert!(matches!(
+            parent,
+            AddRootOutcome::Overlap {
+                reason: OverlapReason::ContainsExisting,
+                ..
+            }
+        ));
+        assert_eq!(list_roots(&mut conn).unwrap().len(), 1);
+        assert_eq!(list_roots(&mut conn).unwrap()[0].path, added.path);
+
+        let other = tmp.path().join("OtherPacks");
+        fs::create_dir_all(&other).unwrap();
+        assert!(matches!(
+            add_root(&mut conn, other.to_str().unwrap()).expect("non-overlap"),
+            AddRootOutcome::Added(_)
+        ));
+        assert_eq!(list_roots(&mut conn).unwrap().len(), 2);
     }
 }

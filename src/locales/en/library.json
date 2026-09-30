@@ -94,6 +94,20 @@
     "safe": "Nothing on disk is touched. Re-add the folder later to index it again, but the tags do not come back.",
     "confirm": "Remove root"
   },
+  "recovery": {
+    "title": "Your library couldn't be opened",
+    "body": "Sift couldn't open your library, so it saved a copy and started a new empty one.",
+    "backupIntro": "Your audio files are still on disk. Tags, favorites, and edits are in the backup:",
+    "copyError": "Copy error details",
+    "continue": "Use empty library",
+    "quit": "Quit"
+  },
+  "overlapFolder": {
+    "title": "Can't add this folder",
+    "bodyNested": "You can't add folder \"{{newName}}\" to your library because \"{{existingName}}\" already contains that folder.",
+    "bodyContains": "You can't add folder \"{{newName}}\" to your library because it contains \"{{existingName}}\", which is already in your library.",
+    "ok": "OK"
+  },
   "removeMissing": {
     "title_one": "Remove {{count}} missing sample?",
     "title_other": "Remove {{count}} missing samples?",

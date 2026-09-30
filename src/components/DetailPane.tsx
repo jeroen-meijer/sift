@@ -1,19 +1,18 @@
 import {
   ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
-  CheckIcon,
-  CopySimpleIcon,
   PlugChargingIcon,
   PlusIcon,
   StarIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { flattenTags, type SampleRow, type SnapMode, type TagNode } from "../lib/ipc";
 import type { PeakData, WaveformView as WaveformMode } from "../lib/ipc";
 import { folderChipLabel } from "../lib/omni";
 import { tagPalette } from "../lib/tagColors";
+import { CopyableText } from "../ui/CopyableText";
 import { Popover } from "../ui/Popover";
 import { TransportBar } from "./TransportBar";
 import { WaveformView, type Selection } from "./WaveformView";
@@ -97,65 +96,6 @@ function DetailName({
         </span>
       ) : null}
     </span>
-  );
-}
-
-/** Root-relative path with start truncation and a hover-to-copy control. */
-function DetailPath({ absolutePath, displayPath }: { absolutePath: string; displayPath: string }) {
-  const { t } = useTranslation("common");
-  const [copied, setCopied] = useState(false);
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setCopied(false);
-    if (resetTimer.current) clearTimeout(resetTimer.current);
-  }, [absolutePath]);
-
-  useEffect(
-    () => () => {
-      if (resetTimer.current) clearTimeout(resetTimer.current);
-    },
-    [],
-  );
-
-  const onCopy = () => {
-    void navigator.clipboard.writeText(absolutePath).then(() => {
-      setCopied(true);
-      if (resetTimer.current) clearTimeout(resetTimer.current);
-      resetTimer.current = setTimeout(() => {
-        setCopied(false);
-      }, 1400);
-    });
-  };
-
-  return (
-    <button
-      type="button"
-      className={`detail-path${copied ? " copied" : ""}`}
-      aria-label={copied ? t("menu.copyPathDone") : t("menu.copyPath")}
-      title={copied ? t("menu.copyPathDone") : absolutePath}
-      onClick={onCopy}
-      onMouseLeave={() => {
-        if (resetTimer.current) clearTimeout(resetTimer.current);
-        setCopied(false);
-      }}
-      onBlur={() => {
-        if (resetTimer.current) clearTimeout(resetTimer.current);
-        setCopied(false);
-      }}
-    >
-      <span className="detail-path-text">
-        <span className="detail-path-text-inner">{displayPath}</span>
-      </span>
-      <span className="detail-path-copy" aria-hidden>
-        <span className={`detail-path-copy-icon${copied ? " is-hidden" : " is-shown"}`}>
-          <CopySimpleIcon size={11} weight="bold" />
-        </span>
-        <span className={`detail-path-copy-icon${copied ? " is-shown" : " is-hidden"}`}>
-          <CheckIcon size={11} weight="bold" />
-        </span>
-      </span>
-    </button>
   );
 }
 
@@ -250,7 +190,7 @@ export const DetailPane = memo(function DetailPane({
             />
             {sample.missing ? <span className="detail-badge">{t("detail.fileMissing")}</span> : null}
           </div>
-          <DetailPath absolutePath={sample.path} displayPath={displayPath} />
+          <CopyableText text={sample.path} display={displayPath} />
         </div>
 
         <div className="detail-meta">

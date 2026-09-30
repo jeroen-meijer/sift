@@ -12,7 +12,7 @@ use crate::audio::{decode_cache, jit};
 use crate::db::settings;
 use crate::error::{AppError, AppResult};
 use crate::indexer::{self, IndexProgress};
-use crate::library::{self, FolderNode, RootDto};
+use crate::library::{self, AddRootOutcome, FolderNode, RootDto};
 use crate::samples::{self, Query as SampleQuery, SampleDto};
 use crate::state::AppState;
 use crate::tags::{self, TagNode};
@@ -37,6 +37,10 @@ pub struct DbStats {
     pub data_dir: String,
     pub clips_dir: String,
     pub clips_bytes: u64,
+    /// Set when boot renamed a broken library DB and opened a fresh empty one.
+    pub library_backup_path: Option<String>,
+    /// Raw migrate/schema error that triggered recovery (for Copy error details).
+    pub library_open_error: Option<String>,
 }
 
 /// Run blocking command work on Tauri's blocking pool, never the main thread.
@@ -123,6 +127,13 @@ pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
             })?;
             // Directory walk stays outside the DB lock.
             let clips_bytes = jit::cache_size(&clips_dir);
+            let (library_backup_path, library_open_error) =
+                state.library_recovery.as_ref().map_or((None, None), |r| {
+                    (
+                        Some(r.backup_path.to_string_lossy().into_owned()),
+                        Some(r.migrate_error.clone()),
+                    )
+                });
             Ok(DbStats {
                 roots,
                 samples,
@@ -131,6 +142,8 @@ pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
                 data_dir,
                 clips_bytes,
                 clips_dir: clips_dir.to_string_lossy().into_owned(),
+                library_backup_path,
+                library_open_error,
             })
         })
     })
@@ -143,10 +156,13 @@ pub async fn list_roots(app: AppHandle) -> AppResult<Vec<RootDto>> {
 }
 
 #[tauri::command]
-pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
+pub async fn add_root(app: AppHandle, path: String) -> AppResult<AddRootOutcome> {
     off_main(app.clone(), move |state| {
         let total = std::time::Instant::now();
-        let root = state.db.with_conn(|conn| library::add_root(conn, &path))?;
+        let outcome = state.db.with_conn(|conn| library::add_root(conn, &path))?;
+        let AddRootOutcome::Added(root) = &outcome else {
+            return Ok(outcome);
+        };
         let root_id = root.id;
         let db = state.db.clone();
         watch::restart_in_background(
@@ -184,7 +200,7 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
                 );
                 crate::analyze::enqueue_unanalyzed(index_app, db, peaks_dir);
             });
-        Ok(root)
+        Ok(outcome)
     })
     .await
 }
@@ -1062,7 +1078,10 @@ pub async fn snap_zero_crossings(
 
 #[tauri::command]
 pub async fn clear_jit_cache(app: AppHandle) -> AppResult<()> {
-    off_main(app, move |state| jit::clear_cache(&state.clips_dir())).await
+    off_main(app, move |state| {
+        jit::clear_default_clips_cache(&state.paths)
+    })
+    .await
 }
 
 /// Point the JIT clip cache at another directory. The old cache is left alone.
