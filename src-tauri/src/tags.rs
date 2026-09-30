@@ -306,11 +306,16 @@ fn set_sample_tags_inner(
     Ok(())
 }
 
-pub fn add_sample_tag(conn: &mut SqliteConnection, sample_id: i64, tag_id: i64) -> AppResult<()> {
+pub fn add_sample_tag(conn: &mut SqliteConnection, sample_id: i64, tag_id: i64) -> AppResult<bool> {
     let sample_id = id_from_i64(sample_id)?;
     let tag_id = id_from_i64(tag_id)?;
     ensure_sample(conn, sample_id)?;
     ensure_tag(conn, tag_id)?;
+    let existed: i64 = sample_tags_dsl::sample_tags
+        .filter(sample_tags_dsl::sample_id.eq(sample_id))
+        .filter(sample_tags_dsl::tag_id.eq(tag_id))
+        .count()
+        .get_result(conn)?;
     diesel::insert_into(sample_tags_dsl::sample_tags)
         .values(SampleTag {
             sample_id,
@@ -327,7 +332,7 @@ pub fn add_sample_tag(conn: &mut SqliteConnection, sample_id: i64, tag_id: i64) 
             .filter(rejects_dsl::tag_id.eq(tag_id)),
     )
     .execute(conn)?;
-    Ok(())
+    Ok(existed == 0)
 }
 
 pub fn remove_sample_tag(

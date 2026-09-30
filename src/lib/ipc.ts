@@ -252,6 +252,9 @@ async function run(command: string, args?: Record<string, unknown>): Promise<voi
   await invoke(command, args);
 }
 
+export { parseInvokeError, type AppErrorPayload } from "./appError";
+export { showAppError } from "./errorToastStore";
+
 /**
  * Play, stop and pause carry an increasing number. The backend drops a play
  * whose decode finishes after a newer request, so the last row you pick is

@@ -376,25 +376,25 @@ pub async fn set_sample_favorite(app: AppHandle, id: i64, favorite: bool) -> App
 #[tauri::command]
 pub async fn set_sample_bpm(app: AppHandle, id: i64, bpm: Option<f64>) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| {
-            let (_, b, _, _) = samples::sample_meta_snapshot(conn, id)?;
-            Ok(b)
-        })?;
+        let before = state
+            .db
+            .with_conn(|conn| samples::sample_meta_snapshot_full(conn, id))?;
         state
             .db
             .with_conn(|conn| samples::set_sample_bpm(conn, id, bpm))?;
-        if before != bpm {
+        let after_source = bpm.filter(|b| *b > 0.0).map(|_| "user".to_string());
+        let after_bpm = bpm.filter(|b| *b > 0.0);
+        if before.bpm != after_bpm || before.bpm_source != after_source {
             undo.push(UndoAction::Bpm {
                 id,
-                before,
-                after: bpm,
+                before: before.bpm,
+                before_source: before.bpm_source,
+                after: after_bpm,
+                after_source,
             });
         }
         drop(undo);
@@ -406,25 +406,24 @@ pub async fn set_sample_bpm(app: AppHandle, id: i64, bpm: Option<f64>) -> AppRes
 #[tauri::command]
 pub async fn set_sample_key(app: AppHandle, id: i64, key: Option<String>) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| {
-            let (_, _, k, _) = samples::sample_meta_snapshot(conn, id)?;
-            Ok(k)
-        })?;
+        let before = state
+            .db
+            .with_conn(|conn| samples::sample_meta_snapshot_full(conn, id))?;
         state
             .db
             .with_conn(|conn| samples::set_sample_key(conn, id, key.as_deref()))?;
-        if before != key {
+        let after_source = key.as_ref().map(|_| "user".to_string());
+        if before.key != key || before.key_source != after_source {
             undo.push(UndoAction::Key {
                 id,
-                before,
+                before: before.key,
+                before_source: before.key_source,
                 after: key,
+                after_source,
             });
         }
         drop(undo);
@@ -440,25 +439,24 @@ pub async fn set_sample_type(
     sample_type: Option<String>,
 ) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| {
-            let (_, _, _, t) = samples::sample_meta_snapshot(conn, id)?;
-            Ok(t)
-        })?;
+        let before = state
+            .db
+            .with_conn(|conn| samples::sample_meta_snapshot_full(conn, id))?;
         state
             .db
             .with_conn(|conn| samples::set_sample_type(conn, id, sample_type.as_deref()))?;
-        if before != sample_type {
+        let after_source = sample_type.as_ref().map(|_| "user".to_string());
+        if before.sample_type != sample_type || before.sample_type_source != after_source {
             undo.push(UndoAction::SampleType {
                 id,
-                before,
+                before: before.sample_type,
+                before_source: before.sample_type_source,
                 after: sample_type,
+                after_source,
             });
         }
         drop(undo);
@@ -1036,17 +1034,16 @@ pub async fn set_sample_tags(app: AppHandle, sample_id: i64, tag_ids: Vec<i64>) 
 #[tauri::command]
 pub async fn add_sample_tag(app: AppHandle, sample_id: i64, tag_id: i64) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        state
+        let inserted = state
             .db
             .with_conn(|conn| tags::add_sample_tag(conn, sample_id, tag_id))?;
-        undo.push(UndoAction::TagAdd { sample_id, tag_id });
+        if inserted {
+            undo.push(UndoAction::TagAdd { sample_id, tag_id });
+        }
         drop(undo);
         Ok(())
     })

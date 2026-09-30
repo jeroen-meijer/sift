@@ -22,6 +22,7 @@ import { bootMark, warmProfile } from "../lib/profile";
 import { applyTheme } from "../theme";
 import { groupByFolder } from "../lib/askIndex";
 import { AskIndexToast } from "./AskIndexToast";
+import { ErrorToast } from "./ErrorToast";
 import { FirstLaunch } from "./FirstLaunch";
 import { LibraryView } from "./LibraryView";
 import { SettingsView } from "./SettingsView";
@@ -385,6 +386,8 @@ export function App() {
           }}
         />
       ) : null}
+
+      <ErrorToast />
 
       {launchUpdate != null ? (
         <UpdateAvailableDialog

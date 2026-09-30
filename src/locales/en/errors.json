@@ -1,0 +1,23 @@
+{
+  "generic": "Something went wrong.",
+  "library": {
+    "migrate_failed": "Library database migrate failed.",
+    "add_refused": "Could not add that library folder."
+  },
+  "sample": {
+    "not_found": "Sample not found.",
+    "missing_file": "Sample file is missing."
+  },
+  "play": {
+    "failed": "Could not play that sample."
+  },
+  "settings": {
+    "save_failed": "Could not save that setting."
+  },
+  "drag": {
+    "failed": "Could not export for drag."
+  },
+  "error": {
+    "generic": "Something went wrong."
+  }
+}

@@ -4,6 +4,7 @@ mod changes;
 mod commands;
 mod db;
 mod error;
+mod error_codes;
 mod fs_dates;
 mod fs_ready;
 mod ids;
