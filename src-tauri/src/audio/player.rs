@@ -956,9 +956,7 @@ mod tests {
         assert_eq!(hit.out_channels, 2);
         assert_eq!(hit.out_rate, 48_000);
         assert!(
-            engine
-                .convert_cache_snapshot(path, Some(200))
-                .is_none(),
+            engine.convert_cache_snapshot(path, Some(200)).is_none(),
             "mtime change must miss the convert cache"
         );
     }
