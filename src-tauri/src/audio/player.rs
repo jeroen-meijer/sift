@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -62,6 +62,9 @@ struct SharedPlayback {
     looping: AtomicBool,
     /// Linear gain as f32 bits.
     gain: AtomicU32,
+    /// Bumped on each new play, seek that replaces transport, and soft stop so
+    /// a finishing callback from an older buffer cannot clear a live one.
+    generation: AtomicU64,
 }
 
 impl SharedPlayback {
@@ -83,6 +86,10 @@ impl SharedPlayback {
             .unwrap_or(0)
     }
 
+    fn bump_generation(&self) {
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// Replace PCM and retarget transport. Brief `playing=false` avoids reading
     /// a half-swapped buffer in the audio callback.
     fn load_buffer(
@@ -92,6 +99,7 @@ impl SharedPlayback {
         region: (usize, usize),
         looping: bool,
     ) {
+        self.bump_generation();
         self.playing.store(false, Ordering::Relaxed);
         *self
             .pcm
@@ -106,6 +114,7 @@ impl SharedPlayback {
     }
 
     fn retarget_playhead(&self, start_frame: usize, region: (usize, usize), looping: bool) {
+        self.bump_generation();
         self.region_start.store(region.0, Ordering::Relaxed);
         self.region_end.store(region.1, Ordering::Relaxed);
         self.position.store(start_frame, Ordering::Relaxed);
@@ -119,9 +128,19 @@ impl SharedPlayback {
 #[derive(Clone)]
 struct ConvertedBuffer {
     path: PathBuf,
+    /// Source file mtime in ms since epoch. Cache hits require a match.
+    source_mtime: Option<i64>,
     channels: usize,
     sample_rate: u32,
     pcm: Arc<[f32]>,
+}
+
+/// Snapshot under a short lock so convert can run with the player mutex released.
+#[derive(Debug, Clone, Copy)]
+pub struct PlayConvertSnapshot {
+    pub cache_hit: bool,
+    pub out_channels: usize,
+    pub out_rate: u32,
 }
 
 /// Thread-safe preview player owned by `AppState` behind a `Mutex`.
@@ -135,6 +154,8 @@ pub struct PlayerEngine {
     shared: Option<Arc<SharedPlayback>>,
     /// Last file converted for the current output device layout.
     last_converted: Option<ConvertedBuffer>,
+    /// Set from the cpal error callback. Next control path clears and rebuilds.
+    stream_failed: Arc<AtomicBool>,
 }
 
 impl Default for PlayerEngine {
@@ -153,6 +174,7 @@ impl PlayerEngine {
             stream: None,
             shared: None,
             last_converted: None,
+            stream_failed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -245,45 +267,69 @@ impl PlayerEngine {
         self.gain_db
     }
 
-    /// Play `decoded` from `start_secs`. `region_secs` limits playback to a
-    /// window, which is what a waveform selection loops over.
-    ///
-    /// When `path` matches the last converted buffer, skips convert and (when
-    /// the stream is still live) only retargets the playhead. Otherwise converts
-    /// and swaps PCM into the live stream when the device layout still matches.
-    pub fn play_decoded(
+    /// Recover after a cpal stream error: drop dead stream and convert cache.
+    fn recover_stream_if_needed(&mut self) {
+        if self.stream_failed.swap(false, Ordering::SeqCst) {
+            self.last_converted = None;
+            self.teardown_stream();
+        }
+    }
+
+    /// Short lock: decide whether convert is needed and which device layout to use.
+    pub fn snapshot_for_play(
         &mut self,
         path: &Path,
-        decoded: &DecodedAudio,
-        start_secs: f64,
-        sample_type: SamplePlayType,
-        region_secs: Option<(f64, f64)>,
-    ) -> AppResult<()> {
-        if self.last_converted.as_ref().is_some_and(|c| c.path == path) {
-            return self.restart_converted(start_secs, sample_type, region_secs);
+        source_mtime: Option<i64>,
+    ) -> AppResult<PlayConvertSnapshot> {
+        self.recover_stream_if_needed();
+        if let Some(c) = &self.last_converted
+            && c.path == path
+            && c.source_mtime == source_mtime
+        {
+            return Ok(PlayConvertSnapshot {
+                cache_hit: true,
+                out_channels: c.channels,
+                out_rate: c.sample_rate,
+            });
         }
-
         let device = self.resolve_device()?;
         let supported = device
             .default_output_config()
             .map_err(|e| AppError::msg(format!("default output config: {e}")))?;
-        let out_channels = usize::from(supported.channels());
-        let out_rate = supported.sample_rate();
-        let sample_format = supported.sample_format();
-        let config: StreamConfig = supported.into();
+        Ok(PlayConvertSnapshot {
+            cache_hit: false,
+            out_channels: usize::from(supported.channels()),
+            out_rate: supported.sample_rate(),
+        })
+    }
 
-        let convert_start = Instant::now();
-        let pcm: Arc<[f32]> = convert_for_device(decoded, out_channels, out_rate).into();
-        crate::profile_log::event(
-            "play.convert",
-            convert_start.elapsed(),
-            &format!(
-                "frames={}",
-                pcm.len().checked_div(out_channels.max(1)).unwrap_or(0)
-            ),
-        );
+    /// Install PCM after convert that ran outside the player lock. Call only
+    /// while the play sequence is still current.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "play install needs path identity, buffer, layout, and window together"
+    )]
+    pub fn install_play(
+        &mut self,
+        path: &Path,
+        source_mtime: Option<i64>,
+        converted: Option<Arc<[f32]>>,
+        snap: PlayConvertSnapshot,
+        start_secs: f64,
+        sample_type: SamplePlayType,
+        region_secs: Option<(f64, f64)>,
+    ) -> AppResult<()> {
+        self.recover_stream_if_needed();
+        // Decide from live state after recover, not from a possibly stale snapshot.
+        let Some(pcm) = converted else {
+            if self.last_converted.is_some() {
+                return self.restart_converted(start_secs, sample_type, region_secs);
+            }
+            return Err(AppError::msg("converted cache cleared"));
+        };
 
-        let channels = out_channels.max(1);
+        let channels = snap.out_channels.max(1);
+        let out_rate = snap.out_rate;
         let frames = pcm.len().checked_div(channels).unwrap_or(0);
         let (region, start_frame, should_loop) = play_window(
             frames,
@@ -293,6 +339,13 @@ impl PlayerEngine {
             region_secs,
             self.loop_preview,
         );
+
+        let device = self.resolve_device()?;
+        let supported = device
+            .default_output_config()
+            .map_err(|e| AppError::msg(format!("default output config: {e}")))?;
+        let sample_format = supported.sample_format();
+        let config: StreamConfig = supported.into();
 
         self.apply_pcm(
             Arc::clone(&pcm),
@@ -308,6 +361,7 @@ impl PlayerEngine {
 
         self.last_converted = Some(ConvertedBuffer {
             path: path.to_path_buf(),
+            source_mtime,
             channels,
             sample_rate: out_rate,
             pcm,
@@ -369,6 +423,12 @@ impl PlayerEngine {
             sample_format,
         )?;
         Ok(())
+    }
+
+    /// Mark the stream dead so the next control path rebuilds output.
+    #[cfg(test)]
+    pub fn mark_stream_failed_for_test(&self) {
+        self.stream_failed.store(true, Ordering::SeqCst);
     }
 
     /// Swap into the live stream when layout matches; otherwise cold-start cpal.
@@ -438,6 +498,7 @@ impl PlayerEngine {
     }
 
     pub fn resume(&mut self) -> AppResult<()> {
+        self.recover_stream_if_needed();
         let Some(shared) = self.shared.clone() else {
             return Err(AppError::msg("nothing to resume"));
         };
@@ -482,6 +543,7 @@ impl PlayerEngine {
     /// Soft stop: silence output but keep the cpal stream warm for the next play.
     pub fn stop(&self) {
         if let Some(shared) = &self.shared {
+            shared.bump_generation();
             shared.playing.store(false, Ordering::Relaxed);
             shared.paused.store(false, Ordering::Relaxed);
         }
@@ -579,9 +641,14 @@ impl PlayerEngine {
             paused: AtomicBool::new(false),
             looping: AtomicBool::new(looping),
             gain: AtomicU32::new(db_to_linear(self.gain_db).to_bits()),
+            generation: AtomicU64::new(0),
         });
 
-        let err_fn = |e| eprintln!("cpal stream error: {e}");
+        let failed = Arc::clone(&self.stream_failed);
+        let err_fn = move |e| {
+            eprintln!("cpal stream error: {e}");
+            failed.store(true, Ordering::SeqCst);
+        };
         let stream = match sample_format {
             SampleFormat::F32 => build_stream::<f32>(device, config, Arc::clone(&shared), err_fn)?,
             SampleFormat::I16 => build_stream::<i16>(device, config, Arc::clone(&shared), err_fn)?,
@@ -636,6 +703,7 @@ where
     let gain = shared.gain_linear();
     let src_ch = shared.channels.max(1);
     let out_ch = out_channels.max(1);
+    let play_gen = shared.generation.load(Ordering::Relaxed);
 
     if !shared.playing.load(Ordering::Relaxed) || shared.paused.load(Ordering::Relaxed) {
         for s in data.iter_mut() {
@@ -668,7 +736,6 @@ where
                 pos = region_start;
             } else {
                 finished = true;
-                shared.playing.store(false, Ordering::Relaxed);
             }
         }
         if finished {
@@ -690,7 +757,13 @@ where
         }
         pos = pos.saturating_add(1);
     }
-    shared.position.store(pos, Ordering::Relaxed);
+    // Stale callback from a superseded play must not clear a newer one.
+    if shared.generation.load(Ordering::Relaxed) == play_gen {
+        shared.position.store(pos, Ordering::Relaxed);
+        if finished {
+            shared.playing.store(false, Ordering::Relaxed);
+        }
+    }
 }
 
 fn db_to_linear(db: f32) -> f32 {
@@ -721,9 +794,14 @@ fn play_window(
     clippy::as_conversions,
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
+    clippy::redundant_pub_crate,
     reason = "linear-interpolation resampler: float DSP with bounds-checked sample reads"
 )]
-fn convert_for_device(decoded: &DecodedAudio, out_channels: usize, out_rate: u32) -> Vec<f32> {
+pub(crate) fn convert_for_device(
+    decoded: &DecodedAudio,
+    out_channels: usize,
+    out_rate: u32,
+) -> Vec<f32> {
     let in_ch = usize::from(decoded.channels.max(1));
     let in_rate = decoded.sample_rate.max(1);
     let out_rate = out_rate.max(1);
@@ -757,15 +835,36 @@ fn convert_for_device(decoded: &DecodedAudio, out_channels: usize, out_rate: u32
         let i1 = i0.saturating_add(1).min(last_frame);
         let frac = (src_pos - i0 as f64) as f32;
 
-        for (oc, slot) in frame.iter_mut().enumerate() {
-            let ic = if in_ch == 1 {
-                0
-            } else {
-                oc.min(in_ch.saturating_sub(1))
-            };
+        let lerp = |ic: usize| {
             let s0 = sample_at(&decoded.samples, i0, in_ch, ic);
             let s1 = sample_at(&decoded.samples, i1, in_ch, ic);
-            *slot = (s1 - s0).mul_add(frac, s0);
+            (s1 - s0).mul_add(frac, s0)
+        };
+
+        if out_ch == 1 {
+            // Downmix: average all input channels.
+            let mut sum = 0.0f32;
+            for ic in 0..in_ch {
+                sum += lerp(ic);
+            }
+            if let Some(slot) = frame.first_mut() {
+                *slot = sum / in_ch as f32;
+            }
+        } else if in_ch == 1 {
+            // Mono → every output channel.
+            let s = lerp(0);
+            for slot in frame.iter_mut() {
+                *slot = s;
+            }
+        } else {
+            // L→0, R→1, silence on extra outs.
+            for (oc, slot) in frame.iter_mut().enumerate() {
+                *slot = if oc < 2 {
+                    lerp(oc.min(in_ch.saturating_sub(1)))
+                } else {
+                    0.0
+                };
+            }
         }
     }
     out
@@ -778,4 +877,98 @@ fn sample_at(samples: &[f32], frame: usize, channels: usize, channel: usize) -> 
         .and_then(|idx| samples.get(idx))
         .copied()
         .unwrap_or(0.0)
+}
+
+/// File mtime in ms since UNIX epoch, for convert-cache identity.
+pub fn source_mtime_ms(path: &Path) -> Option<i64> {
+    let meta = std::fs::metadata(path).ok()?;
+    let modified = meta.modified().ok()?;
+    let dur = modified
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .ok()?;
+    i64::try_from(dur.as_millis()).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::decode::DecodedAudio;
+
+    fn decoded(channels: u16, rate: u32, samples: Vec<f32>) -> DecodedAudio {
+        DecodedAudio {
+            sample_rate: rate,
+            channels,
+            bit_depth_hint: None,
+            samples,
+        }
+    }
+
+    #[test]
+    fn convert_stereo_to_mono_averages() {
+        // One frame: L=1, R=3 → mono 2.
+        let d = decoded(2, 48_000, vec![1.0, 3.0]);
+        let out = convert_for_device(&d, 1, 48_000);
+        assert_eq!(out.len(), 1);
+        assert!((out[0] - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn convert_stereo_to_quad_silences_extra() {
+        let d = decoded(2, 48_000, vec![0.5, -0.5]);
+        let out = convert_for_device(&d, 4, 48_000);
+        assert_eq!(out, vec![0.5, -0.5, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn convert_mono_to_stereo_duplicates() {
+        let d = decoded(1, 48_000, vec![0.25]);
+        let out = convert_for_device(&d, 2, 48_000);
+        assert_eq!(out, vec![0.25, 0.25]);
+    }
+
+    #[test]
+    fn convert_cache_identity_includes_mtime() {
+        let mut engine = PlayerEngine::new();
+        let path = Path::new("/tmp/sift-play-cache-test.wav");
+        let snap_a = engine.snapshot_for_play(path, Some(100)).expect("snap");
+        // Without a prior convert, always a miss.
+        assert!(!snap_a.cache_hit);
+        engine.last_converted = Some(ConvertedBuffer {
+            path: path.to_path_buf(),
+            source_mtime: Some(100),
+            channels: 2,
+            sample_rate: 48_000,
+            pcm: Arc::from(vec![0.0f32; 4]),
+        });
+        assert!(
+            engine
+                .snapshot_for_play(path, Some(100))
+                .expect("hit")
+                .cache_hit
+        );
+        assert!(
+            !engine
+                .snapshot_for_play(path, Some(200))
+                .expect("mtime miss")
+                .cache_hit
+        );
+    }
+
+    #[test]
+    fn stream_failure_clears_cache_on_next_snapshot() {
+        let mut engine = PlayerEngine::new();
+        let path = Path::new("/tmp/sift-play-fail-test.wav");
+        engine.last_converted = Some(ConvertedBuffer {
+            path: path.to_path_buf(),
+            source_mtime: Some(1),
+            channels: 2,
+            sample_rate: 48_000,
+            pcm: Arc::from(vec![0.0f32; 4]),
+        });
+        engine.mark_stream_failed_for_test();
+        let snap = engine.snapshot_for_play(path, Some(1));
+        // Recover clears last_converted. Without a real device this may err.
+        assert!(engine.last_converted.is_none());
+        let _ = snap;
+    }
 }

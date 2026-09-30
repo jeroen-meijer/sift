@@ -660,7 +660,7 @@ pub async fn get_peaks(app: AppHandle, sample_id: i64, wait: Option<bool>) -> Ap
                 // Empty placeholder. Never decode cloud stubs on the interactive path.
                 return Ok(peaks::empty_peaks(DEFAULT_BUCKETS));
             }
-            if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id)? {
+            if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id) {
                 return Ok(data);
             }
             // No peakfile yet. Browsing never decodes by itself: all decode work
@@ -670,7 +670,7 @@ pub async fn get_peaks(app: AppHandle, sample_id: i64, wait: Option<bool>) -> Ap
             if wait.unwrap_or(false) {
                 // The detail pane: analyze this one first and wait for it.
                 crate::analyze::analyze_now(app, db, peaks_dir, sample_id, DETAIL_PEAKS_WAIT);
-                if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id)? {
+                if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id) {
                     return Ok(data);
                 }
             } else {
@@ -736,11 +736,61 @@ pub async fn play_sample(
             );
             return Ok(());
         }
-        state
+
+        let source_mtime = crate::audio::player::source_mtime_ms(path);
+        let snap = {
+            let mut player = state
+                .player
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            player.snapshot_for_play(path, source_mtime)?
+        };
+
+        // Convert outside the player mutex so stop/pause/playback_state stay responsive.
+        let converted = if snap.cache_hit {
+            None
+        } else {
+            let convert_start = std::time::Instant::now();
+            let pcm: std::sync::Arc<[f32]> = crate::audio::player::convert_for_device(
+                &decoded,
+                snap.out_channels,
+                snap.out_rate,
+            )
+            .into();
+            crate::profile_log::event(
+                "play.convert",
+                convert_start.elapsed(),
+                &format!(
+                    "frames={}",
+                    pcm.len().checked_div(snap.out_channels.max(1)).unwrap_or(0)
+                ),
+            );
+            Some(pcm)
+        };
+
+        // Re-check under the lock before starting audio.
+        let mut player = state
             .player
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .play_decoded(path, &decoded, start, play_type, region)?;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !is_current_play(&state.play_seq, seq) {
+            crate::profile_log::event(
+                "play.superseded",
+                total.elapsed(),
+                &format!("id={sample_id} seq={seq} phase=install"),
+            );
+            return Ok(());
+        }
+        player.install_play(
+            path,
+            source_mtime,
+            converted,
+            snap,
+            start,
+            play_type,
+            region,
+        )?;
+        drop(player);
 
         crate::profile_log::event(
             "ipc.play_sample",
