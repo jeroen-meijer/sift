@@ -2,6 +2,14 @@
 
 How to title commits and pull requests in this repo. Agents and humans follow this file. Product release notes live in [CHANGELOG.md](../../CHANGELOG.md) → `## Upcoming` (see [AGENTS.md](../../AGENTS.md#changelog--release)).
 
+## Workflow
+
+This repo does **not** use Git Flow. There is no `develop` trunk, and no required `feature/` / `release/` / `hotfix/` branch naming.
+
+- Default branch is `main`.
+- Land work by pushing to `main` or opening a pull request against `main`. Topic branches are optional and can use any clear name (`fix/…`, `feat/…`, or a short description).
+- Releases usually run on `main` via `./tool/prepare_release.sh X.Y.Z`. The optional `--pr` path opens a short-lived `chore/release-X.Y.Z` PR into `main` so CI can gate the bump. That is not a Git Flow release branch.
+
 ## Title shape (commits and PRs)
 
 Same Conventional Commits form for both:
@@ -30,11 +38,11 @@ Prefer these (commitizen / semantic PR style). Do not use `build`. `release` is 
 | `perf` | Performance | yes | yes |
 | `test` | Tests | yes | yes |
 | `ci` | CI config or scripts | yes | yes |
-| `chore` | Tooling, deps, back-merges, other non-src/test | yes | yes |
+| `chore` | Tooling, deps, other non-src/test | yes | yes |
 | `revert` | Revert a prior commit | yes | yes |
-| `release` | Release or hotfix into `main` | no | yes |
+| `release` | Version bump / release PR into `main` | no | yes |
 
-Examples: `feat(ui): make Graphite the default theme`, `fix(library): keep tags when folders move outside Sift`, `feat(ci): ship Intel Mac builds alongside Apple Silicon`, `chore: back-merge release 0.5.0`, `release(app): 0.6.0`.
+Examples: `feat(ui): make Graphite the default theme`, `fix(library): keep tags when folders move outside Sift`, `feat(ci): ship Intel Mac builds alongside Apple Silicon`, `chore: prepare release 0.6.0`, `release: 0.6.0`.
 
 Commit body only when it helps (why or caveats). Short paragraph or bullets.
 
