@@ -1,0 +1,16 @@
+---
+description: Never hard-wrap markdown prose mid-sentence or mid-bullet; one physical line per paragraph and list item
+alwaysApply: true
+---
+
+# Markdown prose: no hard wraps
+
+Canonical: [docs/README.md](docs/README.md#markdown-prose-no-hard-wraps). Also pointed from [AGENTS.md](AGENTS.md#markdown-prose-no-hard-wraps).
+
+When you write or edit markdown in this repo:
+
+1. Read the canonical section in `docs/README.md`.
+2. One physical line per paragraph and per list item. No mid-sentence or mid-bullet newlines for column width.
+3. Separate paragraphs with a blank line.
+4. Exceptions: fenced code, tables, YAML/JSON front matter, intentional breaks inside code samples.
+5. When you touch a hard-wrapped file, unwrap the prose you edit (prefer the whole file when practical).

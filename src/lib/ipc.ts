@@ -72,7 +72,20 @@ export interface DbStats {
   data_dir: string;
   clips_dir: string;
   clips_bytes: number;
+  /** Set when boot renamed a broken library DB and opened a fresh empty one. */
+  library_backup_path?: string | null;
+  /** Raw migrate/schema error that triggered recovery. */
+  library_open_error?: string | null;
 }
+
+export type AddRootOutcome =
+  | { kind: "added"; id: number; path: string; label: string }
+  | {
+      kind: "overlap";
+      reason: "nested" | "containsExisting";
+      newLabel: string;
+      existingLabel: string;
+    };
 
 export interface PeakData {
   channels: number;
@@ -239,6 +252,9 @@ async function run(command: string, args?: Record<string, unknown>): Promise<voi
   await invoke(command, args);
 }
 
+export { parseInvokeError, type AppErrorPayload } from "./appError";
+export { showAppError } from "./errorToastStore";
+
 /**
  * Play, stop and pause carry an increasing number. The backend drops a play
  * whose decode finishes after a newer request, so the last row you pick is
@@ -267,7 +283,7 @@ export const ipc = {
   /** Defaults to full depth. Pass {@link FOLDER_TREE_SHALLOW_DEPTH} for first paint. */
   folderTree: (maxDepth = FOLDER_TREE_FULL_DEPTH) =>
     invoke<FolderNode[]>("folder_tree", { maxDepth }),
-  addRoot: (path: string) => invoke<unknown>("add_root", { path }),
+  addRoot: (path: string) => invoke<AddRootOutcome>("add_root", { path }),
   removeRoot: (rootId: number) => run("remove_root", { rootId }),
   setFolderFavorite: (path: string, favorite: boolean) =>
     run("set_folder_favorite", { path, favorite }),

@@ -1,6 +1,19 @@
 ## Upcoming
 
-- feat(ui): new installs start in the Graphite theme. Your current theme stays as it is
+- feat(ui): change default theme to Graphite
+- fix(library): if the library database cannot open, Sift saves a backup and shows a recovery dialog
+- fix(library): clear clip cache only empties Sift's default cache folder, never a custom clips folder you chose
+- fix(library): warn when you add a folder that overlaps an existing library
+- fix(library): renaming or moving files and folders outside Sift keeps tags, BPM, key, and favorites on those samples
+- perf(library): indexing and Splice metadata refresh no longer freeze search and the rest of the UI on large libraries
+- fix(audio): converting for playback no longer freezes the transport, and playback recovers after the audio device disappears
+- fix(wave): broken or incomplete waveforms regenerate on the next analyze
+- fix(ui): changing filters or selection no longer briefly shows the wrong samples or waveform
+- fix(ui): library shortcuts stay off while a dialog is open, and menus keep keyboard focus correctly
+- fix(library): undoing a BPM, key, or type change puts the old value back, including values that came from analysis
+- fix(ui): failed actions show a short error toast with a copyable code
+- fix(ui): refer to user-added collections as "libraries"
+- fix(ui): keep snap grids and tag colors readable on Snow and other themes
 
 ## 0.5.0
 

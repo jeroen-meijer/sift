@@ -38,6 +38,7 @@ import { RemoveMissingDialog } from "./dialogs/RemoveMissingDialog";
 import { RemoveRootDialog } from "./dialogs/RemoveRootDialog";
 import { TagPickerDialog } from "./dialogs/TagPickerDialog";
 import type { Selection } from "./WaveformView";
+import { isDialogOpen } from "../ui/dialogStack";
 
 const PLAYHEAD_POLL_MS = 50;
 /** Cap for unscoped / broad list_samples. Covers a 20k library; D3 windows later. */
@@ -125,6 +126,8 @@ export function LibraryView({
   });
   const shiftHeld = useRef(false);
   const samplesRef = useRef<SampleRow[]>([]);
+  const listGen = useRef(0);
+  const peaksGen = useRef(0);
   const listApplyAt = useRef<{ at: number; n: number } | null>(null);
   /** Folder whose cloud rows were last re-statted (availability check). */
   const availCheckedFolder = useRef<string | null>(null);
@@ -184,6 +187,7 @@ export function LibraryView({
   const refreshSamples = useCallback(async () => {
     /* Keep showing rows while a filter refreshes; only spin when the list is empty. */
     if (samplesRef.current.length === 0) setSamplesLoading(true);
+    const gen = ++listGen.current;
     try {
       const t0 = performance.now();
       const rows = await ipc.listSamples(
@@ -196,6 +200,7 @@ export function LibraryView({
           limit: LIST_SAMPLES_LIMIT,
         }),
       );
+      if (gen !== listGen.current) return;
       const applyAt = performance.now();
       setSamples(rows);
       if (!firstListBootLogged) {
@@ -448,10 +453,15 @@ export function LibraryView({
       /* best-effort */
     });
     /* Waits for analysis when the sample has no peakfile yet (front of the queue). */
+    const gen = ++peaksGen.current;
     void ipc
       .getPeaks(focusedId, true)
-      .then(setPeaks)
+      .then((data) => {
+        if (gen !== peaksGen.current) return;
+        setPeaks(data);
+      })
       .catch(() => {
+        if (gen !== peaksGen.current) return;
         setPeaks(null);
       });
     if (skipPlayOnSelect.current) {
@@ -767,6 +777,7 @@ export function LibraryView({
       }
       if (isTyping(e.target)) return;
 
+      /* Undo/redo stay available while a dialog is open (unless typing). */
       if (matchesBinding(e, keys.redo)) {
         e.preventDefault();
         void ipc.redo().then((ok) => {
@@ -781,6 +792,9 @@ export function LibraryView({
         });
         return;
       }
+
+      if (isDialogOpen() || menu != null) return;
+
       if (matchesBinding(e, keys.open) && focused) {
         e.preventDefault();
         void openPath(focused.path).catch(console.error);
@@ -894,6 +908,7 @@ export function LibraryView({
     focused,
     focusedId,
     loopRegion,
+    menu,
     play,
     refreshSamples,
     runAction,
@@ -1152,6 +1167,22 @@ export function LibraryView({
     [folders],
   );
 
+  const bpmFilter = useMemo(
+    () => ({
+      min: omni.bpmMin,
+      max: omni.bpmMax,
+      halfDouble: settings.half_double_bpm,
+    }),
+    [omni.bpmMin, omni.bpmMax, settings.half_double_bpm],
+  );
+  const keyFilter = useMemo(
+    () => ({
+      key: omni.key,
+      relative: settings.relative_key,
+    }),
+    [omni.key, settings.relative_key],
+  );
+
   return (
     <>
       <div className="library-layout">
@@ -1207,15 +1238,8 @@ export function LibraryView({
             sortColumn={settings.sort_column}
             sortDirection={settings.sort_direction}
             highlightText={omni.text}
-            bpmFilter={{
-              min: omni.bpmMin,
-              max: omni.bpmMax,
-              halfDouble: settings.half_double_bpm,
-            }}
-            keyFilter={{
-              key: omni.key,
-              relative: settings.relative_key,
-            }}
+            bpmFilter={bpmFilter}
+            keyFilter={keyFilter}
             hoverPreviewHeld={hoverPreviewHeld}
             scrollApiRef={tableScrollRef}
             onSelect={onSelectRow}

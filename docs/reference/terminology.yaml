@@ -1,0 +1,20 @@
+# Preferred terms and banned synonyms for user-facing copy.
+#
+# Scanned by `bun run i18n:check` (`tool/check-i18n.ts`) against string VALUES
+# in `src/locales/**/*.json`. Hard-ban hits fail CI. Soft-ban hits warn only.
+# Procedural localization guidance: [localization.md](localization.md).
+#
+# Each term rule:
+# - name: rule id (required; used in reports when there is no replacement)
+# - description: optional human context
+# - replacement: optional string or list of allowed terms to use instead
+# - hard_ban / soft_ban: whole-word matches in locale VALUES
+
+terms:
+  - name: library
+    description: Use "library" to refer to user-added collections of samples.
+    replacement: library
+    hard_ban: [root, roots]
+  - name: plain
+    description: Use plain words instead of hyperbolic marketing speak.
+    hard_ban: [seamless, robust, leverage, streamline, comprehensive, delight, effortless, crucial]

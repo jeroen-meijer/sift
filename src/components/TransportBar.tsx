@@ -1,5 +1,5 @@
 import { PauseIcon, PlayIcon, RepeatIcon } from "@phosphor-icons/react";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { keys } from "../lib/bindings";
 import { formatDb, formatTransportTime } from "../lib/format";
@@ -7,13 +7,6 @@ import type { SnapMode } from "../lib/ipc";
 import { playheadStore } from "../lib/liveStores";
 import { PillSelect } from "../ui/PillSelect";
 import { Slider } from "../ui/Slider";
-
-const SNAP_OPTIONS: { value: SnapMode; label: string }[] = [
-  { value: "None", label: "None" },
-  { value: "1/4", label: "1/4" },
-  { value: "1/8", label: "1/8" },
-  { value: "1/16", label: "1/16" },
-];
 
 interface Props {
   /** Duration in seconds. 0 when unknown. */
@@ -64,6 +57,15 @@ export function TransportBar({
   onGainChange,
 }: Props) {
   const { t } = useTranslation("library");
+  const snapOptions = useMemo(
+    (): { value: SnapMode; label: string }[] => [
+      { value: "None", label: t("transport.snapNone") },
+      { value: "1/4", label: t("transport.snapQuarter") },
+      { value: "1/8", label: t("transport.snapEighth") },
+      { value: "1/16", label: t("transport.snapSixteenth") },
+    ],
+    [t],
+  );
 
   return (
     <div className="transport">
@@ -92,7 +94,7 @@ export function TransportBar({
 
       <div className="transport-group">
         <span className="transport-label">{t("transport.snap")}</span>
-        <PillSelect label={t("transport.snap")} value={snap} options={SNAP_OPTIONS} onChange={onSnapChange} />
+        <PillSelect label={t("transport.snap")} value={snap} options={snapOptions} onChange={onSnapChange} />
       </div>
 
       <button

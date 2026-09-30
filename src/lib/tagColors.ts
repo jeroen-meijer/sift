@@ -2,30 +2,63 @@
  * Tag chip colours. The design paints a chip from the root segment of the tag
  * path (`Drums/Kick` → the Drums palette). A colour set by hand in the tag
  * editor wins over that, and anything unknown falls back to neutral.
+ *
+ * Root palettes live in theme tokens (`--color-tag-*-{bg,fg,dot}`). Custom
+ * stored hex colours still build a chip in JS from the theme mix ground.
  */
+
 export interface TagColors {
   bg: string;
   fg: string;
   dot: string;
 }
 
-const ROOT_PALETTE: Record<string, TagColors> = {
-  Drums: { bg: "#39305a", fg: "#cdc4f5", dot: "#8a7ad0" },
-  Synths: { bg: "#1f3a45", fg: "#bfe3ef", dot: "#5f8fa8" },
-  FX: { bg: "#453721", fg: "#f1ddba", dot: "#a88a5f" },
-  Field: { bg: "#26402f", fg: "#c4e4ce", dot: "#5f9a72" },
-  Ambience: { bg: "#2b3348", fg: "#c7d3ec", dot: "#7f849b" },
-  Vocals: { bg: "#452a38", fg: "#f1cadb", dot: "#a86b80" },
-  Genre: { bg: "#322b56", fg: "#d2caf6", dot: "#6d78b8" },
+export interface TagSwatchChoice {
+  /** CSS value for the swatch preview. */
+  css: string;
+  /** Resolved `#rrggbb` to store when the user picks this swatch. */
+  storedHex: string | null;
+}
+
+/** Ordered theme token slugs for the editor swatch row. */
+export const TAG_SWATCH_KEYS = [
+  "drums",
+  "synths",
+  "fx",
+  "field",
+  "ambience",
+  "vocals",
+  "genre",
+] as const;
+
+export type TagSwatchKey = (typeof TAG_SWATCH_KEYS)[number];
+
+/** Root segment display name → theme token slug. */
+const ROOT_SLUG: Record<string, TagSwatchKey> = {
+  Drums: "drums",
+  Synths: "synths",
+  FX: "fx",
+  Field: "field",
+  Ambience: "ambience",
+  Vocals: "vocals",
+  Genre: "genre",
 };
 
-const FALLBACK: TagColors = { bg: "#31333d", fg: "#cfd3e5", dot: "#75798c" };
+const FALLBACK_SLUG = "fallback";
 
-/** The swatches the tag editor offers, in design order. */
-export const TAG_SWATCHES = Object.values(ROOT_PALETTE).map((entry) => entry.dot);
+function tokenPalette(slug: string): TagColors {
+  return {
+    bg: `var(--color-tag-${slug}-bg)`,
+    fg: `var(--color-tag-${slug}-fg)`,
+    dot: `var(--color-tag-${slug}-dot)`,
+  };
+}
 
-const GROUND = [0x1b, 0x1d, 0x2b] as const;
+/** Dot CSS vars for the tag-editor swatch row (display only). */
+export const TAG_SWATCHES = TAG_SWATCH_KEYS.map((key) => tokenPalette(key).dot);
+
 const HEX = /^#([0-9a-f]{6})$/i;
+const RGB = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i;
 
 function parseHex(hex: string): [number, number, number] | null {
   const match = HEX.exec(hex.trim());
@@ -42,12 +75,52 @@ function mix(a: readonly number[], b: readonly number[], amount: number): number
   return a.map((channel, i) => channel + ((b[i] ?? 0) - channel) * amount);
 }
 
+function mixGround(): [number, number, number] {
+  if (typeof document !== "undefined") {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue("--color-tag-mix-ground")
+      .trim();
+    const hex = parseHex(raw);
+    if (hex) return hex;
+    const resolved = resolveCssColorToHex(raw);
+    if (resolved) {
+      const fromResolved = parseHex(resolved);
+      if (fromResolved) return fromResolved;
+    }
+  }
+  return [0x1b, 0x1d, 0x2b];
+}
+
+/** Resolve a CSS color (including `var(--…)`) to `#rrggbb` for storage / compare. */
+export function resolveCssColorToHex(cssColor: string): string | null {
+  const asHex = parseHex(cssColor);
+  if (asHex) return toHex(asHex);
+  if (typeof document === "undefined") return null;
+  const el = document.createElement("span");
+  el.style.color = cssColor;
+  document.body.appendChild(el);
+  const computed = getComputedStyle(el).color;
+  el.remove();
+  const match = RGB.exec(computed);
+  if (!match) return null;
+  return toHex([Number(match[1]), Number(match[2]), Number(match[3])]);
+}
+
+/** Swatch row choices: preview CSS + hex to persist when clicked. */
+export function tagSwatchChoices(): TagSwatchChoice[] {
+  return TAG_SWATCH_KEYS.map((key) => {
+    const css = tokenPalette(key).dot;
+    return { css, storedHex: resolveCssColorToHex(css) };
+  });
+}
+
 /** Build a design-shaped chip (dark ground, light ink) from one hex colour. */
 function paletteFromHex(hex: string): TagColors | null {
   const rgb = parseHex(hex);
   if (!rgb) return null;
+  const ground = mixGround();
   return {
-    bg: toHex(mix(GROUND, rgb, 0.34)),
+    bg: toHex(mix(ground, rgb, 0.34)),
     fg: toHex(mix(rgb, [255, 255, 255], 0.62)),
     dot: toHex(rgb),
   };
@@ -58,5 +131,6 @@ export function tagPalette(path: string, storedColor?: string | null): TagColors
     const custom = paletteFromHex(storedColor);
     if (custom) return custom;
   }
-  return ROOT_PALETTE[path.split("/")[0] ?? ""] ?? FALLBACK;
+  const root = path.split("/")[0] ?? "";
+  return tokenPalette(ROOT_SLUG[root] ?? FALLBACK_SLUG);
 }

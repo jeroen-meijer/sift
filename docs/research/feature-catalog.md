@@ -94,6 +94,10 @@ All remain research / stretch. Not in spec v1.
 - Open: cancel indexing / analysis mid-run. Stop an accidental scan of a huge SSD or root without quitting the app.
   - Producer ask (2026-09): "stop scanning" when thousands of files keep going after a mistaken root add; today the escape hatch is close Sift.
   - Should cover both filesystem walk / index and the background analyze queue (clear progress, leave already-written rows intact).
+  - Related queue gaps (not separate product features; fix with cancel / queue work):
+    - Files that fail to decode (`open_audio` / `decode_all` returns `Ok(())` without setting `analyzed_at`) stay forever in `list_analysis_queue_ids` and retry every launch.
+    - Queuing a second job for the same sample id does not replace the mode: a later `Custom` is dropped if a `Normal` job is already waiting (and the reverse). Only priority moves an existing job to the front.
+    - No user-facing cancel or “skip this file” for analyze.
 - Open: auto rename and organize. Consistent names such as `Kick_F_120ms_Punchy.wav`.
   - Destructive batch rename is out of spec v1 as a primary feature. Filename parsing for BPM/key exists; writing new names on disk does not.
 - Partial: cloud and offline libraries. Splice (and similar) samples you already downloaded, shown with local samples in one place.

@@ -1,6 +1,7 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import common from "../locales/en/common.json";
+import errors from "../locales/en/errors.json";
 import library from "../locales/en/library.json";
 import settings from "../locales/en/settings.json";
 import tags from "../locales/en/tags.json";
@@ -9,6 +10,7 @@ void i18n.use(initReactI18next).init({
   resources: {
     en: {
       common,
+      errors,
       library,
       settings,
       tags,
@@ -17,7 +19,7 @@ void i18n.use(initReactI18next).init({
   lng: "en",
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "library", "settings", "tags"],
+  ns: ["common", "errors", "library", "settings", "tags"],
   interpolation: {
     escapeValue: false,
   },

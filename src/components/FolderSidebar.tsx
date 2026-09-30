@@ -374,7 +374,7 @@ export const FolderSidebar = memo(function FolderSidebar({
             <PlusIcon size={12} />
           </button>
         </div>
-        <div className='sidebar-scroll' ref={scrollRef}>
+        <div className='sidebar-scroll' ref={scrollRef} role='tree' aria-label={t('sidebar.folders')}>
           {folders.length === 0 ? (
             <div className='sidebar-empty'>{t('sidebar.noRoots')}</div>
           ) : (
@@ -391,6 +391,9 @@ export const FolderSidebar = memo(function FolderSidebar({
                 return (
                   <div
                     key={node.path}
+                    role='treeitem'
+                    aria-selected={selected}
+                    aria-expanded={hasKids ? isExpanded : undefined}
                     className={`tree-row${node.is_root ? ' root' : ''}${selected ? ' selected' : ''}${h < FOLDER_ROW_HEIGHT ? ' tree-row-animating' : ''}`}
                     style={{
                       position: 'absolute',
@@ -413,7 +416,7 @@ export const FolderSidebar = memo(function FolderSidebar({
                         type='button'
                         className='tree-caret'
                         aria-label={isExpanded ? t('sidebar.collapseRoot') : t('sidebar.expandRoot')}
-                        aria-expanded={isExpanded}
+                        tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleExpanded(node.path, e.altKey);
@@ -431,7 +434,7 @@ export const FolderSidebar = memo(function FolderSidebar({
                     <button
                       type='button'
                       className='tree-label'
-                      aria-pressed={selected}
+                      tabIndex={-1}
                       onClick={(e) => {
                         onFolderActivate(node, e.altKey);
                       }}

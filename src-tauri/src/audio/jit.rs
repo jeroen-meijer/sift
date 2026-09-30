@@ -84,6 +84,12 @@ pub fn allocate_clip_path(
     candidate
 }
 
+/// Clear empties the default OS-cache clips path from `AppPaths`, never a
+/// user-selected custom `clips_dir` setting.
+pub fn clear_default_clips_cache(paths: &crate::paths::AppPaths) -> AppResult<()> {
+    clear_cache(&paths.clips_dir)
+}
+
 /// Delete all files in the JIT clips directory (keeps the directory).
 pub fn clear_cache(clips_dir: &Path) -> AppResult<()> {
     if !clips_dir.exists() {
@@ -300,5 +306,32 @@ mod tests {
         let b = allocate_clip_path(&dir, "kick.wav", 1.25, 3.0);
         assert_eq!(b.file_name().unwrap(), "kick_clip_1.250-3.000_2.wav");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Clear must use `AppPaths` clips (via `clear_default_clips_cache`), never a
+    /// configured custom directory.
+    #[test]
+    fn clear_default_clips_cache_leaves_custom_dir_untouched() {
+        let root = tempfile::tempdir().expect("temp");
+        let paths = crate::paths::AppPaths::for_test(root.path());
+        let custom_dir = root.path().join("custom_clips");
+        fs::create_dir_all(custom_dir.join("nested")).unwrap();
+        fs::write(paths.clips_dir.join("stale.wav"), b"default").unwrap();
+        fs::write(custom_dir.join("nested").join("keep.wav"), b"custom").unwrap();
+
+        assert_ne!(
+            paths.clips_dir, custom_dir,
+            "test setup: custom override must differ from AppPaths default"
+        );
+        clear_default_clips_cache(&paths).unwrap();
+
+        assert!(
+            paths.clips_dir.read_dir().unwrap().next().is_none(),
+            "default clips dir should be emptied"
+        );
+        assert!(
+            custom_dir.join("nested").join("keep.wav").is_file(),
+            "configured custom clips dir must stay untouched"
+        );
     }
 }

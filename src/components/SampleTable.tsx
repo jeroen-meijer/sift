@@ -555,7 +555,7 @@ export const SampleTable = memo(function SampleTable({
         <span aria-hidden />
       </div>
 
-      <div className="sample-table-body" ref={scrollRef}>
+      <div className="sample-table-body" ref={scrollRef} role="listbox" aria-multiselectable>
         {/* Row lines are the container's background, so an area the browser has
           * scrolled to before React renders its rows (fast flicks, scrollbar
           * yanks) looks like empty rows for a frame instead of a void. */}

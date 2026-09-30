@@ -96,6 +96,9 @@ fn handle_events(
     let mut removed: Vec<PathBuf> = Vec::new();
     let mut modified: Vec<PathBuf> = Vec::new();
     let mut renames: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut dir_created: Vec<PathBuf> = Vec::new();
+    let mut dir_removed: Vec<PathBuf> = Vec::new();
+    let mut dir_renames: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut structural = false;
     let mut changed_ids: Vec<i64> = Vec::new();
     let mut became_local: Vec<i64> = Vec::new();
@@ -104,7 +107,9 @@ fn handle_events(
         match ev.kind {
             EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
                 for p in &ev.paths {
-                    if p.is_file() && is_audio_file(p) {
+                    if p.is_dir() {
+                        dir_created.push(p.clone());
+                    } else if p.is_file() && is_audio_file(p) {
                         created.push(p.clone());
                     }
                 }
@@ -113,20 +118,29 @@ fn handle_events(
                 for p in &ev.paths {
                     if is_audio_file(p) || looks_like_audio_path(p) {
                         removed.push(p.clone());
+                    } else if looks_like_directory_path(p) {
+                        dir_removed.push(p.clone());
                     }
                 }
             }
             EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
-                if let [from, to, ..] = ev.paths.as_slice()
-                    && (looks_like_audio_path(from) || looks_like_audio_path(to))
-                {
-                    renames.push((from.clone(), to.clone()));
+                if let [from, to, ..] = ev.paths.as_slice() {
+                    if looks_like_audio_path(from) || looks_like_audio_path(to) {
+                        renames.push((from.clone(), to.clone()));
+                    } else if looks_like_directory_path(from)
+                        || to.is_dir()
+                        || looks_like_directory_path(to)
+                    {
+                        dir_renames.push((from.clone(), to.clone()));
+                    }
                 }
             }
             EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
                 for p in &ev.paths {
                     if looks_like_audio_path(p) {
                         removed.push(p.clone());
+                    } else if looks_like_directory_path(p) {
+                        dir_removed.push(p.clone());
                     }
                 }
             }
@@ -148,6 +162,33 @@ fn handle_events(
     removed.dedup();
     modified.sort();
     modified.dedup();
+    dir_created.sort();
+    dir_created.dedup();
+    dir_removed.sort();
+    dir_removed.dedup();
+
+    for (from, to) in &dir_renames {
+        if indexer::apply_directory_path_change(&shared.db, from, Some(to))? {
+            structural = true;
+            dir_created.retain(|p| p != to);
+            dir_removed.retain(|p| p != from);
+        }
+    }
+
+    for dir in &dir_removed {
+        if indexer::apply_directory_path_change(&shared.db, dir, None)? {
+            structural = true;
+        }
+    }
+
+    for dir in &dir_created {
+        if dir.is_dir()
+            && let Some(root_id) = indexer::root_id_for_path(&shared.db, dir)?
+        {
+            let _ = indexer::index_tree(&shared.db, root_id, Some(dir), |_| {});
+            structural = true;
+        }
+    }
 
     for (from, to) in &renames {
         let from_s = from.to_string_lossy().to_string();
@@ -252,9 +293,7 @@ fn handle_events(
         } else {
             let total = u64::try_from(new_files.len()).unwrap_or(u64::MAX);
             crate::analyze::work::start(app, total);
-            let indexed = shared
-                .db
-                .with_conn(|conn| indexer::index_paths(conn, &new_files))?;
+            let indexed = indexer::index_paths(&shared.db, &new_files)?;
             crate::analyze::work::finish(app, indexed);
             if indexed > 0 {
                 structural = true;
@@ -290,6 +329,15 @@ fn handle_events(
 
 fn looks_like_audio_path(path: &Path) -> bool {
     is_audio_file(path)
+}
+
+/// True for a directory that still exists, or a gone path with no file extension
+/// (remove / rename-from events). Sidecars and audio keep their extensions.
+fn looks_like_directory_path(path: &Path) -> bool {
+    if path.exists() {
+        return path.is_dir();
+    }
+    path.extension().is_none()
 }
 
 /// Restart watches for all current roots. Replaces any previous guard.

@@ -106,6 +106,8 @@
 @property --color-wave-high-mid { syntax: "<color>"; inherits: true; initial-value: #38bdf8; }
 @property --color-wave-mid { syntax: "<color>"; inherits: true; initial-value: #4ade80; }
 @property --color-wave-treble { syntax: "<color>"; inherits: true; initial-value: #8b9cf7; }
+@property --color-wave-grid { syntax: "<color>"; inherits: true; initial-value: rgb(226 226 226 / 9%); }
+@property --color-wave-grid-bar { syntax: "<color>"; inherits: true; initial-value: rgb(152 152 152 / 30%); }
 
 /* Smooth lerp when data-theme flips (skipped on first paint and reduced-motion). */
 html.theme-lerp {
@@ -175,7 +177,9 @@ html.theme-lerp {
     --color-wave-low-mid var(--motion-theme) var(--motion-ease),
     --color-wave-high-mid var(--motion-theme) var(--motion-ease),
     --color-wave-mid var(--motion-theme) var(--motion-ease),
-    --color-wave-treble var(--motion-theme) var(--motion-ease);
+    --color-wave-treble var(--motion-theme) var(--motion-ease),
+    --color-wave-grid var(--motion-theme) var(--motion-ease),
+    --color-wave-grid-bar var(--motion-theme) var(--motion-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -262,6 +266,34 @@ html.theme-lerp {
   --color-wave-high-mid: #40c8e8;
   --color-wave-mid: #2ee89a;
   --color-wave-treble: #8b7cff;
+  --color-wave-grid: rgb(233 233 237 / 9%);
+  --color-wave-grid-bar: rgb(145 132 217 / 30%);
+
+  --color-tag-drums-bg: #39305a;
+  --color-tag-drums-fg: #cdc4f5;
+  --color-tag-drums-dot: #8a7ad0;
+  --color-tag-synths-bg: #1f3a45;
+  --color-tag-synths-fg: #bfe3ef;
+  --color-tag-synths-dot: #5f8fa8;
+  --color-tag-fx-bg: #453721;
+  --color-tag-fx-fg: #f1ddba;
+  --color-tag-fx-dot: #a88a5f;
+  --color-tag-field-bg: #26402f;
+  --color-tag-field-fg: #c4e4ce;
+  --color-tag-field-dot: #5f9a72;
+  --color-tag-ambience-bg: #2b3348;
+  --color-tag-ambience-fg: #c7d3ec;
+  --color-tag-ambience-dot: #7f849b;
+  --color-tag-vocals-bg: #452a38;
+  --color-tag-vocals-fg: #f1cadb;
+  --color-tag-vocals-dot: #a86b80;
+  --color-tag-genre-bg: #322b56;
+  --color-tag-genre-fg: #d2caf6;
+  --color-tag-genre-dot: #6d78b8;
+  --color-tag-fallback-bg: #31333d;
+  --color-tag-fallback-fg: #cfd3e5;
+  --color-tag-fallback-dot: #75798c;
+  --color-tag-mix-ground: #1b1d2b;
 }
 
 /* --- Ink (Monospace Ink) --- */
@@ -340,6 +372,34 @@ html.theme-lerp {
   --color-wave-high-mid: #3ec4f0;
   --color-wave-mid: #1dff9a;
   --color-wave-treble: #9a7dff;
+  --color-wave-grid: rgb(217 223 231 / 9%);
+  --color-wave-grid-bar: rgb(151 111 225 / 30%);
+
+  --color-tag-drums-bg: #39305a;
+  --color-tag-drums-fg: #cdc4f5;
+  --color-tag-drums-dot: #8a7ad0;
+  --color-tag-synths-bg: #1f3a45;
+  --color-tag-synths-fg: #bfe3ef;
+  --color-tag-synths-dot: #5f8fa8;
+  --color-tag-fx-bg: #453721;
+  --color-tag-fx-fg: #f1ddba;
+  --color-tag-fx-dot: #a88a5f;
+  --color-tag-field-bg: #26402f;
+  --color-tag-field-fg: #c4e4ce;
+  --color-tag-field-dot: #5f9a72;
+  --color-tag-ambience-bg: #2b3348;
+  --color-tag-ambience-fg: #c7d3ec;
+  --color-tag-ambience-dot: #7f849b;
+  --color-tag-vocals-bg: #452a38;
+  --color-tag-vocals-fg: #f1cadb;
+  --color-tag-vocals-dot: #a86b80;
+  --color-tag-genre-bg: #322b56;
+  --color-tag-genre-fg: #d2caf6;
+  --color-tag-genre-dot: #6d78b8;
+  --color-tag-fallback-bg: #31333d;
+  --color-tag-fallback-fg: #cfd3e5;
+  --color-tag-fallback-dot: #75798c;
+  --color-tag-mix-ground: #10151e;
 }
 
 /* --- Graphite (default; Monospace Graphite) --- */
@@ -419,6 +479,34 @@ html.theme-lerp {
   --color-wave-high-mid: #38bdf8;
   --color-wave-mid: #4ade80;
   --color-wave-treble: #8b9cf7;
+  --color-wave-grid: rgb(226 226 226 / 9%);
+  --color-wave-grid-bar: rgb(152 152 152 / 30%);
+
+  --color-tag-drums-bg: #39305a;
+  --color-tag-drums-fg: #cdc4f5;
+  --color-tag-drums-dot: #8a7ad0;
+  --color-tag-synths-bg: #1f3a45;
+  --color-tag-synths-fg: #bfe3ef;
+  --color-tag-synths-dot: #5f8fa8;
+  --color-tag-fx-bg: #453721;
+  --color-tag-fx-fg: #f1ddba;
+  --color-tag-fx-dot: #a88a5f;
+  --color-tag-field-bg: #26402f;
+  --color-tag-field-fg: #c4e4ce;
+  --color-tag-field-dot: #5f9a72;
+  --color-tag-ambience-bg: #2b3348;
+  --color-tag-ambience-fg: #c7d3ec;
+  --color-tag-ambience-dot: #7f849b;
+  --color-tag-vocals-bg: #452a38;
+  --color-tag-vocals-fg: #f1cadb;
+  --color-tag-vocals-dot: #a86b80;
+  --color-tag-genre-bg: #322b56;
+  --color-tag-genre-fg: #d2caf6;
+  --color-tag-genre-dot: #6d78b8;
+  --color-tag-fallback-bg: #31333d;
+  --color-tag-fallback-fg: #cfd3e5;
+  --color-tag-fallback-dot: #75798c;
+  --color-tag-mix-ground: #181818;
 }
 
 /* --- Snow (Monospace Snow, light) --- */
@@ -500,4 +588,33 @@ html.theme-lerp {
   --color-wave-high-mid: #0969da;
   --color-wave-mid: #1a7f37;
   --color-wave-treble: #5b4db8;
+  --color-wave-grid: rgb(36 41 46 / 12%);
+  --color-wave-grid-bar: rgb(3 102 214 / 35%);
+
+  /* Soft tinted chips so tags stay readable on white chrome. */
+  --color-tag-drums-bg: #ebe6f8;
+  --color-tag-drums-fg: #3d3560;
+  --color-tag-drums-dot: #6d5cb8;
+  --color-tag-synths-bg: #dceef3;
+  --color-tag-synths-fg: #1a3a45;
+  --color-tag-synths-dot: #3d7a90;
+  --color-tag-fx-bg: #f5ead8;
+  --color-tag-fx-fg: #4a3820;
+  --color-tag-fx-dot: #8a6e45;
+  --color-tag-field-bg: #ddeee3;
+  --color-tag-field-fg: #1e3d2a;
+  --color-tag-field-dot: #3d7a52;
+  --color-tag-ambience-bg: #e2e6f0;
+  --color-tag-ambience-fg: #2a3348;
+  --color-tag-ambience-dot: #5a6278;
+  --color-tag-vocals-bg: #f5e4eb;
+  --color-tag-vocals-fg: #4a2a38;
+  --color-tag-vocals-dot: #8a4d62;
+  --color-tag-genre-bg: #e8e4f5;
+  --color-tag-genre-fg: #322b56;
+  --color-tag-genre-dot: #5560a0;
+  --color-tag-fallback-bg: #eaecef;
+  --color-tag-fallback-fg: #444d56;
+  --color-tag-fallback-dot: #6e7681;
+  --color-tag-mix-ground: #f7f9fc;
 }

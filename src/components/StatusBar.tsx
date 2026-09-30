@@ -47,7 +47,7 @@ export const StatusBar = memo(function StatusBar({
             <span aria-hidden>·</span>
           </>
         ) : null}
-        <span>{t("statusBar.roots", { count: rootCount })}</span>
+        <span>{t("statusBar.libraries", { count: rootCount })}</span>
         <span aria-hidden>·</span>
         <span>
           {t(shownCount == null ? "statusBar.filesIndexed" : "statusBar.files", {

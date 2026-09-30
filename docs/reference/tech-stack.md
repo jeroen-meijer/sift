@@ -141,7 +141,7 @@ src/
 
 Rules:
 
-1. No hex / rgb colors or user-visible English in components (`.tsx`, component `.css`) except tests/fixtures. Chrome colors live only in theme token files (`src/styles/tokens.css` today). UI CSS uses `var(--color-*)` / `color-mix(...)` against those tokens. Tag taxonomy swatches (`src/lib/tagColors.ts`) are separate product data, not theme chrome.
+1. No hex / rgb colors or user-visible English in components (`.tsx`, component `.css`) except tests/fixtures. Chrome colors live only in theme token files (`src/styles/tokens.css` today). UI CSS uses `var(--color-*)` / `color-mix(...)` against those tokens. Tag chip palettes map root segments to `--color-tag-*` tokens in the same file; custom stored hex still builds a chip in JS from `--color-tag-mix-ground`.
 2. Rust error strings that surface in the UI get a stable error code; the UI maps code → locale string.
 3. Tag taxonomy defaults may ship as data (JSON/YAML), not as translated UI chrome; product copy for dialogs still goes through locales.
 4. Waveform/canvas draws read theme tokens (CSS variables or a JS token object synced from the same theme file) so a theme change recolors peaks without code edits.

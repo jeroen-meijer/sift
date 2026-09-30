@@ -292,7 +292,7 @@ export const OmniSearch = memo(function OmniSearch({
       rows.push({
         id: `tr-${c.kind}`,
         kind: "trigger",
-        label: c.label,
+        label: t(`omni.suggest.${c.kind}`),
         hint: c.insert,
         trigger: c.kind,
       });

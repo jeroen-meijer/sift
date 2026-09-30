@@ -581,17 +581,23 @@ pub struct AnalysisProgress {
 }
 
 #[derive(Debug, Clone)]
-struct SampleRow {
-    path: String,
-    missing: bool,
-    availability: String,
-    analyzed_at: Option<String>,
+struct CreativeLive {
     bpm: Option<f64>,
     key_name: Option<String>,
     sample_type: Option<String>,
     bpm_source: Option<String>,
     key_source: Option<String>,
     sample_type_source: Option<String>,
+}
+
+/// Path / availability / peaks gate loaded before decode. Creative fields are
+/// re-read live inside the write transaction.
+#[derive(Debug, Clone)]
+struct SampleGate {
+    path: String,
+    missing: bool,
+    availability: String,
+    analyzed_at: Option<String>,
 }
 
 /// Analyze one sample. Decode outside the DB mutex; only short writes hold the lock.
@@ -613,17 +619,17 @@ pub fn analyze_sample(
     let detail = seq.is_multiple_of(ANALYZE_DETAIL_EVERY);
 
     // Catalog enrich before decode so empty fields fill without peaks work.
-    let _ = db.with_conn(|conn| enrich::enrich_sample(conn, sample_id, false));
+    let _ = enrich::enrich_sample(db, sample_id, false);
 
-    let row = db
-        .with_conn(|conn| load_sample_row(conn, sample_id))?
+    let gate = db
+        .with_conn(|conn| load_sample_gate(conn, sample_id))?
         .ok_or_else(|| AppError::msg("sample not found"))?;
-    if row.missing || Availability::parse(&row.availability) != Availability::Local {
+    if gate.missing || Availability::parse(&gate.availability) != Availability::Local {
         return Ok(());
     }
-    let path = Path::new(&row.path);
+    let path = Path::new(&gate.path);
 
-    let peaks_only = matches!(mode, AnalyzeMode::Normal) && row.analyzed_at.is_some();
+    let peaks_only = matches!(mode, AnalyzeMode::Normal) && gate.analyzed_at.is_some();
 
     let stat_start = Instant::now();
     let exists = path.exists();
@@ -722,146 +728,36 @@ pub fn analyze_sample(
         );
     }
 
-    let (overwrite_tags, rerun_bpm, rerun_key, rerun_type) = match mode {
-        AnalyzeMode::Normal => (false, false, false, false),
-        AnalyzeMode::Custom(c) => (c.overwrite_tags, c.rerun_bpm, c.rerun_key, c.rerun_type),
+    let (overwrite_tags, skip_audio_bpm) = {
+        let overwrite_tags = match mode {
+            AnalyzeMode::Normal => false,
+            AnalyzeMode::Custom(c) => c.overwrite_tags,
+        };
+        let path_type = path_result.sample_type.as_deref();
+        let audio_type = audio_result.sample_type.as_deref();
+        let skip_audio_bpm = path_type.or(audio_type) == Some("one-shot");
+        (overwrite_tags, skip_audio_bpm)
     };
-
-    let path_type = path_result.sample_type.clone();
-    let audio_type = audio_result.sample_type.clone();
-    let skip_audio_bpm = path_type.as_deref().or(audio_type.as_deref()) == Some("one-shot");
-
     let db_start = Instant::now();
     db.with_conn(|conn| {
-        write_technical_info(conn, sample_id, path, &tech)?;
-
-        let now = utc_now();
-        let id = id_from_i64(sample_id)?;
-
-        // BPM: filename > audio (one-shots skip audio tempo). ≤ 0 is empty.
-        let bpm_empty = row.bpm.is_none_or(|b| b <= 0.0);
-        let bpm_candidate = if let Some(v) = path_result.bpm.filter(|b| *b > 0.0) {
-            if should_write(
-                bpm_empty,
-                row.bpm_source.as_deref(),
-                MetaSource::Filename,
-                rerun_bpm,
-            ) {
-                Some((v, path_result.bpm_confidence, MetaSource::Filename))
-            } else {
-                None
-            }
-        } else if !skip_audio_bpm {
-            if let Some(v) = audio_result.bpm.filter(|b| *b > 0.0) {
-                if should_write(
-                    bpm_empty,
-                    row.bpm_source.as_deref(),
-                    MetaSource::Audio,
-                    rerun_bpm,
-                ) {
-                    Some((v, audio_result.bpm_confidence, MetaSource::Audio))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        if let Some((v, conf, src)) = bpm_candidate {
-            diesel::update(samples_dsl::samples.find(id))
-                .set((
-                    samples_dsl::bpm.eq(v),
-                    samples_dsl::bpm_confidence.eq(conf),
-                    samples_dsl::bpm_source.eq(src.as_str()),
-                ))
-                .execute(conn)?;
-        }
-
-        let key_candidate = if let Some(ref v) = path_result.key_name {
-            if should_write(
-                row.key_name.is_none(),
-                row.key_source.as_deref(),
-                MetaSource::Filename,
-                rerun_key,
-            ) {
-                Some((v.clone(), path_result.key_confidence, MetaSource::Filename))
-            } else {
-                None
-            }
-        } else if let Some(ref v) = audio_result.key_name {
-            if should_write(
-                row.key_name.is_none(),
-                row.key_source.as_deref(),
-                MetaSource::Audio,
-                rerun_key,
-            ) {
-                Some((v.clone(), audio_result.key_confidence, MetaSource::Audio))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        if let Some((v, conf, src)) = key_candidate {
-            diesel::update(samples_dsl::samples.find(id))
-                .set((
-                    samples_dsl::key_name.eq(v),
-                    samples_dsl::key_confidence.eq(conf),
-                    samples_dsl::key_source.eq(src.as_str()),
-                ))
-                .execute(conn)?;
-        }
-
-        let type_candidate = if let Some(ref v) = path_type {
-            if should_write(
-                row.sample_type.is_none(),
-                row.sample_type_source.as_deref(),
-                MetaSource::Filename,
-                rerun_type,
-            ) {
-                Some((v.clone(), MetaSource::Filename))
-            } else {
-                None
-            }
-        } else if let Some(ref v) = audio_type {
-            if should_write(
-                row.sample_type.is_none(),
-                row.sample_type_source.as_deref(),
-                MetaSource::Audio,
-                rerun_type,
-            ) {
-                Some((v.clone(), MetaSource::Audio))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        if let Some((v, src)) = type_candidate {
-            diesel::update(samples_dsl::samples.find(id))
-                .set((
-                    samples_dsl::sample_type.eq(v),
-                    samples_dsl::sample_type_source.eq(src.as_str()),
-                ))
-                .execute(conn)?;
-        }
-
-        diesel::update(samples_dsl::samples.find(id))
-            .set((
-                samples_dsl::analyzed_at.eq(&now),
-                samples_dsl::updated_at.eq(&now),
-            ))
-            .execute(conn)?;
-
-        apply_suggested_tags(
-            conn,
-            sample_id,
-            &path_result.suggested_tag_paths,
-            overwrite_tags,
-        )?;
-        Ok(())
+        conn.transaction::<_, AppError, _>(|conn| {
+            write_technical_info(conn, sample_id, path, &tech)?;
+            write_creative_fields(
+                conn,
+                sample_id,
+                &path_result,
+                &audio_result,
+                mode,
+                skip_audio_bpm,
+            )?;
+            apply_suggested_tags(
+                conn,
+                sample_id,
+                &path_result.suggested_tag_paths,
+                overwrite_tags,
+            )?;
+            Ok(())
+        })
     })?;
     if detail {
         crate::profile_log::event(
@@ -877,6 +773,148 @@ pub fn analyze_sample(
         &format!("id={sample_id}"),
     );
 
+    Ok(())
+}
+
+/// Reload live BPM/key/type sources and UPDATE only fields that still win
+/// `should_write`. Pre-decode snapshots must not drive creative writes.
+fn write_creative_fields(
+    conn: &mut SqliteConnection,
+    sample_id: i64,
+    path_result: &AnalysisResult,
+    audio_result: &AnalysisResult,
+    mode: &AnalyzeMode,
+    skip_audio_bpm: bool,
+) -> AppResult<()> {
+    let live =
+        load_creative_live(conn, sample_id)?.ok_or_else(|| AppError::msg("sample not found"))?;
+    let (rerun_bpm, rerun_key, rerun_type) = match mode {
+        AnalyzeMode::Normal => (false, false, false),
+        AnalyzeMode::Custom(c) => (c.rerun_bpm, c.rerun_key, c.rerun_type),
+    };
+
+    let now = utc_now();
+    let id = id_from_i64(sample_id)?;
+
+    let path_type = path_result.sample_type.as_deref();
+    let audio_type = audio_result.sample_type.as_deref();
+
+    // BPM: filename > audio (one-shots skip audio tempo). ≤ 0 is empty.
+    let bpm_empty = live.bpm.is_none_or(|b| b <= 0.0);
+    let bpm_candidate = if let Some(v) = path_result.bpm.filter(|b| *b > 0.0) {
+        if should_write(
+            bpm_empty,
+            live.bpm_source.as_deref(),
+            MetaSource::Filename,
+            rerun_bpm,
+        ) {
+            Some((v, path_result.bpm_confidence, MetaSource::Filename))
+        } else {
+            None
+        }
+    } else if !skip_audio_bpm {
+        if let Some(v) = audio_result.bpm.filter(|b| *b > 0.0) {
+            if should_write(
+                bpm_empty,
+                live.bpm_source.as_deref(),
+                MetaSource::Audio,
+                rerun_bpm,
+            ) {
+                Some((v, audio_result.bpm_confidence, MetaSource::Audio))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    if let Some((v, conf, src)) = bpm_candidate {
+        diesel::update(samples_dsl::samples.find(id))
+            .set((
+                samples_dsl::bpm.eq(v),
+                samples_dsl::bpm_confidence.eq(conf),
+                samples_dsl::bpm_source.eq(src.as_str()),
+            ))
+            .execute(conn)?;
+    }
+
+    let key_candidate = if let Some(ref v) = path_result.key_name {
+        if should_write(
+            live.key_name.is_none(),
+            live.key_source.as_deref(),
+            MetaSource::Filename,
+            rerun_key,
+        ) {
+            Some((v.clone(), path_result.key_confidence, MetaSource::Filename))
+        } else {
+            None
+        }
+    } else if let Some(ref v) = audio_result.key_name {
+        if should_write(
+            live.key_name.is_none(),
+            live.key_source.as_deref(),
+            MetaSource::Audio,
+            rerun_key,
+        ) {
+            Some((v.clone(), audio_result.key_confidence, MetaSource::Audio))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    if let Some((v, conf, src)) = key_candidate {
+        diesel::update(samples_dsl::samples.find(id))
+            .set((
+                samples_dsl::key_name.eq(v),
+                samples_dsl::key_confidence.eq(conf),
+                samples_dsl::key_source.eq(src.as_str()),
+            ))
+            .execute(conn)?;
+    }
+
+    let type_candidate = if let Some(v) = path_type {
+        if should_write(
+            live.sample_type.is_none(),
+            live.sample_type_source.as_deref(),
+            MetaSource::Filename,
+            rerun_type,
+        ) {
+            Some((v.to_string(), MetaSource::Filename))
+        } else {
+            None
+        }
+    } else if let Some(v) = audio_type {
+        if should_write(
+            live.sample_type.is_none(),
+            live.sample_type_source.as_deref(),
+            MetaSource::Audio,
+            rerun_type,
+        ) {
+            Some((v.to_string(), MetaSource::Audio))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    if let Some((v, src)) = type_candidate {
+        diesel::update(samples_dsl::samples.find(id))
+            .set((
+                samples_dsl::sample_type.eq(v),
+                samples_dsl::sample_type_source.eq(src.as_str()),
+            ))
+            .execute(conn)?;
+    }
+
+    diesel::update(samples_dsl::samples.find(id))
+        .set((
+            samples_dsl::analyzed_at.eq(&now),
+            samples_dsl::updated_at.eq(&now),
+        ))
+        .execute(conn)?;
     Ok(())
 }
 
@@ -948,11 +986,7 @@ fn tag_id_by_path(conn: &mut SqliteConnection, path: &str) -> AppResult<Option<i
         .optional()?)
 }
 
-type SampleRowTuple = (
-    String,
-    i32,
-    String,
-    Option<String>,
+type CreativeLiveTuple = (
     Option<f64>,
     Option<String>,
     Option<String>,
@@ -961,14 +995,31 @@ type SampleRowTuple = (
     Option<String>,
 );
 
-fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleRow>> {
-    let row: Option<SampleRowTuple> = samples_dsl::samples
+fn load_sample_gate(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<SampleGate>> {
+    let row: Option<(String, i32, String, Option<String>)> = samples_dsl::samples
         .find(id_from_i64(id)?)
         .select((
             samples_dsl::path,
             samples_dsl::missing,
             samples_dsl::availability,
             samples_dsl::analyzed_at,
+        ))
+        .first(conn)
+        .optional()?;
+    Ok(
+        row.map(|(path, missing, availability, analyzed_at)| SampleGate {
+            path,
+            missing: missing != 0,
+            availability,
+            analyzed_at,
+        }),
+    )
+}
+
+fn load_creative_live(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<CreativeLive>> {
+    let row: Option<CreativeLiveTuple> = samples_dsl::samples
+        .find(id_from_i64(id)?)
+        .select((
             samples_dsl::bpm,
             samples_dsl::key_name,
             samples_dsl::sample_type,
@@ -979,22 +1030,7 @@ fn load_sample_row(conn: &mut SqliteConnection, id: i64) -> AppResult<Option<Sam
         .first(conn)
         .optional()?;
     Ok(row.map(
-        |(
-            path,
-            missing,
-            availability,
-            analyzed_at,
-            bpm,
-            key_name,
-            sample_type,
-            bpm_source,
-            key_source,
-            sample_type_source,
-        )| SampleRow {
-            path,
-            missing: missing != 0,
-            availability,
-            analyzed_at,
+        |(bpm, key_name, sample_type, bpm_source, key_source, sample_type_source)| CreativeLive {
             bpm,
             key_name,
             sample_type,
@@ -1616,5 +1652,134 @@ mod tests {
             gate.set_allowed(4);
         });
         assert_eq!(done.load(Ordering::SeqCst), 1);
+    }
+
+    /// User edits during decode must win: live reload + `should_write`, not the
+    /// pre-decode snapshot. Empty fields still fill.
+    #[test]
+    fn creative_write_uses_live_sources_not_stale_snapshot() {
+        use crate::db::schema::roots::dsl as roots_dsl;
+        use crate::db::schema::samples::dsl as samples_dsl;
+        use diesel::prelude::*;
+
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        diesel::insert_into(samples_dsl::samples)
+            .values((
+                samples_dsl::root_id.eq(root_id),
+                samples_dsl::path.eq("/lib/kick.wav"),
+                samples_dsl::filename.eq("kick.wav"),
+                samples_dsl::parent_path.eq("/lib"),
+                samples_dsl::extension.eq("wav"),
+                // Stale pre-decode snapshot would see these as empty/auto.
+                samples_dsl::bpm.eq(Option::<f64>::None),
+                samples_dsl::key_name.eq(Option::<String>::None),
+                samples_dsl::sample_type.eq(Option::<String>::None),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        let sample_id: i32 = samples_dsl::samples
+            .select(samples_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        let sample_id_i64 = i64::from(sample_id);
+
+        // Flip to user mid-decode (before creative write).
+        diesel::update(samples_dsl::samples.find(sample_id))
+            .set((
+                samples_dsl::bpm.eq(Some(128.0)),
+                samples_dsl::bpm_source.eq(Some("user")),
+                samples_dsl::key_name.eq(Some("Am")),
+                samples_dsl::key_source.eq(Some("user")),
+                samples_dsl::sample_type.eq(Some("one-shot")),
+                samples_dsl::sample_type_source.eq(Some("user")),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+
+        let path_result = AnalysisResult {
+            bpm: Some(90.0),
+            bpm_confidence: Some(0.9),
+            key_name: Some("C".into()),
+            key_confidence: Some(0.9),
+            sample_type: Some("loop".into()),
+            suggested_tag_paths: vec![],
+        };
+        let audio_result = AnalysisResult::default();
+        write_creative_fields(
+            &mut conn,
+            sample_id_i64,
+            &path_result,
+            &audio_result,
+            &AnalyzeMode::Normal,
+            false,
+        )
+        .unwrap();
+
+        let (bpm, bpm_src, key, key_src, stype, stype_src) = samples_dsl::samples
+            .find(sample_id)
+            .select((
+                samples_dsl::bpm,
+                samples_dsl::bpm_source,
+                samples_dsl::key_name,
+                samples_dsl::key_source,
+                samples_dsl::sample_type,
+                samples_dsl::sample_type_source,
+            ))
+            .first::<(
+                Option<f64>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+            )>(&mut conn)
+            .unwrap();
+        assert_eq!(bpm, Some(128.0));
+        assert_eq!(bpm_src.as_deref(), Some("user"));
+        assert_eq!(key.as_deref(), Some("Am"));
+        assert_eq!(key_src.as_deref(), Some("user"));
+        assert_eq!(stype.as_deref(), Some("one-shot"));
+        assert_eq!(stype_src.as_deref(), Some("user"));
+
+        // Truly empty field still fills from analysis.
+        diesel::update(samples_dsl::samples.find(sample_id))
+            .set((
+                samples_dsl::key_name.eq(Option::<String>::None),
+                samples_dsl::key_source.eq(Option::<String>::None),
+                samples_dsl::key_confidence.eq(Option::<f64>::None),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        write_creative_fields(
+            &mut conn,
+            sample_id_i64,
+            &path_result,
+            &audio_result,
+            &AnalyzeMode::Normal,
+            false,
+        )
+        .unwrap();
+        let (key2, key_src2): (Option<String>, Option<String>) = samples_dsl::samples
+            .find(sample_id)
+            .select((samples_dsl::key_name, samples_dsl::key_source))
+            .first(&mut conn)
+            .unwrap();
+        assert_eq!(key2.as_deref(), Some("C"));
+        assert_eq!(key_src2.as_deref(), Some("filename"));
+        // User BPM still untouched.
+        let bpm2: Option<f64> = samples_dsl::samples
+            .find(sample_id)
+            .select(samples_dsl::bpm)
+            .first(&mut conn)
+            .unwrap();
+        assert_eq!(bpm2, Some(128.0));
     }
 }

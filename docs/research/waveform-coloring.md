@@ -1,8 +1,6 @@
 # Waveform coloring research
 
-Notes from 2026-09-23 while iterating Sift's spectral row/detail waves
-(four-band bump on `feat/four-band-waveforms`). Goal: understand why pads
-looked all-green, how MiniMeters and DJ apps color waves, and what to try next.
+Notes from 2026-09-23 while iterating Sift's spectral row/detail waves (four-band bump on `feat/four-band-waveforms`). Goal: understand why pads looked all-green, how MiniMeters and DJ apps color waves, and what to try next.
 
 ## Sift today
 
@@ -15,13 +13,9 @@ Peakfile **v7** stores four u8 weights per bucket from moodbar STFT energy:
 | High-mid | 1500-6000 | `--color-wave-high-mid` | cyan `#40c8e8` |
 | Treble | &gt; 6000 | `--color-wave-treble` | violet `#8b7cff` |
 
-UI blend (`blendSpectralRgb`): normalize band shares, raise to **emphasis 3.5**
-(winner-take-more), then saturate. Geometry carries amplitude; color does not
-encode loudness.
+UI blend (`blendSpectralRgb`): normalize band shares, raise to **emphasis 3.5** (winner-take-more), then saturate. Geometry carries amplitude; color does not encode loudness.
 
-**Why FNF pads were all green (3-band era):** almost all energy sat in the old
-single mid band (200 Hz-6 kHz). Softening emphasis to 1.75 did not help pads
-and made mixed grooves (pink↔teal chatter) look worse; reverted to 3.5.
+**Why FNF pads were all green (3-band era):** almost all energy sat in the old single mid band (200 Hz-6 kHz). Softening emphasis to 1.75 did not help pads and made mixed grooves (pink↔teal chatter) look worse; reverted to 3.5.
 
 **Verified after the mid split** (same pad folder):
 
@@ -31,29 +25,21 @@ and made mixed grooves (pink↔teal chatter) look worse; reverted to 3.5.
 | Blinding Lights | ~0% | ~52% | ~33% | ~15% |
 | Creepy Droning | ~10% | ~68% | ~21% | ~1% |
 
-**Bug found during the bump:** analyze queue only checked that a `.peaks` file
-*existed*. After v6→v7, readers rejected old files but the queue never rebuilt
-them → blank waves, no status-bar progress. Fixed with
-`peaks::has_current_peakfile` (header magic+version check).
+**Bug found during the bump:** analyze queue only checked that a `.peaks` file *existed*. After v6→v7, readers rejected old files but the queue never rebuilt them → blank waves, no status-bar progress. Fixed with `peaks::has_current_peakfile` (header magic+version check).
 
 ## MiniMeters (inspected locally)
 
-App: `/Applications/MiniMeters.app`, **v1.0.30** (`com.josephlyncheski.minimeters`).
-arm64 slice probed with `strings` / float scans; themes under
-`~/Library/Preferences/MiniMeters/themes/`.
+App: `/Applications/MiniMeters.app`, **v1.0.30** (`com.josephlyncheski.minimeters`). arm64 slice probed with `strings` / float scans; themes under `~/Library/Preferences/MiniMeters/themes/`.
 
 ### Waveform color modes (docs + binary)
 
 From in-app help strings and [minimeters.app](https://minimeters.app/):
 
 1. **Solid** - one color (`Waveform color is solid`).
-2. **Multiband** - "balance between Low, Mid, and High bands." Help:
-   "Audio will be split into 3 bands. Low (Red), Mid (Green), High (Blue).
-   Some themes select custom colors."
+2. **Multiband** - "balance between Low, Mid, and High bands." Help: "Audio will be split into 3 bands. Low (Red), Mid (Green), High (Blue). Some themes select custom colors."
 3. **Color Map** - "based on overall volume, mapped to the selected ColorMap."
 
-Peak History overlay (since 0.7.0): RMS of the same three bands
-(Fast 1024 / Slow 16384 samples); Red/Green/Blue = Low/Mid/High.
+Peak History overlay (since 0.7.0): RMS of the same three bands (Fast 1024 / Slow 16384 samples); Red/Green/Blue = Low/Mid/High.
 
 Current preset often has `waveform.color_mode = 1` → Multiband.
 
@@ -68,8 +54,7 @@ high_band = 49, 49, 255
 history_low_band / mid / high = classic RGB
 ```
 
-Themes can remap those (e.g. Light Shard, Shades of Purple). **There is no
-theme key for crossover Hz.** Docs never state the cut frequencies.
+Themes can remap those (e.g. Light Shard, Shades of Purple). **There is no theme key for crossover Hz.** Docs never state the cut frequencies.
 
 ### Binary probe for cut frequencies
 
@@ -78,19 +63,15 @@ theme key for crossover Hz.** Docs never state the cut frequencies.
 - "Butterworth" in the binary is a **Syphon license** (Tom Butterworth), not a filter hint.
 - Weak signal: `2π·200/44100` as `f64` appears twice (could be coincidence).
 
-**Conclusion (pre-probe):** MiniMeters Multiband is the same *family* as Sift
-(band energy → theme RGB), but exact crossovers needed a runtime measure.
+**Conclusion (pre-probe):** MiniMeters Multiband is the same *family* as Sift (band energy → theme RGB), but exact crossovers needed a runtime measure.
 
 ### Color Map vs "pretty gaps"
 
-Quieter gaps looking different is often **Color Map** (amp→gradient), not
-Multiband. If the user sees low=red and high=blue/other with steady level,
-that is Multiband.
+Quieter gaps looking different is often **Color Map** (amp→gradient), not Multiband. If the user sees low=red and high=blue/other with steady level, that is Multiband.
 
 ### Probe results (2026-09-25)
 
-Played `band-probe.wav` into MiniMeters Multiband (default-ish RGB theme).
-Click-count markers identify each pure tone.
+Played `band-probe.wav` into MiniMeters Multiband (default-ish RGB theme). Click-count markers identify each pure tone.
 
 | Clicks | Hz | Observed Multiband color | Band read |
 | --- | --- | --- | --- |
@@ -102,22 +83,16 @@ Click-count markers identify each pure tone.
 | 6 | 1500 | cyan | Mid+High blend |
 | 7+ | 2500…12k | solid blue | High |
 
-Chirp (waveform strip): continuous soft rainbow **red → orange → yellow →
-green → cyan → blue** as frequency rises. That is soft 3-band Multiband
-mixing, not four discrete Sift hues.
+Chirp (waveform strip): continuous soft rainbow **red → orange → yellow → green → cyan → blue** as frequency rises. That is soft 3-band Multiband mixing, not four discrete Sift hues.
 
-Spectrogram panel in the same capture uses a separate continuous freq→hue
-colormap (purple→red→yellow). Do not confuse that with Multiband.
+Spectrogram panel in the same capture uses a separate continuous freq→hue colormap (purple→red→yellow). Do not confuse that with Multiband.
 
 **Inferred MiniMeters cuts (soft, ±100 Hz):**
 
 - Low ↔ Mid ≈ **200–250 Hz**
 - Mid ↔ High ≈ **1.5–2 kHz**
 
-Matches Aurora defaults (250 / 2000) and DJ folklore (200 / 2000) much better
-than Sift’s four-band 200 / 1500 / 6000. MiniMeters stays at **three** bands;
-Sift’s extra high-mid/treble split is what made pads differ, but it will not
-match MiniMeters’ blue-by-~2.5 kHz behavior.
+Matches Aurora defaults (250 / 2000) and DJ folklore (200 / 2000) much better than Sift’s four-band 200 / 1500 / 6000. MiniMeters stays at **three** bands; Sift’s extra high-mid/treble split is what made pads differ, but it will not match MiniMeters’ blue-by-~2.5 kHz behavior.
 
 ## Other apps / libraries
 
@@ -129,16 +104,13 @@ match MiniMeters’ blue-by-~2.5 kHz behavior.
 | **libdjwaveform** | STFT + **continuous frequency→color gradient** (not 3 buckets) | Serato-like look via gradient points |
 | **moodbar** (Sift backend) | N-band STFT energy → Classic RGB or themed blend | Sift drives `band_edges_hz` |
 
-Industry consensus for "DJ colored waveforms": **three bands, RGB convention**,
-soft additive mix of band energies into one stroke color. Continuous centroid
-or amp-colormaps are alternate products, not the Multiband look.
+Industry consensus for "DJ colored waveforms": **three bands, RGB convention**, soft additive mix of band energies into one stroke color. Continuous centroid or amp-colormaps are alternate products, not the Multiband look.
 
 ## Calibration fixture
 
 `testdata/spectral-fixtures/band-probe.wav` (~33 s, stereo 44.1 kHz).
 
-Stepped pure tones with N short 2 kHz clicks before each segment (count the
-clicks to know which tone), then a 40→16 kHz chirp:
+Stepped pure tones with N short 2 kHz clicks before each segment (count the clicks to know which tone), then a 40→16 kHz chirp:
 
 | After clicks | Hz | Intent |
 | --- | --- | --- |
@@ -155,14 +127,9 @@ clicks to know which tone), then a 40→16 kHz chirp:
 | 11 | 12000 | top |
 | end | chirp 40→16k | continuous sweep |
 
-**Replay in MiniMeters:** set Waveform Color Mode to Multiband (not Color Map).
-Play through the device MiniMeters is listening to, or through MiniMeters Server
-in a DAW. Screenshot or screen-record while it plays; you can open the same file
-in Sift and compare. Pure tones should read as one solid band color. Where color
-flips between adjacent tones is roughly where MiniMeters' crossovers sit.
+**Replay in MiniMeters:** set Waveform Color Mode to Multiband (not Color Map). Play through the device MiniMeters is listening to, or through MiniMeters Server in a DAW. Screenshot or screen-record while it plays; you can open the same file in Sift and compare. Pure tones should read as one solid band color. Where color flips between adjacent tones is roughly where MiniMeters' crossovers sit.
 
-Probe completed 2026-09-25 (see MiniMeters section above). Sift four-band cuts
-today: **200 / 1500 / 6000 Hz**.
+Probe completed 2026-09-25 (see MiniMeters section above). Sift four-band cuts today: **200 / 1500 / 6000 Hz**.
 
 ## Options considered (and status)
 
@@ -177,10 +144,7 @@ today: **200 / 1500 / 6000 Hz**.
 
 ## Suggested next steps
 
-1. Decide product goal: MiniMeters parity (3-band ~250/2k) vs pad differentiation
-   (keep four bands). Those pull in opposite directions.
-2. If keeping four bands: optional retune of the mid/high edges after more
-   day-to-day use; do not chase MM's early blue unless we drop a band.
+1. Decide product goal: MiniMeters parity (3-band ~250/2k) vs pad differentiation (keep four bands). Those pull in opposite directions.
+2. If keeping four bands: optional retune of the mid/high edges after more day-to-day use; do not chase MM's early blue unless we drop a band.
 3. Centroid tint inside the winning band if within-file pad motion still feels flat.
-4. Keep Multiband and Color Map as separate mental models; do not mix amp into
-   spectral hue by default.
+4. Keep Multiband and Color Map as separate mental models; do not mix amp into spectral hue by default.

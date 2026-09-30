@@ -48,64 +48,91 @@ fn peak_path(peaks_dir: &Path, sample_id: i64) -> PathBuf {
     peaks_dir.join(format!("{sample_id}.peaks"))
 }
 
+/// On-disk size of a complete peakfile for the given header fields.
+fn peakfile_body_len(channels: u16, bucket_count: usize) -> Option<u64> {
+    let peaks_bytes = bucket_count
+        .checked_mul(usize::from(channels))?
+        .checked_mul(2)?
+        .checked_mul(4)?;
+    let colors_bytes = bucket_count.checked_mul(BAND_COUNT)?;
+    let header = 28u64; // magic + version + channels + rate + duration + buckets
+    u64::try_from(peaks_bytes).ok().and_then(|p| {
+        u64::try_from(colors_bytes)
+            .ok()
+            .map(|c| header.saturating_add(p).saturating_add(c))
+    })
+}
+
 fn write_peakfile(path: &Path, data: &PeakData) -> AppResult<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut f = File::create(path)?;
-    f.write_all(MAGIC)?;
-    f.write_all(&VERSION.to_le_bytes())?;
-    f.write_all(&(u32::from(data.channels)).to_le_bytes())?;
-    f.write_all(&data.sample_rate.to_le_bytes())?;
-    f.write_all(&data.duration_ms.to_le_bytes())?;
-    let bucket_count =
-        u32::try_from(data.bucket_count).map_err(|_| AppError::msg("bucket count out of range"))?;
-    f.write_all(&bucket_count.to_le_bytes())?;
-    for v in &data.peaks {
-        f.write_all(&v.to_le_bytes())?;
+    let tmp = path.with_extension("peaks.tmp");
+    {
+        let mut f = File::create(&tmp)?;
+        f.write_all(MAGIC)?;
+        f.write_all(&VERSION.to_le_bytes())?;
+        f.write_all(&(u32::from(data.channels)).to_le_bytes())?;
+        f.write_all(&data.sample_rate.to_le_bytes())?;
+        f.write_all(&data.duration_ms.to_le_bytes())?;
+        let bucket_count = u32::try_from(data.bucket_count)
+            .map_err(|_| AppError::msg("bucket count out of range"))?;
+        f.write_all(&bucket_count.to_le_bytes())?;
+        for v in &data.peaks {
+            f.write_all(&v.to_le_bytes())?;
+        }
+        if data.colors.len() != data.bucket_count.saturating_mul(BAND_COUNT) {
+            let _ = fs::remove_file(&tmp);
+            return Err(AppError::msg("spectral color length mismatch"));
+        }
+        f.write_all(&data.colors)?;
+        f.sync_all()?;
     }
-    if data.colors.len() != data.bucket_count.saturating_mul(BAND_COUNT) {
-        return Err(AppError::msg("spectral color length mismatch"));
-    }
-    f.write_all(&data.colors)?;
+    fs::rename(&tmp, path)?;
     Ok(())
 }
 
-fn read_peakfile(path: &Path, expected_buckets: Option<usize>) -> AppResult<Option<PeakData>> {
-    if !path.exists() {
-        return Ok(None);
-    }
-    let mut f = File::open(path)?;
-    let mut magic = [0u8; 4];
-    f.read_exact(&mut magic)?;
-    if &magic != MAGIC {
-        return Ok(None);
-    }
-    let mut buf4 = [0u8; 4];
-    f.read_exact(&mut buf4)?;
-    let version = u32::from_le_bytes(buf4);
-    if version != VERSION {
-        return Ok(None);
-    }
-    f.read_exact(&mut buf4)?;
-    let channels = u16::try_from(u32::from_le_bytes(buf4)).unwrap_or(1);
-    f.read_exact(&mut buf4)?;
-    let sample_rate = u32::from_le_bytes(buf4);
-    let mut buf8 = [0u8; 8];
-    f.read_exact(&mut buf8)?;
-    let duration_ms = f64::from_le_bytes(buf8);
-    f.read_exact(&mut buf4)?;
-    let bucket_count = usize::try_from(u32::from_le_bytes(buf4))
-        .map_err(|_| AppError::msg("bucket count out of range"))?;
+fn discard_bad_peakfile(path: &Path) {
+    let _ = fs::remove_file(path);
+}
 
+fn read_peakfile(path: &Path, expected_buckets: Option<usize>) -> Option<PeakData> {
+    if !path.exists() {
+        return None;
+    }
+    if let Ok(Some(data)) = read_peakfile_inner(path, expected_buckets) {
+        Some(data)
+    } else {
+        discard_bad_peakfile(path);
+        None
+    }
+}
+
+fn read_peakfile_inner(
+    path: &Path,
+    expected_buckets: Option<usize>,
+) -> AppResult<Option<PeakData>> {
+    let mut f = File::open(path)?;
+    let Some(header) = read_peakfile_header_from(&mut f)? else {
+        return Ok(None);
+    };
     if let Some(expected) = expected_buckets
-        && bucket_count != expected
+        && header.bucket_count != expected
     {
         return Ok(None);
     }
 
-    let n = bucket_count
-        .checked_mul(usize::from(channels))
+    let meta = fs::metadata(path)?;
+    let Some(expected_len) = peakfile_body_len(header.channels, header.bucket_count) else {
+        return Ok(None);
+    };
+    if meta.len() < expected_len {
+        return Ok(None);
+    }
+
+    let n = header
+        .bucket_count
+        .checked_mul(usize::from(header.channels))
         .and_then(|x| x.checked_mul(2))
         .ok_or_else(|| AppError::msg("peakfile size overflow"))?;
     let mut peaks = Vec::with_capacity(n);
@@ -115,18 +142,19 @@ fn read_peakfile(path: &Path, expected_buckets: Option<usize>) -> AppResult<Opti
         peaks.push(f32::from_le_bytes(f32buf));
     }
 
-    let color_len = bucket_count
+    let color_len = header
+        .bucket_count
         .checked_mul(BAND_COUNT)
         .ok_or_else(|| AppError::msg("peakfile color size overflow"))?;
     let mut colors = vec![0u8; color_len];
     f.read_exact(&mut colors)?;
 
     Ok(Some(PeakData {
-        channels,
-        sample_rate,
-        duration_ms,
+        channels: header.channels,
+        sample_rate: header.sample_rate,
+        duration_ms: header.duration_ms,
         peaks,
-        bucket_count,
+        bucket_count: header.bucket_count,
         colors,
     }))
 }
@@ -375,7 +403,7 @@ pub fn cache_peaks_from_decoded_with_mono(
 ) -> AppResult<PeakData> {
     let cache = peak_path(peaks_dir, sample_id);
     let start = std::time::Instant::now();
-    if let Some(cached) = read_peakfile(&cache, Some(buckets_row))? {
+    if let Some(cached) = read_peakfile(&cache, Some(buckets_row)) {
         crate::profile_log::event(
             "peaks.cache_hit",
             start.elapsed(),
@@ -410,54 +438,74 @@ pub fn cache_peaks_from_decoded_with_mono(
 /// Default bucket count for row / generic peaks IPC.
 pub const DEFAULT_BUCKETS: usize = 1024;
 
-/// True when a readable peakfile for the current format is on disk.
-/// Only reads the header (magic + version + bucket count), not the body.
+/// True when a complete, current-format peakfile is on disk (header + full body).
 #[must_use]
 pub fn has_current_peakfile(peaks_dir: &Path, sample_id: i64) -> bool {
-    peakfile_header_ok(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
+    peakfile_complete(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
 }
 
-/// Fast header check used by the analyze queue (skip decode + full parse).
-fn peakfile_header_ok(path: &Path, expected_buckets: Option<usize>) -> bool {
+/// Header fields plus file length cover the peaks and colors body.
+fn peakfile_complete(path: &Path, expected_buckets: Option<usize>) -> bool {
+    let Ok(meta) = fs::metadata(path) else {
+        return false;
+    };
     let Ok(mut f) = File::open(path) else {
         return false;
     };
-    let mut magic = [0u8; 4];
-    if f.read_exact(&mut magic).is_err() || &magic != MAGIC {
-        return false;
-    }
-    let mut buf4 = [0u8; 4];
-    if f.read_exact(&mut buf4).is_err() {
-        return false;
-    }
-    if u32::from_le_bytes(buf4) != VERSION {
-        return false;
-    }
-    // channels, sample_rate
-    if f.read_exact(&mut buf4).is_err() || f.read_exact(&mut buf4).is_err() {
-        return false;
-    }
-    let mut buf8 = [0u8; 8];
-    if f.read_exact(&mut buf8).is_err() {
-        return false;
-    }
-    if f.read_exact(&mut buf4).is_err() {
-        return false;
-    }
-    let Ok(bucket_count) = usize::try_from(u32::from_le_bytes(buf4)) else {
+    let Ok(Some(header)) = read_peakfile_header_from(&mut f) else {
         return false;
     };
     if let Some(expected) = expected_buckets
-        && bucket_count != expected
+        && header.bucket_count != expected
     {
         return false;
     }
-    true
+    let Some(expected_len) = peakfile_body_len(header.channels, header.bucket_count) else {
+        return false;
+    };
+    meta.len() >= expected_len
+}
+
+struct PeakfileHeader {
+    channels: u16,
+    sample_rate: u32,
+    duration_ms: f64,
+    bucket_count: usize,
+}
+
+fn read_peakfile_header_from(f: &mut File) -> AppResult<Option<PeakfileHeader>> {
+    let mut magic = [0u8; 4];
+    f.read_exact(&mut magic)?;
+    if &magic != MAGIC {
+        return Ok(None);
+    }
+    let mut buf4 = [0u8; 4];
+    f.read_exact(&mut buf4)?;
+    if u32::from_le_bytes(buf4) != VERSION {
+        return Ok(None);
+    }
+    f.read_exact(&mut buf4)?;
+    let channels = u16::try_from(u32::from_le_bytes(buf4)).unwrap_or(1);
+    f.read_exact(&mut buf4)?;
+    let sample_rate = u32::from_le_bytes(buf4);
+    let mut buf8 = [0u8; 8];
+    f.read_exact(&mut buf8)?;
+    let duration_ms = f64::from_le_bytes(buf8);
+    f.read_exact(&mut buf4)?;
+    let bucket_count = usize::try_from(u32::from_le_bytes(buf4))
+        .map_err(|_| AppError::msg("bucket count out of range"))?;
+    Ok(Some(PeakfileHeader {
+        channels,
+        sample_rate,
+        duration_ms,
+        bucket_count,
+    }))
 }
 
 /// Read the cached row peakfile only. Never decodes. `None` when the sample
 /// has not been analyzed yet (or the file is from an older format).
-pub fn read_cached_peaks(peaks_dir: &Path, sample_id: i64) -> AppResult<Option<PeakData>> {
+#[must_use]
+pub fn read_cached_peaks(peaks_dir: &Path, sample_id: i64) -> Option<PeakData> {
     read_peakfile(&peak_path(peaks_dir, sample_id), Some(DEFAULT_BUCKETS))
 }
 
@@ -607,9 +655,7 @@ mod tests {
         let data = generate_peaks(&audio, 64).expect("peaks");
         let path = dir.path().join("1.peaks");
         write_peakfile(&path, &data).expect("write");
-        let loaded = read_peakfile(&path, Some(64))
-            .expect("read")
-            .expect("present");
+        let loaded = read_peakfile(&path, Some(64)).expect("present");
         assert_eq!(loaded.bucket_count, 64);
         assert_eq!(loaded.colors, data.colors);
         assert_eq!(loaded.peaks.len(), data.peaks.len());
@@ -650,5 +696,25 @@ mod tests {
         let data = generate_peaks(&audio, DEFAULT_BUCKETS).expect("peaks");
         write_peakfile(&peak_path(dir.path(), 3), &data).expect("write");
         assert!(has_current_peakfile(dir.path(), 3));
+    }
+
+    #[test]
+    fn truncated_peakfile_is_cache_miss_and_removed() {
+        let dir = tempfile::tempdir().expect("temp");
+        let path = peak_path(dir.path(), 7);
+        let mut f = File::create(&path).expect("create");
+        f.write_all(MAGIC).expect("magic");
+        f.write_all(&VERSION.to_le_bytes()).expect("ver");
+        f.write_all(&1u32.to_le_bytes()).expect("ch");
+        f.write_all(&44_100u32.to_le_bytes()).expect("rate");
+        f.write_all(&0f64.to_le_bytes()).expect("dur");
+        let buckets = u32::try_from(DEFAULT_BUCKETS).expect("buckets fit u32");
+        f.write_all(&buckets.to_le_bytes()).expect("buckets");
+        // No peaks/colors body.
+        drop(f);
+        assert!(!has_current_peakfile(dir.path(), 7));
+        let cached = read_cached_peaks(dir.path(), 7);
+        assert!(cached.is_none());
+        assert!(!path.exists(), "truncated peakfile should be deleted");
     }
 }

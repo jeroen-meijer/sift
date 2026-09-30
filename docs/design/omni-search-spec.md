@@ -140,9 +140,7 @@ Pending chip: dashed accent border and value shown as `…`. It becomes a normal
 
 ### Suggestion dropdown
 
-Shown when the field is focused by a click and no editor is open. About 260px wide.
-Top-left sits under the text input (after any chips) when there is room, and shifts
-left or shrinks so the menu stays inside the window.
+Shown when the field is focused by a click and no editor is open. About 260px wide. Top-left sits under the text input (after any chips) when there is room, and shifts left or shrinks so the menu stays inside the window.
 
 - **Empty field:**
   - A list of filter types (Tag `#`, BPM range `b:`, Key `k:`). Clicking one does exactly what typing its trigger does.

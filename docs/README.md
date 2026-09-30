@@ -9,7 +9,7 @@ How Sift docs are laid out, named, and maintained. Agents and humans follow this
 | [spec.md](spec.md) | Living product rules |
 | [decisions.md](decisions.md) | Requirements Q&A history |
 | [known-issues.md](known-issues.md) | Open bugs and dogfood notes |
-| [reference/](reference/) | Durable how-to and facts (stack, localization, taxonomy, [testing](reference/testing.md)) |
+| [reference/](reference/) | Durable how-to and facts (stack, localization, taxonomy, [testing](reference/testing.md), [commits and pull requests](reference/commits-and-pull-requests.md)) |
 | [research/](research/) | Investigations and evidence; distill into spec/reference/decisions when settled |
 | [plans/](plans/) | Historical v1 phase plan |
 | [design/](design/) | Claude Design export and visual gaps |
@@ -67,6 +67,21 @@ Durable means it would still matter next week to a cold agent. One-off task tips
 
 For code and docs changes, follow [Prefer clean end state](../AGENTS.md#prefer-clean-end-state) in AGENTS.md. Do not leave half-migrated trees, rename shims, or bolted-on sections.
 
+## Markdown prose: no hard wraps
+
+Applies to **all** markdown agents write in this repo: tickets, PR bodies, ADRs, plans, `docs/**`, root `*.md`, and other narrative `.md` files.
+
+Do **not** insert newlines mid-sentence or mid-bullet to fit an editor column (the ~80-character wrap habit from code and skill docs). Keep each paragraph and each list item on **one physical line**. Separate paragraphs with a blank line. Editors and GitHub soft-wrap in the UI.
+
+Exceptions: fenced code blocks, tables, YAML/JSON front matter, and intentional hard breaks inside code samples.
+
+This is absolute. Do not hard-wrap "just for this file" or because an older doc was wrapped before. When you edit a hard-wrapped file, unwrap the prose you touch (prefer unwrapping the whole file when practical).
+
+Agent entrypoints (pointers only; do not copy this section elsewhere):
+
+- [AGENTS.md](../AGENTS.md#markdown-prose-no-hard-wraps) (Claude, Codex, and other tools that load `AGENTS.md`)
+- [`.cursor/rules/markdown-prose-no-hard-wraps.mdc`](../.cursor/rules/markdown-prose-no-hard-wraps.mdc) (Cursor)
+
 ## Lint and validate
 
 After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run:
@@ -75,16 +90,19 @@ After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run:
 bun run docs:check
 ```
 
-That gate is also part of `bun run preflight` and CI. It runs two checks:
+That gate is also part of `bun run preflight` and CI. It runs three checks:
 
-1. [`tool/check-docs.py`](../tool/check-docs.py): internal links and heading anchors, no YAML frontmatter under `docs/`, kebab-case filenames (see [Naming](#naming)), and path hygiene from [Repo hygiene](#repo-hygiene).
-2. `markdownlint-cli2`: code-fence languages, heading and list shape. Config: [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc).
+1. [`tool/check-docs.ts`](../tool/check-docs.ts): internal links and heading anchors, no YAML frontmatter under `docs/`, kebab-case filenames (see [Naming](#naming)), and path hygiene from [Repo hygiene](#repo-hygiene).
+2. [`tool/check-i18n.ts`](../tool/check-i18n.ts) (`bun run i18n:check`): locale string VALUES against [reference/terminology.yaml](reference/terminology.yaml). Hard-ban hits fail; soft-ban hits warn only.
+3. `markdownlint-cli2`: code-fence languages, heading and list shape. Config: [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc).
 
 External http(s) links are a separate, optional check (needs the network, and some sites block scripted requests):
 
 ```bash
 bun run docs:links
 ```
+
+That runs [`tool/check-links.ts`](../tool/check-links.ts).
 
 ## Root README
 

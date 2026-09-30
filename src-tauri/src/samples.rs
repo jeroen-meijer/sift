@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use diesel::dsl::{exists, not, sql};
 use diesel::prelude::*;
-use diesel::sql_types::{Bool, Text};
+use diesel::sql_types::Text;
 use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +10,7 @@ use crate::db::models::Sample;
 use crate::db::schema::sample_tags::dsl as sample_tags_dsl;
 use crate::db::schema::samples::dsl as samples_dsl;
 use crate::db::schema::tags::dsl as tags_dsl;
-use crate::db::utc_now;
+use crate::db::{escape_like, utc_now};
 use crate::error::{AppError, AppResult};
 use crate::fs_ready::{self, Availability};
 use crate::ids::{id_from_i64, id_to_i64};
@@ -237,29 +237,17 @@ fn search_tokens(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Escape `LIKE` wildcards so `%` and `_` in a search word match literally.
-fn escape_like(token: &str) -> String {
-    let mut out = String::with_capacity(token.len());
-    for c in token.chars() {
-        if matches!(c, '\\' | '%' | '_') {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out
-}
-
 pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec<SampleDto>> {
     let mut q = samples_dsl::samples
         .select(Sample::as_select())
         .into_boxed();
 
     if let Some(prefix) = query.folder_prefix.as_deref().filter(|s| !s.is_empty()) {
-        let like = format!("{prefix}{}%", std::path::MAIN_SEPARATOR);
+        let like = format!("{}{}%", escape_like(prefix), std::path::MAIN_SEPARATOR);
         q = q.filter(
             samples_dsl::parent_path
                 .eq(prefix)
-                .or(samples_dsl::parent_path.like(like)),
+                .or(samples_dsl::parent_path.like(like).escape('\\')),
         );
     }
 
@@ -287,24 +275,32 @@ pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec
         tag_filters.push(tag_path.to_string());
     }
     for tag_path in &tag_filters {
-        let like = format!("{tag_path}/%");
+        let like = format!("{}/%", escape_like(tag_path));
         let tp = tag_path.clone();
         q = q.filter(exists(
             sample_tags_dsl::sample_tags
                 .inner_join(tags_dsl::tags)
                 .filter(sample_tags_dsl::sample_id.eq(samples_dsl::id))
-                .filter(tags_dsl::path.eq(tp).or(tags_dsl::path.like(like))),
+                .filter(
+                    tags_dsl::path
+                        .eq(tp)
+                        .or(tags_dsl::path.like(like).escape('\\')),
+                ),
         ));
     }
 
     for tag_path in query.tag_exclude_paths.iter().filter(|s| !s.is_empty()) {
-        let like = format!("{tag_path}/%");
+        let like = format!("{}/%", escape_like(tag_path));
         let tp = tag_path.clone();
         q = q.filter(not(exists(
             sample_tags_dsl::sample_tags
                 .inner_join(tags_dsl::tags)
                 .filter(sample_tags_dsl::sample_id.eq(samples_dsl::id))
-                .filter(tags_dsl::path.eq(tp).or(tags_dsl::path.like(like))),
+                .filter(
+                    tags_dsl::path
+                        .eq(tp)
+                        .or(tags_dsl::path.like(like).escape('\\')),
+                ),
         )));
     }
 
@@ -338,24 +334,17 @@ pub fn list_samples(conn: &mut SqliteConnection, query: &Query) -> AppResult<Vec
     if let Some(key) = query.key.as_deref().filter(|s| !s.is_empty()) {
         let keys = key_match_set(key, query.relative_key, query.key_either);
         if !keys.is_empty() {
-            // Keys are controlled pitch tokens (a-z / # / m); safe to embed.
-            let list = keys
-                .iter()
-                .map(|k| format!("'{k}'"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            q = q.filter(sql::<Bool>(&format!(
-                "key_name IS NOT NULL AND lower(replace(key_name, ' ', '')) IN ({list})"
-            )));
+            q = q.filter(
+                samples_dsl::key_name
+                    .is_not_null()
+                    .and(sql::<Text>("lower(replace(key_name, ' ', ''))").eq_any(keys)),
+            );
         }
     }
 
     if let Some(sample_type) = query.sample_type.as_deref().filter(|s| !s.is_empty()) {
-        // Escape single quotes if any; sample_type is user filter text.
-        let escaped = sample_type.replace('\'', "''");
-        q = q.filter(sql::<Bool>(&format!(
-            "sample_type = '{escaped}' COLLATE NOCASE"
-        )));
+        let lowered = sample_type.to_ascii_lowercase();
+        q = q.filter(sql::<Text>("lower(sample_type)").eq(lowered));
     }
 
     if query.favorites_only {
@@ -528,7 +517,10 @@ pub fn set_sample_favorite(conn: &mut SqliteConnection, id: i64, favorite: bool)
         ))
         .execute(conn)?;
     if n == 0 {
-        return Err(crate::error::AppError::msg("sample not found"));
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
     }
     Ok(())
 }
@@ -812,7 +804,10 @@ fn apply_date_patches(
 pub fn remove_sample(conn: &mut SqliteConnection, id: i64) -> AppResult<()> {
     let n = diesel::delete(samples_dsl::samples.find(id_from_i64(id)?)).execute(conn)?;
     if n == 0 {
-        return Err(crate::error::AppError::msg("sample not found"));
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
     }
     Ok(())
 }
@@ -972,7 +967,10 @@ pub fn set_sample_bpm(conn: &mut SqliteConnection, id: i64, bpm: Option<f64>) ->
         ))
         .execute(conn)?;
     if n == 0 {
-        return Err(crate::error::AppError::msg("sample not found"));
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
     }
     Ok(())
 }
@@ -987,7 +985,10 @@ pub fn set_sample_key(conn: &mut SqliteConnection, id: i64, key: Option<&str>) -
         ))
         .execute(conn)?;
     if n == 0 {
-        return Err(crate::error::AppError::msg("sample not found"));
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
     }
     Ok(())
 }
@@ -1005,7 +1006,81 @@ pub fn set_sample_type(
         ))
         .execute(conn)?;
     if n == 0 {
-        return Err(crate::error::AppError::msg("sample not found"));
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
+    }
+    Ok(())
+}
+
+/// Restore BPM and source without forcing `user` (undo / redo).
+pub fn restore_sample_bpm(
+    conn: &mut SqliteConnection,
+    id: i64,
+    bpm: Option<f64>,
+    source: Option<&str>,
+) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id_from_i64(id)?))
+        .set((
+            samples_dsl::bpm.eq(bpm),
+            samples_dsl::bpm_source.eq(source),
+            samples_dsl::bpm_confidence.eq(source.map(|_| 1.0)),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
+    if n == 0 {
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
+    }
+    Ok(())
+}
+
+/// Restore key and source without forcing `user` (undo / redo).
+pub fn restore_sample_key(
+    conn: &mut SqliteConnection,
+    id: i64,
+    key: Option<&str>,
+    source: Option<&str>,
+) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id_from_i64(id)?))
+        .set((
+            samples_dsl::key_name.eq(key),
+            samples_dsl::key_source.eq(source),
+            samples_dsl::key_confidence.eq(source.map(|_| 1.0)),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
+    if n == 0 {
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
+    }
+    Ok(())
+}
+
+/// Restore sample type and source without forcing `user` (undo / redo).
+pub fn restore_sample_type(
+    conn: &mut SqliteConnection,
+    id: i64,
+    sample_type: Option<&str>,
+    source: Option<&str>,
+) -> AppResult<()> {
+    let n = diesel::update(samples_dsl::samples.find(id_from_i64(id)?))
+        .set((
+            samples_dsl::sample_type.eq(sample_type),
+            samples_dsl::sample_type_source.eq(source),
+            samples_dsl::updated_at.eq(utc_now()),
+        ))
+        .execute(conn)?;
+    if n == 0 {
+        return Err(crate::error::AppError::coded(
+            crate::error_codes::SAMPLE_NOT_FOUND,
+            crate::error_codes::SAMPLE_NOT_FOUND.log,
+        ));
     }
     Ok(())
 }
@@ -1056,21 +1131,69 @@ pub fn wipe_analysis_all(
     Ok(ids.into_iter().map(id_to_i64).collect())
 }
 
+/// Favorite plus BPM / key / type values and their sources.
+#[derive(Debug, Clone)]
+pub struct SampleMetaSnapshot {
+    pub favorite: bool,
+    pub bpm: Option<f64>,
+    pub bpm_source: Option<String>,
+    pub key: Option<String>,
+    pub key_source: Option<String>,
+    pub sample_type: Option<String>,
+    pub sample_type_source: Option<String>,
+}
+
 /// `(favorite, bpm, key_name, sample_type)` as stored for one sample.
 pub type SampleMeta = (bool, Option<f64>, Option<String>, Option<String>);
 
 pub fn sample_meta_snapshot(conn: &mut SqliteConnection, id: i64) -> AppResult<SampleMeta> {
+    let snap = sample_meta_snapshot_full(conn, id)?;
+    Ok((snap.favorite, snap.bpm, snap.key, snap.sample_type))
+}
+
+pub fn sample_meta_snapshot_full(
+    conn: &mut SqliteConnection,
+    id: i64,
+) -> AppResult<SampleMetaSnapshot> {
     samples_dsl::samples
         .find(id_from_i64(id)?)
         .select((
             samples_dsl::favorite,
             samples_dsl::bpm,
+            samples_dsl::bpm_source,
             samples_dsl::key_name,
+            samples_dsl::key_source,
             samples_dsl::sample_type,
+            samples_dsl::sample_type_source,
         ))
-        .first::<(i32, Option<f64>, Option<String>, Option<String>)>(conn)
-        .map(|(fav, bpm, key, ty)| (fav != 0, bpm, key, ty))
-        .map_err(|_| crate::error::AppError::msg("sample not found"))
+        .first::<(
+            i32,
+            Option<f64>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>(conn)
+        .map(
+            |(fav, bpm, bpm_source, key, key_source, sample_type, sample_type_source)| {
+                SampleMetaSnapshot {
+                    favorite: fav != 0,
+                    bpm,
+                    bpm_source,
+                    key,
+                    key_source,
+                    sample_type,
+                    sample_type_source,
+                }
+            },
+        )
+        .map_err(|_| {
+            crate::error::AppError::coded(
+                crate::error_codes::SAMPLE_NOT_FOUND,
+                crate::error_codes::SAMPLE_NOT_FOUND.log,
+            )
+        })
 }
 
 #[cfg(test)]

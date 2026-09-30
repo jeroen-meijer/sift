@@ -41,9 +41,11 @@
       "tag": "Tag",
       "bpm": "BPM range",
       "key": "Key",
+      "type": "Type",
       "addTag": "Add tag {{path}}",
       "footer": "Typing # b: or k: opens the editor straight away · ⌫ selects the last chip"
     },
+    "relBadge": "rel",
     "editor": {
       "bpmMin": "Min BPM",
       "bpmMax": "Max BPM",
@@ -62,8 +64,8 @@
     }
   },
   "statusBar": {
-    "roots_one": "{{count}} root",
-    "roots_other": "{{count}} roots",
+    "libraries_one": "{{count}} library",
+    "libraries_other": "{{count}} libraries",
     "files_one": "{{formatted}} file",
     "files_other": "{{formatted}} files",
     "filesIndexed_one": "{{formatted}} file indexed",

@@ -12,7 +12,7 @@ use crate::audio::{decode_cache, jit};
 use crate::db::settings;
 use crate::error::{AppError, AppResult};
 use crate::indexer::{self, IndexProgress};
-use crate::library::{self, FolderNode, RootDto};
+use crate::library::{self, AddRootOutcome, FolderNode, RootDto};
 use crate::samples::{self, Query as SampleQuery, SampleDto};
 use crate::state::AppState;
 use crate::tags::{self, TagNode};
@@ -37,6 +37,10 @@ pub struct DbStats {
     pub data_dir: String,
     pub clips_dir: String,
     pub clips_bytes: u64,
+    /// Set when boot renamed a broken library DB and opened a fresh empty one.
+    pub library_backup_path: Option<String>,
+    /// Raw migrate/schema error that triggered recovery (for Copy error details).
+    pub library_open_error: Option<String>,
 }
 
 /// Run blocking command work on Tauri's blocking pool, never the main thread.
@@ -86,8 +90,12 @@ pub async fn set_setting(app: AppHandle, key: String, value: Value) -> AppResult
                     settings::set(conn, "splice_db_path", &Value::String(path.clone()))
                 });
             }
-            let n = crate::analyze::refresh_metadata_all(&app, &state.db).unwrap_or(0);
-            let _ = n; // library-changed is emitted inside refresh when rows change
+            let db = state.db.clone();
+            let _ = std::thread::Builder::new()
+                .name("sift-splice-refresh".into())
+                .spawn(move || {
+                    let _ = crate::analyze::refresh_metadata_all(&app, &db);
+                });
         }
         Ok(())
     })
@@ -123,6 +131,13 @@ pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
             })?;
             // Directory walk stays outside the DB lock.
             let clips_bytes = jit::cache_size(&clips_dir);
+            let (library_backup_path, library_open_error) =
+                state.library_recovery.as_ref().map_or((None, None), |r| {
+                    (
+                        Some(r.backup_path.to_string_lossy().into_owned()),
+                        Some(r.migrate_error.clone()),
+                    )
+                });
             Ok(DbStats {
                 roots,
                 samples,
@@ -131,6 +146,8 @@ pub async fn db_stats(app: AppHandle) -> AppResult<DbStats> {
                 data_dir,
                 clips_bytes,
                 clips_dir: clips_dir.to_string_lossy().into_owned(),
+                library_backup_path,
+                library_open_error,
             })
         })
     })
@@ -143,10 +160,13 @@ pub async fn list_roots(app: AppHandle) -> AppResult<Vec<RootDto>> {
 }
 
 #[tauri::command]
-pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
+pub async fn add_root(app: AppHandle, path: String) -> AppResult<AddRootOutcome> {
     off_main(app.clone(), move |state| {
         let total = std::time::Instant::now();
-        let root = state.db.with_conn(|conn| library::add_root(conn, &path))?;
+        let outcome = state.db.with_conn(|conn| library::add_root(conn, &path))?;
+        let AddRootOutcome::Added(root) = &outcome else {
+            return Ok(outcome);
+        };
         let root_id = root.id;
         let db = state.db.clone();
         watch::restart_in_background(
@@ -163,13 +183,10 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 let index_start = std::time::Instant::now();
                 crate::analyze::work::start(&index_app, 0);
-                let scanned = db
-                    .with_conn(|conn| {
-                        indexer::index_root(conn, root_id, |progress| {
-                            tick_index_progress(&index_app, &progress);
-                        })
-                    })
-                    .map_or(0, |p| p.scanned);
+                let scanned = indexer::index_root(&db, root_id, |progress| {
+                    tick_index_progress(&index_app, &progress);
+                })
+                .map_or(0, |p| p.scanned);
                 crate::analyze::work::finish(&index_app, scanned);
                 index_app.state::<crate::state::AppState>().changes.push(
                     &index_app,
@@ -184,7 +201,7 @@ pub async fn add_root(app: AppHandle, path: String) -> AppResult<RootDto> {
                 );
                 crate::analyze::enqueue_unanalyzed(index_app, db, peaks_dir);
             });
-        Ok(root)
+        Ok(outcome)
     })
     .await
 }
@@ -240,13 +257,10 @@ pub async fn reindex_root(app: AppHandle, root_id: i64) -> AppResult<()> {
             .spawn(move || {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 crate::analyze::work::start(&app, 0);
-                let scanned = db
-                    .with_conn(|conn| {
-                        indexer::index_root(conn, root_id, |progress| {
-                            tick_index_progress(&app, &progress);
-                        })
-                    })
-                    .map_or(0, |p| p.scanned);
+                let scanned = indexer::index_root(&db, root_id, |progress| {
+                    tick_index_progress(&app, &progress);
+                })
+                .map_or(0, |p| p.scanned);
                 crate::analyze::work::finish(&app, scanned);
                 app.state::<crate::state::AppState>()
                     .changes
@@ -273,13 +287,11 @@ pub async fn reindex_all(app: AppHandle) -> AppResult<()> {
                 let _ = qos_threads::set_current_thread(qos_threads::Qos::Low);
                 crate::analyze::work::start(&app, 0);
                 let mut scanned = 0u64;
-                let _ = db.with_conn(|conn| {
-                    indexer::index_all_roots(conn, |progress| {
-                        tick_index_progress(&app, &progress);
-                        if progress.done {
-                            scanned = scanned.saturating_add(progress.scanned);
-                        }
-                    })
+                let _ = indexer::index_all_roots(&db, |progress| {
+                    tick_index_progress(&app, &progress);
+                    if progress.done {
+                        scanned = scanned.saturating_add(progress.scanned);
+                    }
                 });
                 crate::analyze::work::finish(&app, scanned);
                 app.state::<crate::state::AppState>()
@@ -364,25 +376,25 @@ pub async fn set_sample_favorite(app: AppHandle, id: i64, favorite: bool) -> App
 #[tauri::command]
 pub async fn set_sample_bpm(app: AppHandle, id: i64, bpm: Option<f64>) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| {
-            let (_, b, _, _) = samples::sample_meta_snapshot(conn, id)?;
-            Ok(b)
-        })?;
+        let before = state
+            .db
+            .with_conn(|conn| samples::sample_meta_snapshot_full(conn, id))?;
         state
             .db
             .with_conn(|conn| samples::set_sample_bpm(conn, id, bpm))?;
-        if before != bpm {
+        let after_source = bpm.filter(|b| *b > 0.0).map(|_| "user".to_string());
+        let after_bpm = bpm.filter(|b| *b > 0.0);
+        if before.bpm != after_bpm || before.bpm_source != after_source {
             undo.push(UndoAction::Bpm {
                 id,
-                before,
-                after: bpm,
+                before: before.bpm,
+                before_source: before.bpm_source,
+                after: after_bpm,
+                after_source,
             });
         }
         drop(undo);
@@ -394,25 +406,24 @@ pub async fn set_sample_bpm(app: AppHandle, id: i64, bpm: Option<f64>) -> AppRes
 #[tauri::command]
 pub async fn set_sample_key(app: AppHandle, id: i64, key: Option<String>) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| {
-            let (_, _, k, _) = samples::sample_meta_snapshot(conn, id)?;
-            Ok(k)
-        })?;
+        let before = state
+            .db
+            .with_conn(|conn| samples::sample_meta_snapshot_full(conn, id))?;
         state
             .db
             .with_conn(|conn| samples::set_sample_key(conn, id, key.as_deref()))?;
-        if before != key {
+        let after_source = key.as_ref().map(|_| "user".to_string());
+        if before.key != key || before.key_source != after_source {
             undo.push(UndoAction::Key {
                 id,
-                before,
+                before: before.key,
+                before_source: before.key_source,
                 after: key,
+                after_source,
             });
         }
         drop(undo);
@@ -428,25 +439,24 @@ pub async fn set_sample_type(
     sample_type: Option<String>,
 ) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = state.db.with_conn(|conn| {
-            let (_, _, _, t) = samples::sample_meta_snapshot(conn, id)?;
-            Ok(t)
-        })?;
+        let before = state
+            .db
+            .with_conn(|conn| samples::sample_meta_snapshot_full(conn, id))?;
         state
             .db
             .with_conn(|conn| samples::set_sample_type(conn, id, sample_type.as_deref()))?;
-        if before != sample_type {
+        let after_source = sample_type.as_ref().map(|_| "user".to_string());
+        if before.sample_type != sample_type || before.sample_type_source != after_source {
             undo.push(UndoAction::SampleType {
                 id,
-                before,
+                before: before.sample_type,
+                before_source: before.sample_type_source,
                 after: sample_type,
+                after_source,
             });
         }
         drop(undo);
@@ -562,9 +572,7 @@ pub async fn respond_ask_index(app: AppHandle, paths: Vec<String>, index: bool) 
             let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
             let total = u64::try_from(path_bufs.len()).unwrap_or(u64::MAX);
             crate::analyze::work::start(&app, total);
-            let n = state
-                .db
-                .with_conn(|conn| indexer::index_paths(conn, &path_bufs))?;
+            let n = indexer::index_paths(&state.db, &path_bufs)?;
             crate::analyze::work::finish(&app, n);
             if n > 0 {
                 state.changes.push(&app, "ask-index", true, &[]);
@@ -650,7 +658,7 @@ pub async fn get_peaks(app: AppHandle, sample_id: i64, wait: Option<bool>) -> Ap
                 // Empty placeholder. Never decode cloud stubs on the interactive path.
                 return Ok(peaks::empty_peaks(DEFAULT_BUCKETS));
             }
-            if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id)? {
+            if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id) {
                 return Ok(data);
             }
             // No peakfile yet. Browsing never decodes by itself: all decode work
@@ -660,7 +668,7 @@ pub async fn get_peaks(app: AppHandle, sample_id: i64, wait: Option<bool>) -> Ap
             if wait.unwrap_or(false) {
                 // The detail pane: analyze this one first and wait for it.
                 crate::analyze::analyze_now(app, db, peaks_dir, sample_id, DETAIL_PEAKS_WAIT);
-                if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id)? {
+                if let Some(data) = peaks::read_cached_peaks(&state.paths.peaks_dir, sample_id) {
                     return Ok(data);
                 }
             } else {
@@ -726,11 +734,61 @@ pub async fn play_sample(
             );
             return Ok(());
         }
-        state
+
+        let source_mtime = crate::audio::player::source_mtime_ms(path);
+        let snap = {
+            let mut player = state
+                .player
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            player.snapshot_for_play(path, source_mtime)?
+        };
+
+        // Convert outside the player mutex so stop/pause/playback_state stay responsive.
+        let converted = if snap.cache_hit {
+            None
+        } else {
+            let convert_start = std::time::Instant::now();
+            let pcm: std::sync::Arc<[f32]> = crate::audio::player::convert_for_device(
+                &decoded,
+                snap.out_channels,
+                snap.out_rate,
+            )
+            .into();
+            crate::profile_log::event(
+                "play.convert",
+                convert_start.elapsed(),
+                &format!(
+                    "frames={}",
+                    pcm.len().checked_div(snap.out_channels.max(1)).unwrap_or(0)
+                ),
+            );
+            Some(pcm)
+        };
+
+        // Re-check under the lock before starting audio.
+        let mut player = state
             .player
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .play_decoded(path, &decoded, start, play_type, region)?;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !is_current_play(&state.play_seq, seq) {
+            crate::profile_log::event(
+                "play.superseded",
+                total.elapsed(),
+                &format!("id={sample_id} seq={seq} phase=install"),
+            );
+            return Ok(());
+        }
+        player.install_play(
+            path,
+            source_mtime,
+            converted,
+            snap,
+            start,
+            play_type,
+            region,
+        )?;
+        drop(player);
 
         crate::profile_log::event(
             "ipc.play_sample",
@@ -976,17 +1034,16 @@ pub async fn set_sample_tags(app: AppHandle, sample_id: i64, tag_ids: Vec<i64>) 
 #[tauri::command]
 pub async fn add_sample_tag(app: AppHandle, sample_id: i64, tag_id: i64) -> AppResult<()> {
     off_main(app, move |state| {
-        // Hold the undo lock for the whole read, write and push so two quick
-        // edits cannot interleave now that commands run concurrently.
-        // Lock order everywhere: undo, then DB.
         let mut undo = state
             .undo
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        state
+        let inserted = state
             .db
             .with_conn(|conn| tags::add_sample_tag(conn, sample_id, tag_id))?;
-        undo.push(UndoAction::TagAdd { sample_id, tag_id });
+        if inserted {
+            undo.push(UndoAction::TagAdd { sample_id, tag_id });
+        }
         drop(undo);
         Ok(())
     })
@@ -1062,7 +1119,10 @@ pub async fn snap_zero_crossings(
 
 #[tauri::command]
 pub async fn clear_jit_cache(app: AppHandle) -> AppResult<()> {
-    off_main(app, move |state| jit::clear_cache(&state.clips_dir())).await
+    off_main(app, move |state| {
+        jit::clear_default_clips_cache(&state.paths)
+    })
+    .await
 }
 
 /// Point the JIT clip cache at another directory. The old cache is left alone.

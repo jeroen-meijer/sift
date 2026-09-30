@@ -20,6 +20,20 @@ Obey [docs/README.md](docs/README.md) for layout, naming, no frontmatter, single
 
 After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run `bun run docs:check` before you finish. Details: [Lint and validate](docs/README.md#lint-and-validate).
 
+## Markdown prose: no hard wraps
+
+Canonical: [docs/README.md](docs/README.md#markdown-prose-no-hard-wraps).
+
+When you write or edit markdown in this repo (docs, PR/issue bodies, plans, root `*.md`):
+
+1. Read that section.
+2. One physical line per paragraph and per list item. No mid-sentence or mid-bullet newlines for column width.
+3. Separate paragraphs with a blank line.
+4. Exceptions: fenced code, tables, YAML/JSON front matter, intentional breaks inside code samples.
+5. When you touch a hard-wrapped file, unwrap the prose you edit (prefer the whole file when practical).
+
+Cursor also loads [`.cursor/rules/markdown-prose-no-hard-wraps.mdc`](.cursor/rules/markdown-prose-no-hard-wraps.mdc) (pointer only). Claude, Codex, and other AGENTS.md readers follow this section.
+
 ## Testing (agents)
 
 Canonical: [docs/reference/testing.md](docs/reference/testing.md). Cursor also loads [`.cursor/rules/testing.mdc`](.cursor/rules/testing.mdc).
@@ -50,7 +64,7 @@ When you build or change a feature, or the user asks you to test, verify, or che
 | Renderer E2E | WebdriverIO browser mode (`e2e/`, `bun run test:e2e:browser`) |
 | Desktop E2E | WebdriverIO + `@wdio/tauri-service` embedded (`bun run build:e2e:app` then `test:e2e:tauri`) |
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
-| Docs lint | `markdownlint-cli2` (`.markdownlint-cli2.jsonc`) + `tool/check-docs.py` via `bun run docs:check` |
+| Docs lint | `markdownlint-cli2` (`.markdownlint-cli2.jsonc`) + `tool/check-docs.ts` + `i18n:check` via `bun run docs:check` |
 | Package manager | Bun |
 | CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest · e2e-browser · docs:check); Bun+Rust caches; publish on macOS/Windows |
 | Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (installers + updater + `latest.json`) |
@@ -97,6 +111,8 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 ## Changelog / release
 
 `CHANGELOG.md` → `## Upcoming` is the **user-facing draft for the next release**, not a commit diary.
+
+Pull request and commit titles/bodies: [docs/reference/commits-and-pull-requests.md](docs/reference/commits-and-pull-requests.md).
 
 - Write for someone who installs the next version. Conventional prefixes (`feat` / `fix` / `perf` / …) are fine; the rest of the line should read as a product note.
 - Lead with what the user can do or notice. Prefer “allow searching for samples by BPM…” over “typed omni filters with chip editors…”.
