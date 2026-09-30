@@ -282,15 +282,8 @@ impl PlayerEngine {
         source_mtime: Option<i64>,
     ) -> AppResult<PlayConvertSnapshot> {
         self.recover_stream_if_needed();
-        if let Some(c) = &self.last_converted
-            && c.path == path
-            && c.source_mtime == source_mtime
-        {
-            return Ok(PlayConvertSnapshot {
-                cache_hit: true,
-                out_channels: c.channels,
-                out_rate: c.sample_rate,
-            });
+        if let Some(hit) = self.convert_cache_snapshot(path, source_mtime) {
+            return Ok(hit);
         }
         let device = self.resolve_device()?;
         let supported = device
@@ -301,6 +294,24 @@ impl PlayerEngine {
             out_channels: usize::from(supported.channels()),
             out_rate: supported.sample_rate(),
         })
+    }
+
+    /// Cached convert for this path + mtime, if still installed.
+    fn convert_cache_snapshot(
+        &self,
+        path: &Path,
+        source_mtime: Option<i64>,
+    ) -> Option<PlayConvertSnapshot> {
+        let c = self.last_converted.as_ref()?;
+        if c.path == path && c.source_mtime == source_mtime {
+            Some(PlayConvertSnapshot {
+                cache_hit: true,
+                out_channels: c.channels,
+                out_rate: c.sample_rate,
+            })
+        } else {
+            None
+        }
     }
 
     /// Install PCM after convert that ran outside the player lock. Call only
@@ -930,9 +941,7 @@ mod tests {
     fn convert_cache_identity_includes_mtime() {
         let mut engine = PlayerEngine::new();
         let path = Path::new("/tmp/sift-play-cache-test.wav");
-        let snap_a = engine.snapshot_for_play(path, Some(100)).expect("snap");
-        // Without a prior convert, always a miss.
-        assert!(!snap_a.cache_hit);
+        assert!(engine.convert_cache_snapshot(path, Some(100)).is_none());
         engine.last_converted = Some(ConvertedBuffer {
             path: path.to_path_buf(),
             source_mtime: Some(100),
@@ -940,17 +949,17 @@ mod tests {
             sample_rate: 48_000,
             pcm: Arc::from(vec![0.0f32; 4]),
         });
+        let hit = engine
+            .convert_cache_snapshot(path, Some(100))
+            .expect("same path + mtime is a hit");
+        assert!(hit.cache_hit);
+        assert_eq!(hit.out_channels, 2);
+        assert_eq!(hit.out_rate, 48_000);
         assert!(
             engine
-                .snapshot_for_play(path, Some(100))
-                .expect("hit")
-                .cache_hit
-        );
-        assert!(
-            !engine
-                .snapshot_for_play(path, Some(200))
-                .expect("mtime miss")
-                .cache_hit
+                .convert_cache_snapshot(path, Some(200))
+                .is_none(),
+            "mtime change must miss the convert cache"
         );
     }
 
