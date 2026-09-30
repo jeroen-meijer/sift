@@ -20,15 +20,24 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TERMINOLOGY = join(ROOT, "docs/reference/terminology.yaml");
 const LOCALES = join(ROOT, "src/locales");
 
+type Replacement = string | string[];
+
 interface TermEntry {
-  preferred?: string;
-  note?: string;
+  name?: string;
+  description?: string;
+  replacement?: Replacement;
   hard_ban?: string[];
   soft_ban?: string[];
 }
 
 interface Terminology {
   terms?: TermEntry[];
+}
+
+interface BanRule {
+  term: string;
+  name: string;
+  replacement: string[] | undefined;
 }
 
 function toPosix(p: string): string {
@@ -89,20 +98,53 @@ function wholeWordRe(term: string): RegExp {
   return new RegExp(`(?:^|[^A-Za-z0-9_])${escaped}(?:$|[^A-Za-z0-9_])`, "i");
 }
 
-function main(): number {
-  const raw = parseYaml(readFileSync(TERMINOLOGY, "utf8")) as Terminology;
-  const terms = raw.terms ?? [];
-  const hard: { term: string; preferred: string }[] = [];
-  const soft: { term: string; preferred: string }[] = [];
+function normalizeReplacement(
+  replacement: Replacement | undefined,
+): string[] | undefined {
+  if (replacement === undefined) return undefined;
+  const list = Array.isArray(replacement) ? replacement : [replacement];
+  const cleaned = list.map((s) => s.trim()).filter((s) => s.length > 0);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** Hint for ban reports: prefer …, or rule name when there is no replacement. */
+export function banHint(rule: {
+  name: string;
+  replacement: string[] | undefined;
+}): string {
+  if (rule.replacement && rule.replacement.length > 0) {
+    return `prefer ${rule.replacement.join(" | ")}`;
+  }
+  return `rule: ${rule.name}`;
+}
+
+function loadBanRules(terms: TermEntry[]): {
+  hard: BanRule[];
+  soft: BanRule[];
+} {
+  const hard: BanRule[] = [];
+  const soft: BanRule[] = [];
   for (const entry of terms) {
-    const preferred = entry.preferred ?? "?";
+    const name = entry.name?.trim();
+    if (!name) {
+      throw new Error(
+        "terminology.yaml: each term needs a non-empty `name`",
+      );
+    }
+    const replacement = normalizeReplacement(entry.replacement);
     for (const t of entry.hard_ban ?? []) {
-      if (t) hard.push({ term: t, preferred });
+      if (t) hard.push({ term: t, name, replacement });
     }
     for (const t of entry.soft_ban ?? []) {
-      if (t) soft.push({ term: t, preferred });
+      if (t) soft.push({ term: t, name, replacement });
     }
   }
+  return { hard, soft };
+}
+
+function main(): number {
+  const raw = parseYaml(readFileSync(TERMINOLOGY, "utf8")) as Terminology;
+  const { hard, soft } = loadBanRules(raw.terms ?? []);
 
   const hardRes = hard.map((h) => ({ ...h, re: wholeWordRe(h.term) }));
   const softRes = soft.map((s) => ({ ...s, re: wholeWordRe(s.term) }));
@@ -119,14 +161,14 @@ function main(): number {
       for (const h of hardRes) {
         if (h.re.test(text)) {
           hardProblems.push(
-            `${rel}:${path}: hard-ban ${JSON.stringify(h.term)} (prefer ${h.preferred})`,
+            `${rel}:${path}: hard-ban ${JSON.stringify(h.term)} (${banHint(h)})`,
           );
         }
       }
       for (const s of softRes) {
         if (s.re.test(text)) {
           softProblems.push(
-            `${rel}:${path}: soft-ban ${JSON.stringify(s.term)} (prefer ${s.preferred})`,
+            `${rel}:${path}: soft-ban ${JSON.stringify(s.term)} (${banHint(s)})`,
           );
         }
       }
@@ -152,4 +194,6 @@ function main(): number {
   return 0;
 }
 
-process.exit(main());
+if (import.meta.main) {
+  process.exit(main());
+}

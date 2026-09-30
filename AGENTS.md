@@ -20,6 +20,20 @@ Obey [docs/README.md](docs/README.md) for layout, naming, no frontmatter, single
 
 After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run `bun run docs:check` before you finish. Details: [Lint and validate](docs/README.md#lint-and-validate).
 
+## Markdown prose: no hard wraps
+
+Canonical: [docs/README.md](docs/README.md#markdown-prose-no-hard-wraps).
+
+When you write or edit markdown in this repo (docs, PR/issue bodies, plans, root `*.md`):
+
+1. Read that section.
+2. One physical line per paragraph and per list item. No mid-sentence or mid-bullet newlines for column width.
+3. Separate paragraphs with a blank line.
+4. Exceptions: fenced code, tables, YAML/JSON front matter, intentional breaks inside code samples.
+5. When you touch a hard-wrapped file, unwrap the prose you edit (prefer the whole file when practical).
+
+Cursor also loads [`.cursor/rules/markdown-prose-no-hard-wraps.mdc`](.cursor/rules/markdown-prose-no-hard-wraps.mdc) (pointer only). Claude, Codex, and other AGENTS.md readers follow this section.
+
 ## Testing (agents)
 
 Canonical: [docs/reference/testing.md](docs/reference/testing.md). Cursor also loads [`.cursor/rules/testing.mdc`](.cursor/rules/testing.mdc).

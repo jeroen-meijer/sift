@@ -67,6 +67,21 @@ Durable means it would still matter next week to a cold agent. One-off task tips
 
 For code and docs changes, follow [Prefer clean end state](../AGENTS.md#prefer-clean-end-state) in AGENTS.md. Do not leave half-migrated trees, rename shims, or bolted-on sections.
 
+## Markdown prose: no hard wraps
+
+Applies to **all** markdown agents write in this repo: tickets, PR bodies, ADRs, plans, `docs/**`, root `*.md`, and other narrative `.md` files.
+
+Do **not** insert newlines mid-sentence or mid-bullet to fit an editor column (the ~80-character wrap habit from code and skill docs). Keep each paragraph and each list item on **one physical line**. Separate paragraphs with a blank line. Editors and GitHub soft-wrap in the UI.
+
+Exceptions: fenced code blocks, tables, YAML/JSON front matter, and intentional hard breaks inside code samples.
+
+This is absolute. Do not hard-wrap "just for this file" or because an older doc was wrapped before. When you edit a hard-wrapped file, unwrap the prose you touch (prefer unwrapping the whole file when practical).
+
+Agent entrypoints (pointers only; do not copy this section elsewhere):
+
+- [AGENTS.md](../AGENTS.md#markdown-prose-no-hard-wraps) (Claude, Codex, and other tools that load `AGENTS.md`)
+- [`.cursor/rules/markdown-prose-no-hard-wraps.mdc`](../.cursor/rules/markdown-prose-no-hard-wraps.mdc) (Cursor)
+
 ## Lint and validate
 
 After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run:
