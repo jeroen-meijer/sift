@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -212,7 +213,19 @@ function RootMenu({
   const [mountedSub, setMountedSub] = useState<string | null>(initialOpen ?? null);
   const [leaving, setLeaving] = useState(false);
   const [flyoutsLeft, setFlyoutsLeft] = useState(false);
+  const [highlight, setHighlight] = useState(0);
   const didInitialFocus = useRef(false);
+
+  const actionable = useMemo(
+    () =>
+      entries
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => {
+          if (entry.kind === "rule") return false;
+          return entry.disabled !== true;
+        }),
+    [entries],
+  );
 
   /*
    * Flyouts open on hover and close after a short delay. The delay keeps a
@@ -304,19 +317,97 @@ function RootMenu({
     input?.select();
   }, [flyoutPos, initialOpen, mountedSub]);
 
+  const [flyoutHighlight, setFlyoutHighlight] = useState(0);
+
+  useEffect(() => {
+    setHighlight(0);
+  }, [entries]);
+
+  useEffect(() => {
+    setFlyoutHighlight(0);
+  }, [mountedSub]);
+
+  const pick = useCallback(
+    (id: string) => {
+      onSelect(id);
+      onClose();
+    },
+    [onClose, onSelect],
+  );
+
   useEffect(() => {
     const close = () => {
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (!matchesBinding(e, keys.dismiss)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (openSub != null || mountedSub != null) {
-        beginCloseFlyout();
+      if (matchesBinding(e, keys.dismiss)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (openSub != null || mountedSub != null) {
+          beginCloseFlyout();
+          return;
+        }
+        onClose();
         return;
       }
-      onClose();
+
+      const flyoutEntry = entries.find(
+        (entry): entry is MenuSubmenu | MenuPanel =>
+          (entry.kind === "submenu" || entry.kind === "panel") && entry.id === mountedSub,
+      );
+
+      if (flyoutEntry?.kind === "submenu") {
+        const options = flyoutEntry.options;
+        if (options.length === 0) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          e.stopPropagation();
+          setFlyoutHighlight((current) => {
+            const delta = e.key === "ArrowDown" ? 1 : -1;
+            return (current + delta + options.length) % options.length;
+          });
+          return;
+        }
+        if (e.key === "Enter") {
+          const option = options[flyoutHighlight];
+          if (!option) return;
+          e.preventDefault();
+          e.stopPropagation();
+          pick(option.id);
+          return;
+        }
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          e.stopPropagation();
+          beginCloseFlyout();
+        }
+        return;
+      }
+
+      if (openSub != null || mountedSub != null) return;
+      if (actionable.length === 0) return;
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        setHighlight((current) => {
+          const delta = e.key === "ArrowDown" ? 1 : -1;
+          return (current + delta + actionable.length) % actionable.length;
+        });
+        return;
+      }
+      if (e.key === "Enter" || e.key === "ArrowRight") {
+        const item = actionable[highlight];
+        if (!item) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const { entry } = item;
+        if (entry.kind === "item") {
+          pick(entry.id);
+        } else if (entry.kind === "submenu" || entry.kind === "panel") {
+          openFlyout(entry.id);
+        }
+      }
     };
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -334,12 +425,20 @@ function RootMenu({
       window.removeEventListener("resize", close);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [beginCloseFlyout, mountedSub, onClose, openSub]);
+  }, [
+    actionable,
+    beginCloseFlyout,
+    entries,
+    flyoutHighlight,
+    highlight,
+    mountedSub,
+    onClose,
+    openFlyout,
+    openSub,
+    pick,
+  ]);
 
-  const pick = (id: string) => {
-    onSelect(id);
-    onClose();
-  };
+  const highlightedEntryIndex = actionable[highlight]?.index ?? -1;
 
   /* Hidden for the first frame, while the layout effect measures and places it. */
   const flyoutStyle: CSSProperties = flyoutPos
@@ -366,12 +465,13 @@ function RootMenu({
       >
         {isPanel
           ? entry.content
-          : entry.options.map((option) => (
+          : entry.options.map((option, optionIndex) => (
               <button
                 key={option.id}
                 type="button"
                 role="menuitemradio"
                 aria-checked={option.checked ?? false}
+                data-highlighted={flyoutHighlight === optionIndex ? "" : undefined}
                 className="menu-item"
                 onClick={() => {
                   pick(option.id);
@@ -417,6 +517,7 @@ function RootMenu({
               role="menuitem"
               className="menu-item"
               disabled={entry.disabled}
+              data-highlighted={highlightedEntryIndex === index ? "" : undefined}
               aria-haspopup={entry.kind === "panel" ? "true" : "menu"}
               aria-expanded={openSub === entry.id}
               onClick={() => {
@@ -444,7 +545,12 @@ function RootMenu({
             role="menuitem"
             className={`menu-item${entry.danger ? " danger" : ""}`}
             disabled={entry.disabled}
-            onMouseEnter={scheduleClose}
+            data-highlighted={highlightedEntryIndex === index ? "" : undefined}
+            onMouseEnter={() => {
+              scheduleClose();
+              const at = actionable.findIndex((a) => a.index === index);
+              if (at >= 0) setHighlight(at);
+            }}
             onClick={() => {
               pick(entry.id);
             }}

@@ -150,6 +150,13 @@ export function App() {
   /* Backend events: indexing, analysis, watcher. */
   useEffect(() => {
     const unlisteners: (() => void)[] = [];
+    let cancelled = false;
+    const trackListen = (promise: Promise<() => void>) => {
+      void promise.then((unlisten) => {
+        if (cancelled) unlisten();
+        else unlisteners.push(unlisten);
+      });
+    };
     let bumpTimer: ReturnType<typeof setTimeout> | undefined;
     /** Structural change: refetch stats, tree, tags and the list. */
     const bump = () => {
@@ -183,45 +190,54 @@ export function App() {
       });
     };
 
-    void listen<{ total: number }>("analysis-queue", ({ payload }) => {
-      analysisStore.set({ bar: { done: 0, total: payload.total }, activeIds: new Set() });
-    }).then((fn) => unlisteners.push(fn));
+    trackListen(
+      listen<{ total: number }>("analysis-queue", ({ payload }) => {
+        analysisStore.set({ bar: { done: 0, total: payload.total }, activeIds: new Set() });
+      }),
+    );
 
-    void listen<AnalysisProgress>("analysis-progress", ({ payload }) => {
-      if (payload.remaining === 0) {
-        if (progressTimer) clearTimeout(progressTimer);
-        progressTimer = undefined;
-        pendingProgress = null;
-        applyProgress(payload);
-        return;
-      }
-      pendingProgress = payload;
-      if (progressTimer) return;
-      progressTimer = setTimeout(() => {
-        progressTimer = undefined;
-        if (pendingProgress) applyProgress(pendingProgress);
-        pendingProgress = null;
-      }, PROGRESS_THROTTLE_MS);
-    }).then((fn) => unlisteners.push(fn));
+    trackListen(
+      listen<AnalysisProgress>("analysis-progress", ({ payload }) => {
+        if (payload.remaining === 0) {
+          if (progressTimer) clearTimeout(progressTimer);
+          progressTimer = undefined;
+          pendingProgress = null;
+          applyProgress(payload);
+          return;
+        }
+        pendingProgress = payload;
+        if (progressTimer) return;
+        progressTimer = setTimeout(() => {
+          progressTimer = undefined;
+          if (pendingProgress) applyProgress(pendingProgress);
+          pendingProgress = null;
+        }, PROGRESS_THROTTLE_MS);
+      }),
+    );
 
-    void listen<LibraryChangedPayload>("library-changed", ({ payload }) => {
-      if (payload.structural) {
-        bump();
-        return;
-      }
-      if (payload.sample_ids.length === 0) return;
-      /* Analysis results or availability: patch rows in place, keep the tree. */
-      invalidateRowPeaks(payload.sample_ids);
-      const prev = rowChangesStore.get();
-      rowChangesStore.set({ seq: prev.seq + 1, ids: payload.sample_ids });
-      refreshStatsSoon();
-    }).then((fn) => unlisteners.push(fn));
+    trackListen(
+      listen<LibraryChangedPayload>("library-changed", ({ payload }) => {
+        if (payload.structural) {
+          bump();
+          return;
+        }
+        if (payload.sample_ids.length === 0) return;
+        /* Analysis results or availability: patch rows in place, keep the tree. */
+        invalidateRowPeaks(payload.sample_ids);
+        const prev = rowChangesStore.get();
+        rowChangesStore.set({ seq: prev.seq + 1, ids: payload.sample_ids });
+        refreshStatsSoon();
+      }),
+    );
 
-    void listen<{ paths: string[] }>("ask-index", ({ payload }) => {
-      setAskPaths((prev) => [...new Set([...prev, ...payload.paths])]);
-    }).then((fn) => unlisteners.push(fn));
+    trackListen(
+      listen<{ paths: string[] }>("ask-index", ({ payload }) => {
+        setAskPaths((prev) => [...new Set([...prev, ...payload.paths])]);
+      }),
+    );
 
     return () => {
+      cancelled = true;
       if (bumpTimer) clearTimeout(bumpTimer);
       if (statsTimer) clearTimeout(statsTimer);
       if (progressTimer) clearTimeout(progressTimer);

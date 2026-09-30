@@ -213,7 +213,9 @@ export const SampleRowView = memo(function SampleRowView({
     <div
       data-index={index}
       data-sample-id={sample.id}
+      role="option"
       className={`sample-row${selected ? " selected" : ""}${sample.missing ? " missing" : ""}`}
+      aria-selected={selected}
       style={{
         gridTemplateColumns: template,
         transform: `translateY(${String(top)}px)`,

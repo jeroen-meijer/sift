@@ -8,6 +8,7 @@ import {
 } from "react";
 import { keys, matchesBinding } from "../lib/bindings";
 import { DialogCloseContext, useDialogClose } from "./dialogClose";
+import { dialogDepth, popDialog, pushDialog } from "./dialogStack";
 import { motionMs } from "./motion";
 
 interface Props {
@@ -30,8 +31,8 @@ interface Props {
   children: ReactNode;
 }
 
-/** Open dialog count; only the topmost dialog handles Escape. */
-let dialogStack = 0;
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 type DialogButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type">;
 
@@ -82,6 +83,8 @@ export function Dialog({
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const exitTimer = useRef(0);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const depthRef = useRef(0);
   const [leaving, setLeaving] = useState(false);
 
   const requestClose = useCallback(() => {
@@ -95,21 +98,60 @@ export function Dialog({
   }, [leaving, onBeforeClose, onClose]);
 
   useEffect(() => {
-    dialogStack += 1;
-    const depth = dialogStack;
+    depthRef.current = pushDialog();
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement ? active : null;
+    cardRef.current?.focus();
+    return () => {
+      popDialog();
+      const opener = openerRef.current;
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!matchesBinding(e, keys.dismiss)) return;
-      if (depth !== dialogStack) return;
-      e.preventDefault();
-      e.stopPropagation();
-      requestClose();
+      if (depthRef.current !== dialogDepth()) return;
+      if (matchesBinding(e, keys.dismiss)) {
+        e.preventDefault();
+        e.stopPropagation();
+        requestClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const root = cardRef.current;
+      if (!root) return;
+      const nodes = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => !el.hasAttribute("disabled") && el.tabIndex !== -1,
+      );
+      if (nodes.length === 0) {
+        e.preventDefault();
+        root.focus();
+        return;
+      }
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (!first || !last) return;
+      const current = document.activeElement;
+      if (!root.contains(current)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+        return;
+      }
+      if (e.shiftKey) {
+        if (current === first || current === root) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (current === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     /* Bubble so a focused field can claim Escape first (stopPropagation). */
     window.addEventListener("keydown", onKey);
-    cardRef.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
-      dialogStack -= 1;
     };
   }, [requestClose]);
 

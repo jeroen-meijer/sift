@@ -487,6 +487,7 @@
 }
 
 .menu-item:hover:not(:disabled),
+.menu-item[data-highlighted]:not(:disabled),
 .menu-item:focus-visible {
   background: var(--color-accent);
   color: var(--color-ink);
