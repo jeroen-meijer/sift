@@ -4,11 +4,12 @@ import { TAG_SWATCHES, tagPalette } from "./tagColors";
 describe("tagPalette", () => {
   it("colours a tag from the root segment of its path", () => {
     expect(tagPalette("Drums/Kick/808")).toEqual(tagPalette("Drums"));
-    expect(tagPalette("Drums").bg).toBe("#39305a");
+    expect(tagPalette("Drums").bg).toBe("var(--color-tag-drums-bg)");
+    expect(tagPalette("Drums").dot).toBe("var(--color-tag-drums-dot)");
   });
 
   it("falls back to neutral for an unknown root", () => {
-    expect(tagPalette("Homemade/Thing").bg).toBe("#31333d");
+    expect(tagPalette("Homemade/Thing").bg).toBe("var(--color-tag-fallback-bg)");
   });
 
   it("lets an explicit colour win over the root palette", () => {
@@ -30,7 +31,7 @@ describe("tagPalette", () => {
   });
 
   it("offers every root palette dot as a swatch", () => {
-    expect(TAG_SWATCHES).toContain("#8a7ad0");
+    expect(TAG_SWATCHES).toContain("var(--color-tag-drums-dot)");
     expect(TAG_SWATCHES).toHaveLength(7);
   });
 });

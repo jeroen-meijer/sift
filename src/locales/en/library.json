@@ -2,9 +2,8 @@
   "sidebar": {
     "title": "Library",
     "folders": "Folders",
-    "noRoots": "No library roots yet.\nFolders you add appear here.",
-    "addFolder": "Add folder…",
-    "addRoot": "Add library root",
+    "noRoots": "No libraries yet.\nFolders you add appear here.",
+    "addRoot": "Add library…",
     "collapseRoot": "Collapse",
     "expandRoot": "Expand",
     "manageTags": "Manage tags"
@@ -67,6 +66,10 @@
   },
   "transport": {
     "snap": "Snap",
+    "snapNone": "None",
+    "snapQuarter": "1/4",
+    "snapEighth": "1/8",
+    "snapSixteenth": "1/16",
     "play": "Play",
     "pause": "Pause",
     "loopPreview": "Loop preview",
@@ -88,11 +91,11 @@
     "clipPendingNoBpm": "{{secs}} s"
   },
   "removeRoot": {
-    "title": "Remove this root from the library?",
+    "title": "Remove this library folder?",
     "body_one": "Sift forgets the <0>{{formatted}} sample</0> under it, with its tags, overrides, and favorites.",
     "body_other": "Sift forgets the <0>{{formatted}} samples</0> under it, with their tags, overrides, and favorites.",
     "safe": "Nothing on disk is touched. Re-add the folder later to index it again, but the tags do not come back.",
-    "confirm": "Remove root"
+    "confirm": "Remove library folder"
   },
   "recovery": {
     "title": "Your library couldn't be opened",

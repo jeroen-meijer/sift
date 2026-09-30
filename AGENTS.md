@@ -50,7 +50,7 @@ When you build or change a feature, or the user asks you to test, verify, or che
 | Renderer E2E | WebdriverIO browser mode (`e2e/`, `bun run test:e2e:browser`) |
 | Desktop E2E | WebdriverIO + `@wdio/tauri-service` embedded (`bun run build:e2e:app` then `test:e2e:tauri`) |
 | Frontend bench | Vitest bench (`bun run bench`, `src/**/*.bench.ts`) |
-| Docs lint | `markdownlint-cli2` (`.markdownlint-cli2.jsonc`) + `tool/check-docs.py` via `bun run docs:check` |
+| Docs lint | `markdownlint-cli2` (`.markdownlint-cli2.jsonc`) + `tool/check-docs.ts` + `i18n:check` via `bun run docs:check` |
 | Package manager | Bun |
 | CI | `.github/workflows/ci.yml` on Ubuntu (fmt · clippy · nextest · eslint · tsc · vitest · e2e-browser · docs:check); Bun+Rust caches; publish on macOS/Windows |
 | Release | `CHANGELOG.md` + `./tool/prepare_release.sh` → Publish Release (installers + updater + `latest.json`) |

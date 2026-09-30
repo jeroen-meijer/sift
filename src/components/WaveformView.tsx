@@ -133,7 +133,7 @@ export function WaveformView({
       ctx.clearRect(0, 0, width, height);
 
       const styles = getComputedStyle(canvas);
-      const ink = styles.getPropertyValue("--color-wave-ink").trim() || "#7b71b8";
+      const ink = styles.getPropertyValue("--color-wave-ink").trim();
       const bands = readSpectralBands(canvas);
       const laneHeight = height / lanes;
       const channels = Math.max(1, peaks.channels);
@@ -159,7 +159,7 @@ export function WaveformView({
       }
 
       if (lanes === 2) {
-        ctx.strokeStyle = "rgba(233,233,237,0.09)";
+        ctx.strokeStyle = styles.getPropertyValue("--color-wave-grid").trim();
         ctx.beginPath();
         ctx.moveTo(0, laneHeight);
         ctx.lineTo(width, laneHeight);
@@ -186,11 +186,11 @@ export function WaveformView({
     if (stepPct < 0.4) return undefined;
     const barPct = ((beat * 4) / duration) * 100;
     const layers = [
-      `repeating-linear-gradient(90deg, rgba(233,233,237,.09) 0 1px, transparent 1px ${stepPct.toFixed(4)}%)`,
+      `repeating-linear-gradient(90deg, var(--color-wave-grid) 0 1px, transparent 1px ${stepPct.toFixed(4)}%)`,
     ];
     if (barPct <= 100) {
       layers.unshift(
-        `repeating-linear-gradient(90deg, rgba(145,132,217,.30) 0 1px, transparent 1px ${barPct.toFixed(4)}%)`,
+        `repeating-linear-gradient(90deg, var(--color-wave-grid-bar) 0 1px, transparent 1px ${barPct.toFixed(4)}%)`,
       );
     }
     return { background: layers.join(", ") };

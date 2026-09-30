@@ -75,16 +75,19 @@ After you edit markdown under `docs/`, root `*.md`, or `assets/**/*.md`, run:
 bun run docs:check
 ```
 
-That gate is also part of `bun run preflight` and CI. It runs two checks:
+That gate is also part of `bun run preflight` and CI. It runs three checks:
 
-1. [`tool/check-docs.py`](../tool/check-docs.py): internal links and heading anchors, no YAML frontmatter under `docs/`, kebab-case filenames (see [Naming](#naming)), and path hygiene from [Repo hygiene](#repo-hygiene).
-2. `markdownlint-cli2`: code-fence languages, heading and list shape. Config: [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc).
+1. [`tool/check-docs.ts`](../tool/check-docs.ts): internal links and heading anchors, no YAML frontmatter under `docs/`, kebab-case filenames (see [Naming](#naming)), and path hygiene from [Repo hygiene](#repo-hygiene).
+2. [`tool/check-i18n.ts`](../tool/check-i18n.ts) (`bun run i18n:check`): locale string VALUES against [reference/terminology.yaml](reference/terminology.yaml). Hard-ban hits fail; soft-ban hits warn only.
+3. `markdownlint-cli2`: code-fence languages, heading and list shape. Config: [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc).
 
 External http(s) links are a separate, optional check (needs the network, and some sites block scripted requests):
 
 ```bash
 bun run docs:links
 ```
+
+That runs [`tool/check-links.ts`](../tool/check-links.ts).
 
 ## Root README
 

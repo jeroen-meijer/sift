@@ -252,7 +252,7 @@ export function App() {
   }, []);
 
   const addRoot = useCallback(() => {
-    void open({ directory: true, multiple: false, title: tl("sidebar.addFolder") })
+    void open({ directory: true, multiple: false, title: tl("sidebar.addRoot") })
       .then(async (selected) => {
         if (typeof selected !== "string") return;
         const outcome = await ipc.addRoot(selected);

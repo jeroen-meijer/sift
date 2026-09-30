@@ -26,7 +26,7 @@ export function FirstLaunch({ onAddFolder, onPreferences }: Props) {
           <div className="first-launch-actions">
             <button type="button" className="btn btn-primary" onClick={onAddFolder}>
               <FolderPlusIcon size={15} />
-              {t("sidebar.addFolder")}
+              {t("sidebar.addRoot")}
             </button>
             <button type="button" className="btn btn-secondary" onClick={onPreferences}>
               {tc("chrome.preferences")}

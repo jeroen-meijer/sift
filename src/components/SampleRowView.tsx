@@ -149,7 +149,7 @@ export const SampleRowView = memo(function SampleRowView({
             ) : (
               <>
                 {sample.key_name}
-                {showRel ? <span className="cell-badge">rel</span> : null}
+                {showRel ? <span className="cell-badge">{t("omni.relBadge")}</span> : null}
               </>
             )}
           </div>

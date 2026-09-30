@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keys, matchesBinding } from "../lib/bindings";
 import { flattenTags, ipc, type TagNode } from "../lib/ipc";
-import { TAG_SWATCHES, tagPalette } from "../lib/tagColors";
+import { tagPalette, tagSwatchChoices } from "../lib/tagColors";
 import { Dialog, DialogDismissButton } from "../ui/Dialog";
 import { PillSelect } from "../ui/PillSelect";
 import { TagDeleteDialog } from "./dialogs/TagDeleteDialog";
@@ -228,18 +228,21 @@ export function TagManagerView({ tags, onRefresh, onClose }: Props) {
                 <div className="tag-editor-colors">
                   <div className="tag-editor-colors-label">{t("editor.color.label")}</div>
                   <div className="tag-swatch-row">
-                    {TAG_SWATCHES.map((color) => (
+                    {tagSwatchChoices().map(({ css, storedHex }) => {
+                      const stored = storedHex ?? css;
+                      return (
                       <button
-                        key={color}
+                        key={css}
                         type="button"
-                        className={`tag-swatch-pick${selected.color === color ? " on" : ""}`}
-                        style={{ background: color }}
-                        aria-label={color}
+                        className={`tag-swatch-pick${selected.color === stored ? " on" : ""}`}
+                        style={{ background: css }}
+                        aria-label={stored}
                         onClick={() => {
-                          run(ipc.setTagColor(selected.id, color));
+                          run(ipc.setTagColor(selected.id, stored));
                         }}
                       />
-                    ))}
+                      );
+                    })}
                     <button
                       type="button"
                       className={`tag-swatch-inherit${selected.color == null ? " on" : ""}`}

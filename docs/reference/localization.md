@@ -127,6 +127,16 @@ structured kind. Map code → locale string at the UI boundary. Do not show raw
 `Display` / `toString()` text from the backend as the only user-facing message
 when you can avoid it.
 
+## Terminology
+
+Preferred product words and banned synonyms live in
+[terminology.yaml](terminology.yaml). `bun run i18n:check` scans string VALUES
+in `src/locales/**/*.json` (not keys). Hard-ban hits fail CI. Soft-ban hits warn
+on stderr and do not fail when there are no hard-bans.
+
+Add or change terms in the YAML only. Do not keep a second ban table in this
+file.
+
 ## Voice
 
 UI copy is short and concrete. One string, one job.
@@ -142,13 +152,8 @@ UI copy is short and concrete. One string, one job.
 Hard bans in locale values: em dash characters, en dash characters, and spaced
 `--` used as a dash. Prefer a period, comma, or colon.
 
-Skip hype in helpers. Prefer the fact or the next step. Do not use these in
-locale strings:
-
-```text
-seamless, robust, leverage, streamline, comprehensive, delight, effortless,
-crucial (as praise)
-```
+Skip hype in helpers. Prefer the fact or the next step. Banned hype words are
+owned by [terminology.yaml](terminology.yaml) (Voice / plain entry).
 
 When rewriting copy, match neighbors in the same file. Do not invent product
 rules to sound specific.

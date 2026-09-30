@@ -79,21 +79,21 @@ export function detectTrigger(
   return null;
 }
 
-/** Trigger suggestions for a partial word in the dropdown. */
+/** Trigger suggestions for a partial word in the dropdown. Labels come from locales. */
 export function triggerCompletions(
   word: string,
-): { kind: OmniTriggerKind; label: string; insert: string }[] {
+): { kind: OmniTriggerKind; insert: string }[] {
   const w = word.toLowerCase();
   if (!w) return [];
-  const all: { kind: OmniTriggerKind; label: string; insert: string; keys: string[] }[] = [
-    { kind: "tag", label: "Tag", insert: "#", keys: ["#", "tag"] },
-    { kind: "bpm", label: "BPM range", insert: "b:", keys: ["b", "bpm"] },
-    { kind: "key", label: "Key", insert: "k:", keys: ["k", "key"] },
-    { kind: "type", label: "Type", insert: "type:", keys: ["type", "t"] },
+  const all: { kind: OmniTriggerKind; insert: string; keys: string[] }[] = [
+    { kind: "tag", insert: "#", keys: ["#", "tag"] },
+    { kind: "bpm", insert: "b:", keys: ["b", "bpm"] },
+    { kind: "key", insert: "k:", keys: ["k", "key"] },
+    { kind: "type", insert: "type:", keys: ["type", "t"] },
   ];
   return all
     .filter((c) => c.keys.some((k) => k.startsWith(w) || w.startsWith(k)))
-    .map(({ kind, label, insert }) => ({ kind, label, insert }));
+    .map(({ kind, insert }) => ({ kind, insert }));
 }
 
 export interface ParsedOmniQuery {

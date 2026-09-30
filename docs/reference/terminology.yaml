@@ -1,0 +1,15 @@
+# Preferred terms and banned synonyms for user-facing copy.
+#
+# Scanned by `bun run i18n:check` (`tool/check-i18n.ts`) against string VALUES
+# in `src/locales/**/*.json`. Hard-ban hits fail CI. Soft-ban hits warn only.
+# Procedural localization guidance: [localization.md](localization.md).
+
+terms:
+  - preferred: library
+    note: A watched sample folder.
+    hard_ban: [root, roots]
+    soft_ban: []
+  - preferred: plain
+    note: "Plain UI wording. No hype words."
+    hard_ban: [seamless, robust, leverage, streamline, comprehensive, delight, effortless, crucial]
+    soft_ban: []

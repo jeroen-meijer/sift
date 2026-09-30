@@ -58,8 +58,8 @@
   },
   "library": {
     "newFiles": {
-      "label": "New files inside a root",
-      "hint": "Roots are watched continuously. Renames and moves update in place.",
+      "label": "New files inside a library folder",
+      "hint": "Libraries are watched continuously. Renames and moves update in place.",
       "autoIndex": "Auto-index",
       "askFirst": "Ask first"
     },
@@ -120,7 +120,7 @@
       "hint": "Erases BPM, key, type, auto tags, and waveforms, then analyzes everything again. Favorites and your tags stay.",
       "dialog": {
         "title": "Erase analysis data?",
-        "body": "This clears BPM, key, type, auto tags, and peakfiles for every sample, including values you edited by hand. Favorites, your tags, and folder roots stay. Analysis then runs again in the background.",
+        "body": "This clears BPM, key, type, auto tags, and peakfiles for every sample, including values you edited by hand. Favorites, your tags, and library folders stay. Analysis then runs again in the background.",
         "confirm": "Erase analysis data"
       }
     },

@@ -1,6 +1,6 @@
 // Structural markdown lint for headings, code fences, and lists.
 //
-// Pair with `bun run docs:check` (`tool/check-docs.py`). That script owns
+// Pair with `bun run docs:check` (`tool/check-docs.ts`). That script owns
 // internal links and anchors, no-frontmatter, kebab-case names, and path
 // hygiene. This file owns fence, heading, and list shape only.
 //
