@@ -124,6 +124,7 @@ Pull request and commit titles/bodies: [docs/reference/commits-and-pull-requests
 - Unshipped work: edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
 - After a release: only then does a later bugfix get its own Upcoming line.
 - Prefer fewer, broader bullets over one line per agent session.
+- Blank line after each `##` heading and between release sections; no blank lines between consecutive bullets within a section.
 - Run `/humanize` (or match that skill) on every new or edited Upcoming bullet before you commit.
 - Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release**.
 - Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.
