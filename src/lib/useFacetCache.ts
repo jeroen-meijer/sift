@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ipc, type SampleQuery, type SampleRow } from "./ipc";
 import type { OmniState } from "./omni";
 import { facetListCacheKey, omniToSampleQuery } from "./omniToQuery";
@@ -64,10 +64,13 @@ export function useFacetCache({
 }: Opts): SampleRow[] {
   const [cache, setCache] = useState(() => new Map<string, SampleRow[]>());
   const cacheRef = useRef(cache);
-  cacheRef.current = cache;
   const inFlight = useRef(new Set<string>());
   const epochRef = useRef(libraryEpoch);
-  epochRef.current = libraryEpoch;
+
+  useLayoutEffect(() => {
+    cacheRef.current = cache;
+    epochRef.current = libraryEpoch;
+  });
 
   useEffect(() => {
     inFlight.current.clear();
