@@ -110,7 +110,7 @@ App DB (macOS): `~/Library/Application Support/dev.jfk.Sift/library.sqlite3`.
 
 ## Changelog / release
 
-`CHANGELOG.md` → `## Upcoming` is the **user-facing draft for the next release**, not a commit diary.
+`CHANGELOG.md` → `## Upcoming` is the draft for the next release.
 
 Pull request and commit titles/bodies: [docs/reference/commits-and-pull-requests.md](docs/reference/commits-and-pull-requests.md).
 
@@ -120,9 +120,10 @@ Pull request and commit titles/bodies: [docs/reference/commits-and-pull-requests
 - One distinct surface per bullet when they are separate (search vs column picker vs transport). Do not semicolon-stack unrelated polish onto one feat.
 - Fix lines name the symptom (“improved Snow theme visibility and contrast”), not the patch (“knobs use on-accent white”).
 - Prefer what the UI does now over soft wrappers (“keep usable”, “improve X”) and parenthetical patch dumps (“stop stealing focus”, “wire the callback”). Say what happens when the user acts (“filter popups close when you click the chip again”).
+- Every PR updates `## Upcoming` (CI enforces this when the check is present). Prefer end-user wording when the change is product-visible. CI, tooling, refactors, and agent-doc changes still get a short honest bullet (`docs` / `chore` / `ci` / …); do not invent fake product language for them.
 - Unshipped work: edit or merge existing Upcoming bullets. Do not add `fix(X)` under a `feat(X)` that never left Upcoming. Collapse iterative polish into one bullet.
 - After a release: only then does a later bugfix get its own Upcoming line.
-- Prefer fewer, broader bullets over one line per agent session. Skip internal-only churn unless it changes what users notice.
+- Prefer fewer, broader bullets over one line per agent session.
 - Run `/humanize` (or match that skill) on every new or edited Upcoming bullet before you commit.
 - Ship: `./tool/prepare_release.sh X.Y.Z` on a clean `main` (moves Upcoming → `## X.Y.Z`, syncs versions, pushes). That commit triggers **Publish Release**.
 - Optional PR flow: `./tool/prepare_release.sh X.Y.Z --pr`.

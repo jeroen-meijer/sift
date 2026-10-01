@@ -1,5 +1,7 @@
 ## Upcoming
 
+- docs: require every PR to update Upcoming; prefer end-user wording when the change is visible, and write what the UI does instead of soft wrappers
+
 ## 0.5.1
 
 - feat(ui): change default theme to Graphite
