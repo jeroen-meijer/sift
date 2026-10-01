@@ -271,8 +271,6 @@ const listSamplesInflight = new Map<string, Promise<SampleRow[]>>();
 
 /** Roots plus one level (packs) for the first sidebar paint. */
 export const FOLDER_TREE_SHALLOW_DEPTH = 1;
-/** Full nested tree after reveal. Keep in sync with Rust `library::FOLDER_TREE_FULL_DEPTH`. */
-export const FOLDER_TREE_FULL_DEPTH = 6;
 
 export const ipc = {
   getSettings: () => invoke<Partial<AppSettings>>("get_settings"),
@@ -280,9 +278,12 @@ export const ipc = {
     run("set_setting", { key, value }),
 
   dbStats: () => invoke<DbStats>("db_stats"),
-  /** Defaults to full depth. Pass {@link FOLDER_TREE_SHALLOW_DEPTH} for first paint. */
-  folderTree: (maxDepth = FOLDER_TREE_FULL_DEPTH) =>
-    invoke<FolderNode[]>("folder_tree", { maxDepth }),
+  /**
+   * Folder sidebar tree. Omit `maxDepth` (or pass `null`) for every nested
+   * folder that has samples. Pass {@link FOLDER_TREE_SHALLOW_DEPTH} on first paint.
+   */
+  folderTree: (maxDepth?: number | null) =>
+    invoke<FolderNode[]>("folder_tree", { maxDepth: maxDepth ?? null }),
   addRoot: (path: string) => invoke<AddRootOutcome>("add_root", { path }),
   removeRoot: (rootId: number) => run("remove_root", { rootId }),
   setFolderFavorite: (path: string, favorite: boolean) =>

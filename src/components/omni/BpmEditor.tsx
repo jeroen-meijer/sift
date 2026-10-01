@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { clampBpm, singleBpmRange } from "../../lib/omniQuery";
+import { SEARCH_INPUT_ATTRS } from "../../lib/searchInputAttrs";
 import { RangeSlider } from "../../ui/RangeSlider";
 import { OmniEditorChrome } from "./OmniEditorChrome";
 import { OmniToggle } from "./OmniToggle";
@@ -112,6 +113,7 @@ export function BpmEditor({
           className="omni-bpm-input mono"
           inputMode="numeric"
           maxLength={3}
+          {...SEARCH_INPUT_ATTRS}
           value={minText}
           aria-label={t("omni.editor.bpmMin")}
           onChange={(e) => {
@@ -154,6 +156,7 @@ export function BpmEditor({
           className="omni-bpm-input mono"
           inputMode="numeric"
           maxLength={3}
+          {...SEARCH_INPUT_ATTRS}
           value={maxText}
           aria-label={t("omni.editor.bpmMax")}
           onChange={(e) => {

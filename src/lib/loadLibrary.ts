@@ -7,7 +7,6 @@
  */
 
 import {
-  FOLDER_TREE_FULL_DEPTH,
   FOLDER_TREE_SHALLOW_DEPTH,
   ipc,
   type DbStats,
@@ -51,11 +50,7 @@ export async function loadLibrary(sink: LibrarySink): Promise<void> {
     })
     .catch(console.error);
 
-  const deep = await bootProfiled(
-    "fe.ipc_folder_tree_deep",
-    `depth=${String(FOLDER_TREE_FULL_DEPTH)}`,
-    () => ipc.folderTree(FOLDER_TREE_FULL_DEPTH),
-  );
+  const deep = await bootProfiled("fe.ipc_folder_tree_deep", "depth=all", () => ipc.folderTree());
   sink.setFolders(deep);
   bootMark(
     "fe.tree_deep",

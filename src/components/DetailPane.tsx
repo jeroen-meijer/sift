@@ -11,6 +11,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { flattenTags, type SampleRow, type SnapMode, type TagNode } from "../lib/ipc";
 import type { PeakData, WaveformView as WaveformMode } from "../lib/ipc";
 import { folderChipLabel } from "../lib/omni";
+import { SEARCH_INPUT_ATTRS } from "../lib/searchInputAttrs";
 import { tagPalette } from "../lib/tagColors";
 import { CopyableText } from "../ui/CopyableText";
 import { Popover } from "../ui/Popover";
@@ -247,6 +248,7 @@ export const DetailPane = memo(function DetailPane({
                   placeholder={t("detail.tagFilter.placeholder")}
                   aria-label={t("detail.tagFilter.placeholder")}
                   autoFocus
+                  {...SEARCH_INPUT_ATTRS}
                   onChange={(e) => {
                     setTagFilter(e.target.value);
                   }}

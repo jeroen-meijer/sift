@@ -9,6 +9,7 @@ import {
   relativeKeyLabel,
   serializeOmniKeyBody,
 } from "../../lib/omniKey";
+import { SEARCH_INPUT_ATTRS } from "../../lib/searchInputAttrs";
 import { OmniEditorChrome } from "./OmniEditorChrome";
 import { OmniToggle } from "./OmniToggle";
 
@@ -70,7 +71,7 @@ export function KeyEditor({
         <input
           ref={inputRef}
           className="omni-key-input mono"
-          spellCheck={false}
+          {...SEARCH_INPUT_ATTRS}
           placeholder={t("omni.editor.keyPlaceholder")}
           value={raw}
           onChange={(e) => {

@@ -52,9 +52,6 @@ pub struct FolderNode {
     pub sample_count: i64,
 }
 
-/// Nested folder tree after the window is up. Keep in sync with FE `FOLDER_TREE_FULL_DEPTH`.
-pub const FOLDER_TREE_FULL_DEPTH: u32 = 6;
-
 pub fn list_roots(conn: &mut SqliteConnection) -> AppResult<Vec<RootDto>> {
     let rows: Vec<(i32, String, Option<String>)> = roots_dsl::roots
         .select((roots_dsl::id, roots_dsl::path, roots_dsl::label))
@@ -168,7 +165,13 @@ pub fn set_folder_favorite(
 ///
 /// Only folders that contain indexed samples (or are ancestors of those) appear.
 /// Safe on Dropbox / File Provider roots.
-pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec<FolderNode>> {
+///
+/// `max_depth` limits nesting under each root (`Some(1)` is roots plus packs for
+/// first paint). `None` includes every ancestor of every sample parent.
+pub fn folder_tree(
+    conn: &mut SqliteConnection,
+    max_depth: Option<u32>,
+) -> AppResult<Vec<FolderNode>> {
     let roots = list_roots(conn)?;
     let favs: HashSet<String> = fav_dsl::favorite_folders
         .select(fav_dsl::path)
@@ -192,8 +195,8 @@ pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec
         .map(|r| (id_from_i64(r.id).unwrap_or(0), r))
         .collect();
 
-    // Folders to show (ancestors of each parent, capped by depth) and
-    // inclusive sample counts under each folder, in one ancestor walk.
+    // Folders to show (ancestors of each parent) and inclusive sample counts,
+    // in one ancestor walk. Optional depth is only for the shallow first paint.
     let mut folder_set: HashSet<(i32, String)> = HashSet::new();
     let mut inclusive: HashMap<(i32, String), i64> = HashMap::new();
     for (root_id_i32, parent, count) in &rows {
@@ -202,7 +205,7 @@ pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec
         };
         let mut cur = parent.clone();
         loop {
-            if depth_under_root(&root.path, &cur) <= max_depth {
+            if within_depth(&root.path, &cur, max_depth) {
                 folder_set.insert((*root_id_i32, cur.clone()));
             }
             let slot = inclusive.entry((*root_id_i32, cur.clone())).or_insert(0);
@@ -243,7 +246,7 @@ pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec
         paths.sort_by(|a, b| cmp_tree_paths(a, b));
         for path in paths {
             let depth = depth_under_root(&root.path, &path);
-            if depth > max_depth && path != root.path {
+            if !within_depth(&root.path, &path, max_depth) && path != root.path {
                 continue;
             }
             let name = if path == root.path {
@@ -266,6 +269,13 @@ pub fn folder_tree(conn: &mut SqliteConnection, max_depth: u32) -> AppResult<Vec
     }
 
     Ok(nodes)
+}
+
+fn within_depth(root: &str, path: &str, max_depth: Option<u32>) -> bool {
+    match max_depth {
+        None => true,
+        Some(max) => depth_under_root(root, path) <= max,
+    }
 }
 
 fn depth_under_root(root: &str, path: &str) -> u32 {
@@ -303,8 +313,8 @@ fn cmp_tree_paths(a: &str, b: &str) -> std::cmp::Ordering {
 #[cfg(test)]
 mod tests {
     use super::{
-        AddRootOutcome, FOLDER_TREE_FULL_DEPTH, OverlapReason, add_root, depth_under_root,
-        folder_tree, is_strict_subpath, list_roots,
+        AddRootOutcome, OverlapReason, add_root, depth_under_root, folder_tree, is_strict_subpath,
+        list_roots,
     };
     use crate::db::schema::roots::dsl as roots_dsl;
     use crate::db::schema::samples::dsl as samples_dsl;
@@ -342,7 +352,7 @@ mod tests {
         insert_sample(&mut conn, root_id, "/lib/drums/snare.wav");
         insert_sample(&mut conn, root_id, "/lib/fx/rise.wav");
 
-        let nodes = folder_tree(&mut conn, FOLDER_TREE_FULL_DEPTH).unwrap();
+        let nodes = folder_tree(&mut conn, None).unwrap();
         let count = |path: &str| {
             nodes
                 .iter()
@@ -369,9 +379,32 @@ mod tests {
             .first(&mut conn)
             .unwrap();
         insert_sample(&mut conn, root_id, "/lib/a/b/c/x.wav");
-        let nodes = folder_tree(&mut conn, 1).unwrap();
+        let nodes = folder_tree(&mut conn, Some(1)).unwrap();
         assert!(nodes.iter().any(|n| n.path == "/lib/a"));
         assert!(!nodes.iter().any(|n| n.path == "/lib/a/b"));
+    }
+
+    #[test]
+    fn folder_tree_unlimited_includes_deep_parents() {
+        let mut conn = crate::db::test_conn();
+        diesel::insert_into(roots_dsl::roots)
+            .values((roots_dsl::path.eq("/lib"), roots_dsl::label.eq("lib")))
+            .execute(&mut conn)
+            .unwrap();
+        let root_id: i32 = roots_dsl::roots
+            .select(roots_dsl::id)
+            .first(&mut conn)
+            .unwrap();
+        insert_sample(
+            &mut conn,
+            root_id,
+            "/lib/a/b/c/d/e/f/g/Drum_Loops/x.wav",
+        );
+        let nodes = folder_tree(&mut conn, None).unwrap();
+        assert!(nodes
+            .iter()
+            .any(|n| n.path == "/lib/a/b/c/d/e/f/g/Drum_Loops"));
+        assert!(nodes.iter().any(|n| n.path == "/lib/a/b/c/d/e/f/g"));
     }
 
     #[test]
@@ -388,7 +421,7 @@ mod tests {
         insert_sample(&mut conn, root_id, "/lib/avant/sub/a.wav");
         insert_sample(&mut conn, root_id, "/lib/blackout/b.wav");
 
-        let paths: Vec<_> = folder_tree(&mut conn, FOLDER_TREE_FULL_DEPTH)
+        let paths: Vec<_> = folder_tree(&mut conn, None)
             .unwrap()
             .into_iter()
             .map(|n| n.path)
@@ -419,7 +452,7 @@ mod tests {
         insert_sample(&mut conn, root_id, "/lib/FX/Risers/b.wav");
         insert_sample(&mut conn, root_id, "/lib/FX One Shots/c.wav");
 
-        let paths: Vec<_> = folder_tree(&mut conn, FOLDER_TREE_FULL_DEPTH)
+        let paths: Vec<_> = folder_tree(&mut conn, None)
             .unwrap()
             .into_iter()
             .map(|n| n.path)

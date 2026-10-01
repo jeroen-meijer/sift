@@ -1,5 +1,10 @@
 ## Upcoming
 
+- fix(audio): show the playhead and transport when you play the first sample after launch
+- fix(search): stop autocorrect from changing what you type in search
+- fix(library): Show parent folder selects that folder in the sidebar and scrolls it into view
+- feat(library): show nested folders at any depth in the sidebar
+
 ## 0.5.2
 
 - fix(search): BPM, key, and tag filter popups close when you click the search bar or the chip again, and keep focus in their fields

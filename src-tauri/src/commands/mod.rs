@@ -225,9 +225,11 @@ pub async fn remove_root(app: AppHandle, root_id: i64) -> AppResult<()> {
 #[tauri::command]
 pub async fn folder_tree(app: AppHandle, max_depth: Option<u32>) -> AppResult<Vec<FolderNode>> {
     off_main(app, move |state| {
-        let depth = max_depth.unwrap_or(library::FOLDER_TREE_FULL_DEPTH);
-        crate::profile_log::time("ipc.folder_tree", &format!("depth={depth}"), || {
-            state.db.with_conn(|conn| library::folder_tree(conn, depth))
+        let detail = max_depth.map_or_else(|| "depth=all".into(), |d| format!("depth={d}"));
+        crate::profile_log::time("ipc.folder_tree", &detail, || {
+            state
+                .db
+                .with_conn(|conn| library::folder_tree(conn, max_depth))
         })
     })
     .await

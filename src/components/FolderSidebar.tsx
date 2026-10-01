@@ -9,6 +9,13 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCount } from '../lib/format';
+import {
+  ancestorPathsToExpand,
+  findFolderIndex,
+  folderPathsEqual,
+  normFolderPath,
+  type FolderSelection,
+} from '../lib/folderPaths';
 import { flattenTags, type FolderNode, type TagNode } from '../lib/ipc';
 import { useRenderTiming } from '../lib/profile';
 import { tagPalette } from '../lib/tagColors';
@@ -17,7 +24,8 @@ import { FolderMenu, type FolderAction } from './FolderMenu';
 interface Props {
   folders: FolderNode[];
   tags: TagNode[];
-  selectedPath: string | null;
+  /** Folder chip selection. `reveal` re-runs expand/scroll for the same path. */
+  folderSelection: FolderSelection | null;
   selectedTagPath: string | null;
   onSelectFolder: (path: string) => void;
   onSelectTag: (path: string | null) => void;
@@ -39,10 +47,6 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
-function normPath(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -53,7 +57,7 @@ function prefersReducedMotion(): boolean {
 function pathsWithChildren(folders: readonly FolderNode[]): Set<string> {
   const parents = new Set<string>();
   for (const node of folders) {
-    const p = normPath(node.path);
+    const p = normFolderPath(node.path);
     const slash = p.lastIndexOf('/');
     if (slash <= 0) continue;
     parents.add(p.slice(0, slash));
@@ -67,7 +71,7 @@ function isHiddenByCollapse(
   expanded: ReadonlySet<string>,
   folderPaths: ReadonlySet<string>,
 ): boolean {
-  const p = normPath(path);
+  const p = normFolderPath(path);
   let slash = p.lastIndexOf('/');
   while (slash > 0) {
     const parent = p.slice(0, slash);
@@ -78,8 +82,8 @@ function isHiddenByCollapse(
 }
 
 function descendantKeys(path: string, folders: readonly FolderNode[]): string[] {
-  const prefix = `${normPath(path)}/`;
-  return folders.filter((n) => normPath(n.path).startsWith(prefix)).map((n) => normPath(n.path));
+  const prefix = `${normFolderPath(path)}/`;
+  return folders.filter((n) => normFolderPath(n.path).startsWith(prefix)).map((n) => normFolderPath(n.path));
 }
 
 interface TreeAnim {
@@ -91,7 +95,7 @@ interface TreeAnim {
 export const FolderSidebar = memo(function FolderSidebar({
   folders,
   tags,
-  selectedPath,
+  folderSelection,
   selectedTagPath,
   onSelectFolder,
   onSelectTag,
@@ -116,7 +120,7 @@ export const FolderSidebar = memo(function FolderSidebar({
   const [ghostEpoch, setGhostEpoch] = useState(0);
 
   const withChildren = useMemo(() => pathsWithChildren(folders), [folders]);
-  const folderPaths = useMemo(() => new Set(folders.map((n) => normPath(n.path))), [folders]);
+  const folderPaths = useMemo(() => new Set(folders.map((n) => normFolderPath(n.path))), [folders]);
 
   /* Roots start expanded so packs are visible; nested folders stay collapsed. */
   useEffect(() => {
@@ -124,7 +128,7 @@ export const FolderSidebar = memo(function FolderSidebar({
       let next: Set<string> | null = null;
       for (const n of folders) {
         if (!n.is_root) continue;
-        const key = normPath(n.path);
+        const key = normFolderPath(n.path);
         if (prev.has(key)) continue;
         next ??= new Set(prev);
         next.add(key);
@@ -135,22 +139,19 @@ export const FolderSidebar = memo(function FolderSidebar({
 
   /* Reveal a selection from elsewhere (e.g. show parent) by expanding ancestors. */
   useEffect(() => {
-    if (!selectedPath) return;
+    if (!folderSelection) return;
+    const toExpand = ancestorPathsToExpand(folderSelection.path, folderPaths);
+    if (toExpand.length === 0) return;
     setExpanded((prev) => {
       let next: Set<string> | null = null;
-      const p = normPath(selectedPath);
-      let slash = p.lastIndexOf('/');
-      while (slash > 0) {
-        const parent = p.slice(0, slash);
-        if (folderPaths.has(parent) && !prev.has(parent) && !next?.has(parent)) {
-          next ??= new Set(prev);
-          next.add(parent);
-        }
-        slash = parent.lastIndexOf('/');
+      for (const parent of toExpand) {
+        if (prev.has(parent)) continue;
+        next ??= new Set(prev);
+        next.add(parent);
       }
       return next ?? prev;
     });
-  }, [selectedPath, folderPaths]);
+  }, [folderSelection, folderPaths]);
 
   const logicalVisible = useMemo(
     () => folders.filter((n) => !isHiddenByCollapse(n.path, expanded, folderPaths)),
@@ -262,19 +263,26 @@ export const FolderSidebar = memo(function FolderSidebar({
     virtualizer.measure();
   }, [animT, displayFolders, virtualizer]);
 
-  /* Keep the selected folder in view when the selection changes (for example
-   * "show parent"), but not on every tree refresh. */
-  const scrolledToPath = useRef<string | null>(null);
+  /* Scroll the selected folder toward the middle when the folder filter changes.
+   * Retry after the expand animation so row heights are final. */
+  const scrolledRevealKey = useRef<string | null>(null);
   useEffect(() => {
-    if (!selectedPath || selectedPath === scrolledToPath.current) return;
-    const idx = displayFolders.findIndex((n) => n.path === selectedPath);
+    if (!folderSelection) {
+      scrolledRevealKey.current = null;
+      return;
+    }
+    const revealKey = `${normFolderPath(folderSelection.path)}#${String(folderSelection.reveal)}`;
+    if (revealKey === scrolledRevealKey.current) return;
+    const idx = findFolderIndex(displayFolders, folderSelection.path);
+    /* Shallow first paint may not include this folder yet. Retry when folders update. */
     if (idx < 0) return;
-    scrolledToPath.current = selectedPath;
-    virtualizer.scrollToIndex(idx, { align: 'auto' });
-  }, [selectedPath, displayFolders, virtualizer]);
+    virtualizer.scrollToIndex(idx, { align: 'center' });
+    if (animT < 1) return;
+    scrolledRevealKey.current = revealKey;
+  }, [folderSelection, displayFolders, virtualizer, animT]);
 
   const setExpandedPath = (path: string, nextExpanded: boolean) => {
-    const key = normPath(path);
+    const key = normFolderPath(path);
     setExpanded((prev) => {
       const next = new Set(prev);
       if (nextExpanded) next.add(key);
@@ -284,7 +292,7 @@ export const FolderSidebar = memo(function FolderSidebar({
   };
 
   const expandAllUnder = (path: string) => {
-    const key = normPath(path);
+    const key = normFolderPath(path);
     setExpanded((prev) => {
       const next = new Set(prev);
       next.add(key);
@@ -296,7 +304,7 @@ export const FolderSidebar = memo(function FolderSidebar({
   };
 
   const collapseAllUnder = (path: string) => {
-    const key = normPath(path);
+    const key = normFolderPath(path);
     setExpanded((prev) => {
       const next = new Set(prev);
       next.delete(key);
@@ -308,7 +316,7 @@ export const FolderSidebar = memo(function FolderSidebar({
   };
 
   const toggleExpanded = (path: string, deep: boolean) => {
-    const key = normPath(path);
+    const key = normFolderPath(path);
     const isExp = expanded.has(key);
     if (deep) {
       if (isExp) collapseAllUnder(path);
@@ -319,8 +327,9 @@ export const FolderSidebar = memo(function FolderSidebar({
   };
 
   const onFolderActivate = (node: FolderNode, deep: boolean) => {
-    const key = normPath(node.path);
-    const wasSelected = selectedPath === node.path;
+    const key = normFolderPath(node.path);
+    const wasSelected =
+      folderSelection != null && folderPathsEqual(folderSelection.path, node.path);
     const isExp = expanded.has(key);
     const hasKids = withChildren.has(key);
     onSelectFolder(node.path);
@@ -382,8 +391,9 @@ export const FolderSidebar = memo(function FolderSidebar({
               {virtualizer.getVirtualItems().map((virtual) => {
                 const node = displayFolders[virtual.index];
                 if (!node) return null;
-                const selected = selectedPath === node.path;
-                const nodeKey = normPath(node.path);
+                const selected =
+                  folderSelection != null && folderPathsEqual(folderSelection.path, node.path);
+                const nodeKey = normFolderPath(node.path);
                 const hasKids = withChildren.has(nodeKey);
                 const isExpanded = expanded.has(nodeKey);
                 const indent = node.is_root ? 0 : 8 + Math.max(0, node.depth - 1) * 13;
@@ -520,8 +530,8 @@ export const FolderSidebar = memo(function FolderSidebar({
           x={menu.x}
           y={menu.y}
           folder={menu.node}
-          hasChildren={withChildren.has(normPath(menu.node.path))}
-          expanded={expanded.has(normPath(menu.node.path))}
+          hasChildren={withChildren.has(normFolderPath(menu.node.path))}
+          expanded={expanded.has(normFolderPath(menu.node.path))}
           onSelect={onMenuSelect}
           onClose={() => {
             setMenu(null);

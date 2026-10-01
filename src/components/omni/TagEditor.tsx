@@ -2,6 +2,7 @@ import { CheckSquareIcon, MinusSquareIcon, SquareIcon } from "@phosphor-icons/re
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { flattenTags, type TagNode } from "../../lib/ipc";
+import { SEARCH_INPUT_ATTRS } from "../../lib/searchInputAttrs";
 import { tagPalette } from "../../lib/tagColors";
 import { OmniEditorChrome } from "./OmniEditorChrome";
 
@@ -99,7 +100,7 @@ export function TagEditor({
       <input
         ref={inputRef}
         className="omni-tag-search mono"
-        spellCheck={false}
+        {...SEARCH_INPUT_ATTRS}
         placeholder={t("omni.editor.tagSearch")}
         value={q}
         onChange={(e) => {

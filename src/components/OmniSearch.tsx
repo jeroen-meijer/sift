@@ -43,6 +43,7 @@ import {
   type OmniEditorSession,
 } from "../lib/omniEditorSession";
 import { formatOmniKey } from "../lib/omniKey";
+import { SEARCH_INPUT_ATTRS } from "../lib/searchInputAttrs";
 import {
   detectTrigger,
   loadRecentFilters,
@@ -478,6 +479,7 @@ export const OmniSearch = memo(function OmniSearch({
             className="omni-input"
             value={value.text}
             placeholder={chipOrder.length > 0 ? "" : t("omni.placeholder")}
+            {...SEARCH_INPUT_ATTRS}
             onFocus={() => {
               if (!suppressSuggest.current && !session) setSuggestOpen(true);
               suppressSuggest.current = false;

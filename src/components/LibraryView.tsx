@@ -19,6 +19,7 @@ import {
 } from "../lib/ipc";
 import { playheadStore, rowChangesStore } from "../lib/liveStores";
 import { patchRows } from "../lib/patchRows";
+import { initialPlayheadPoll, reducePlayheadPoll } from "../lib/playheadPoll";
 import { getRowPeaks } from "../lib/rowPeaks";
 import { bootMark, isProfileOn, profileEvent, profileMark, useRenderTiming } from "../lib/profile";
 import { useStableCallback } from "../lib/useStableCallback";
@@ -134,6 +135,8 @@ export function LibraryView({
   const tableScrollRef = useRef<SampleTableScrollApi | null>(null);
   /** After showParent (or similar), scroll this id into view once the list loads. */
   const pendingScrollId = useRef<number | null>(null);
+  /** With `omni.folder`, lets the sidebar expand/scroll again for the same path. */
+  const [folderReveal, setFolderReveal] = useState(0);
   const [hoverPreviewHeld, setHoverPreviewHeld] = useState(false);
 
   /*
@@ -382,7 +385,11 @@ export function LibraryView({
       const row = samplesRef.current.find((s) => s.id === sampleId);
       if (row && (row.missing || row.availability !== "local")) return;
       setPlayingId(sampleId);
-      void ipc.play(sampleId, startSecs, region).catch(console.error);
+      void ipc.play(sampleId, startSecs, region).catch((err: unknown) => {
+        console.error(err);
+        /* Play never started on the engine. Clear the optimistic playingId. */
+        setPlayingId((current) => (current === sampleId ? null : current));
+      });
     },
     [],
   );
@@ -459,6 +466,7 @@ export function LibraryView({
     let anchorSecs = 0;
     let anchorAt = performance.now();
     let moving = false;
+    let poll = initialPlayheadPoll();
 
     const paint = (now: number) => {
       if (!alive) return;
@@ -473,11 +481,12 @@ export function LibraryView({
         .playbackState()
         .then((state) => {
           if (!alive) return;
-          anchorSecs = state.position_secs;
+          poll = reducePlayheadPoll(poll, state);
+          anchorSecs = poll.positionSecs;
           anchorAt = performance.now();
-          moving = state.playing;
-          setPreviewPlaying((prev) => (prev === state.playing ? prev : state.playing));
-          if (!state.playing && state.position_secs <= 0) setPlayingId(null);
+          moving = poll.playing;
+          setPreviewPlaying((prev) => (prev === poll.playing ? prev : poll.playing));
+          if (poll.clearPlayingId) setPlayingId(null);
         })
         .catch(() => undefined);
       pollTimer = window.setTimeout(tick, PLAYHEAD_POLL_MS);
@@ -649,6 +658,7 @@ export function LibraryView({
           setSelectedIds(new Set([sample.id]));
           setFavoritesOnly(false);
           setOmni({ ...EMPTY_OMNI, folder: sample.parent_path });
+          setFolderReveal((n) => n + 1);
           break;
         case "findSimilar":
           setOmni((prev) => {
@@ -1140,6 +1150,10 @@ export function LibraryView({
     () => folders.filter((n) => n.is_root).map((n) => ({ path: n.path, name: n.name })),
     [folders],
   );
+  const folderSelection = useMemo(
+    () => (omni.folder == null ? null : { path: omni.folder, reveal: folderReveal }),
+    [omni.folder, folderReveal],
+  );
 
   const bpmFilter = useMemo(
     () => ({
@@ -1163,7 +1177,7 @@ export function LibraryView({
         <FolderSidebar
           folders={folders}
           tags={tags}
-          selectedPath={omni.folder}
+          folderSelection={folderSelection}
           selectedTagPath={
             omni.tagsInclude.length === 1 && omni.tagsExclude.length === 0
               ? (omni.tagsInclude[0] ?? null)

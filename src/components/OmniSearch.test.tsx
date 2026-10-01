@@ -59,6 +59,17 @@ function openBpmEditor(container: HTMLElement) {
   expect(container.querySelector(".omni-editor-anchor")).not.toBeNull();
 }
 
+describe("OmniSearch input", () => {
+  it("disables autocomplete and autocorrect on the search field", () => {
+    const { container } = render(<Harness />);
+    const input = omniInput(container);
+    expect(input.autocomplete).toBe("off");
+    expect(input.getAttribute("autocorrect")).toBe("off");
+    expect(input.getAttribute("autocapitalize")).toBe("off");
+    expect(input.getAttribute("spellcheck")).toBe("false");
+  });
+});
+
 describe("OmniSearch paste", () => {
   it("parses a pasted typed query into chips and type control", () => {
     const { container } = render(<Harness />);
