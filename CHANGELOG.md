@@ -1,6 +1,10 @@
 ## Upcoming
 
+- fix(search): BPM, key, and tag filter popups close when you click the search bar or the chip again, and keep focus in their fields
 - docs: require every PR to update Upcoming; prefer end-user wording when the change is visible; write what the UI does instead of soft wrappers; keep changelog bullets consecutive (no blank lines between them)
+- fix(search): improve filter appearances and make it easier to open and close them
+- fix(search): remove the redundant cut-off key label beside the key filter text field
+- perf(search): BPM, key, and tag filter popups reuse the sample distribution, including when you switch between those filters, and refresh it when the library changes
 
 ## 0.5.1
 

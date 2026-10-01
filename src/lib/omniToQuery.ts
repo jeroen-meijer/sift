@@ -54,3 +54,26 @@ export function omniToSampleQuery(omni: OmniState, opts: QueryOpts): SampleQuery
     offset: opts.offset ?? 0,
   };
 }
+
+/**
+ * Cache key for facet `list_samples` results (histogram / root / tag counts).
+ * Sort and offset do not affect counts. `libraryEpoch` invalidates on watch/analysis refresh.
+ */
+export function facetListCacheKey(query: SampleQuery, libraryEpoch: number): string {
+  return JSON.stringify({
+    e: libraryEpoch,
+    folder_prefix: query.folder_prefix,
+    text: query.text,
+    tag_paths: query.tag_paths,
+    tag_exclude_paths: query.tag_exclude_paths,
+    bpm_min: query.bpm_min,
+    bpm_max: query.bpm_max,
+    key: query.key,
+    key_either: query.key_either,
+    sample_type: query.sample_type,
+    half_double: query.half_double,
+    relative_key: query.relative_key,
+    favorites_only: query.favorites_only,
+    limit: query.limit,
+  });
+}

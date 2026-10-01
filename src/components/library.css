@@ -42,8 +42,7 @@
   background: var(--color-bg-input);
 }
 
-.omni-field:focus-within,
-.omni-field.editing {
+.omni-field:focus-within:not(:has(.omni-chip.selected)) {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 1px var(--color-accent);
 }
@@ -74,6 +73,7 @@
   border-radius: 6px;
   background: var(--color-surface);
   font-size: 11px;
+  cursor: pointer;
 }
 
 .omni-chip.selected,
@@ -453,13 +453,6 @@
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 12.5px;
-}
-
-.omni-key-read {
-  min-width: 72px;
-  text-align: right;
-  font-size: 12px;
-  color: var(--color-accent-soft);
 }
 
 .omni-piano {

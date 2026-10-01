@@ -27,15 +27,24 @@ export function OmniChip({
   return (
     <span
       className={`omni-chip${selected ? " selected" : ""}${pending ? " pending" : ""}`}
-      onClick={(e) => {
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        /* Select on down so the chip ring appears before the search field blurs. */
+        e.preventDefault();
         e.stopPropagation();
         onSelect();
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
       }}
     >
       <span className="omni-chip-pre">{prefix}</span>
       <span className="omni-chip-val mono">{children}</span>
       {toggle ? (
         <span
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
           onClick={(e) => {
             e.stopPropagation();
           }}
@@ -47,6 +56,9 @@ export function OmniChip({
         type="button"
         className="omni-chip-x"
         aria-label={removeLabel}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+        }}
         onClick={(e) => {
           e.stopPropagation();
           onRemove();

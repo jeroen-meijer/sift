@@ -27,6 +27,7 @@ import { FolderSidebar } from "./FolderSidebar";
 import { EMPTY_OMNI, omniHasQuery, toggleTagInclude, type OmniState, type OptionalColumn } from "../lib/omni";
 import { storedKeyToOmni } from "../lib/omniKey";
 import { omniToSampleQuery } from "../lib/omniToQuery";
+import { useFacetCache } from "../lib/useFacetCache";
 import { OmniSearch } from "./OmniSearch";
 import { SampleMenu, type SampleAction } from "./SampleMenu";
 import { type FolderAction } from "./FolderMenu";
@@ -90,7 +91,6 @@ export function LibraryView({
   const [samples, setSamples] = useState<SampleRow[]>([]);
   const [samplesLoading, setSamplesLoading] = useState(true);
   const [editorKind, setEditorKind] = useState<"tag" | "bpm" | "key" | "type" | null>(null);
-  const [facetRows, setFacetRows] = useState<SampleRow[]>([]);
   const omniInputRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [focusedId, setFocusedId] = useState<number | null>(null);
@@ -261,41 +261,15 @@ export function LibraryView({
   }, [refreshSamples, refreshToken]);
 
   /* Facet counts for open editors: same filters minus that dimension. */
-  useEffect(() => {
-    if (editorKind == null || editorKind === "type") {
-      setFacetRows([]);
-      return;
-    }
-    const omit = editorKind;
-    let alive = true;
-    void ipc
-      .listSamples(
-        omniToSampleQuery(omni, {
-          favoritesOnly,
-          halfDouble: settings.half_double_bpm,
-          relativeKey: settings.relative_key,
-          sortColumn: settings.sort_column,
-          sortDirection: settings.sort_direction,
-          limit: LIST_SAMPLES_LIMIT,
-          omit,
-        }),
-      )
-      .then((rows) => {
-        if (alive) setFacetRows(rows);
-      })
-      .catch(console.error);
-    return () => {
-      alive = false;
-    };
-  }, [
-    editorKind,
+  const facetRows = useFacetCache({
     omni,
+    editorKind,
     favoritesOnly,
-    settings.half_double_bpm,
-    settings.relative_key,
-    settings.sort_column,
-    settings.sort_direction,
-  ]);
+    halfDouble: settings.half_double_bpm,
+    relativeKey: settings.relative_key,
+    libraryEpoch: refreshToken,
+    limit: LIST_SAMPLES_LIMIT,
+  });
 
   const facetBpms = useMemo(
     () => facetRows.map((r) => r.bpm).filter((b): b is number => b != null && b > 0),

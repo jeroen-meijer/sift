@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_OMNI } from "./omni";
-import { omniToSampleQuery } from "./omniToQuery";
+import { facetListCacheKey, omniToSampleQuery } from "./omniToQuery";
 
 const baseOpts = {
   favoritesOnly: false,
@@ -63,5 +63,43 @@ describe("omniToSampleQuery", () => {
     expect(omniToSampleQuery(state, { ...baseOpts, omit: "bpm" }).bpm_min).toBeNull();
     expect(omniToSampleQuery(state, { ...baseOpts, omit: "key" }).key).toBeNull();
     expect(omniToSampleQuery(state, { ...baseOpts, omit: "type" }).sample_type).toBeNull();
+  });
+});
+
+describe("facetListCacheKey", () => {
+  it("stays stable when omitted BPM range changes", () => {
+    const a = omniToSampleQuery(
+      { ...EMPTY_OMNI, bpmMin: 168, bpmMax: 172, tagsInclude: ["drums"] },
+      { ...baseOpts, omit: "bpm" },
+    );
+    const b = omniToSampleQuery(
+      { ...EMPTY_OMNI, bpmMin: 80, bpmMax: 90, tagsInclude: ["drums"] },
+      { ...baseOpts, omit: "bpm" },
+    );
+    expect(facetListCacheKey(a, 1)).toBe(facetListCacheKey(b, 1));
+  });
+
+  it("changes when other filters or library epoch change", () => {
+    const base = omniToSampleQuery(
+      { ...EMPTY_OMNI, tagsInclude: ["drums"] },
+      { ...baseOpts, omit: "bpm" },
+    );
+    const otherTags = omniToSampleQuery(
+      { ...EMPTY_OMNI, tagsInclude: ["vocals"] },
+      { ...baseOpts, omit: "bpm" },
+    );
+    expect(facetListCacheKey(base, 1)).not.toBe(facetListCacheKey(otherTags, 1));
+    expect(facetListCacheKey(base, 1)).not.toBe(facetListCacheKey(base, 2));
+  });
+
+  it("ignores sort column and direction", () => {
+    const byName = omniToSampleQuery(EMPTY_OMNI, { ...baseOpts, omit: "bpm" });
+    const byBpm = omniToSampleQuery(EMPTY_OMNI, {
+      ...baseOpts,
+      omit: "bpm",
+      sortColumn: "bpm",
+      sortDirection: "desc",
+    });
+    expect(facetListCacheKey(byName, 0)).toBe(facetListCacheKey(byBpm, 0));
   });
 });

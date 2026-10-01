@@ -5,7 +5,6 @@ import {
   ACCIDENTAL_COLS,
   ACCIDENTAL_LABELS,
   NOTES,
-  formatOmniKey,
   parseOmniKey,
   relativeKeyLabel,
   serializeOmniKeyBody,
@@ -91,7 +90,6 @@ export function KeyEditor({
             }
           }}
         />
-        <span className="omni-key-read mono">{parsed ? formatOmniKey(parsed) : ""}</span>
       </div>
 
       <div className="omni-piano">

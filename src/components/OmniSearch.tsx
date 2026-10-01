@@ -58,6 +58,7 @@ import { Popover } from "../ui/Popover";
 import { BpmEditor } from "./omni/BpmEditor";
 import { KeyEditor } from "./omni/KeyEditor";
 import { OmniChip } from "./omni/OmniChip";
+import { OmniEditorAnchor } from "./omni/OmniEditorAnchor";
 import { SuggestionDropdown, type SuggestionRow } from "./omni/SuggestionDropdown";
 import { TagEditor } from "./omni/TagEditor";
 import { TypeEditor } from "./omni/TypeEditor";
@@ -177,6 +178,18 @@ export const OmniSearch = memo(function OmniSearch({
     }
     closeSession(value);
   }, [closeSession, value]);
+
+  /** Open that chip's editor, or confirm if it is already open. */
+  const toggleChipEditor = useCallback(
+    (kind: Exclude<OmniTriggerKind, "type">) => {
+      if (session?.kind === kind) {
+        confirmEditor();
+        return;
+      }
+      openSession(kind, "edit");
+    },
+    [confirmEditor, openSession, session?.kind],
+  );
 
   const cancelEditor = useCallback(() => {
     if (!session) {
@@ -378,7 +391,7 @@ export const OmniSearch = memo(function OmniSearch({
           selected={selectedChip === "tag" || editor === "tag"}
           pending={pendingChip === "tag" && !omniHasTags(value)}
           onSelect={() => {
-            openSession("tag", "edit");
+            toggleChipEditor("tag");
           }}
           removeLabel={t("action.clear")}
           onRemove={() => {
@@ -402,7 +415,7 @@ export const OmniSearch = memo(function OmniSearch({
             onToggle: onToggleHalfDouble,
           }}
           onSelect={() => {
-            openSession("bpm", "edit");
+            toggleChipEditor("bpm");
           }}
           removeLabel={t("action.clear")}
           onRemove={() => {
@@ -431,7 +444,7 @@ export const OmniSearch = memo(function OmniSearch({
             : undefined
         }
         onSelect={() => {
-          openSession("key", "edit");
+          toggleChipEditor("key");
         }}
         removeLabel={t("action.clear")}
         onRemove={() => {
@@ -447,8 +460,12 @@ export const OmniSearch = memo(function OmniSearch({
     <div className="omni-bar">
       <div
         ref={fieldRef}
-        className={`omni-field${session ? " editing" : ""}`}
+        className="omni-field"
         onClick={() => {
+          if (session) {
+            confirmEditor();
+            return;
+          }
           inputRef.current?.focus();
         }}
       >
@@ -599,7 +616,7 @@ export const OmniSearch = memo(function OmniSearch({
         ) : null}
 
         {editor === "bpm" ? (
-          <div className="omni-editor-anchor">
+          <OmniEditorAnchor>
             <BpmEditor
               value={{ min: value.bpmMin, max: value.bpmMax }}
               halfDouble={halfDouble}
@@ -612,10 +629,10 @@ export const OmniSearch = memo(function OmniSearch({
               onConfirm={confirmEditor}
               onCancel={cancelEditor}
             />
-          </div>
+          </OmniEditorAnchor>
         ) : null}
         {editor === "key" ? (
-          <div className="omni-editor-anchor">
+          <OmniEditorAnchor>
             <KeyEditor
               value={value.key}
               relative={relativeKey}
@@ -627,10 +644,10 @@ export const OmniSearch = memo(function OmniSearch({
               onConfirm={confirmEditor}
               onCancel={cancelEditor}
             />
-          </div>
+          </OmniEditorAnchor>
         ) : null}
         {editor === "tag" ? (
-          <div className="omni-editor-anchor">
+          <OmniEditorAnchor>
             <TagEditor
               value={{ include: value.tagsInclude, exclude: value.tagsExclude }}
               tags={tags}
@@ -645,10 +662,10 @@ export const OmniSearch = memo(function OmniSearch({
               onConfirm={confirmEditor}
               onCancel={cancelEditor}
             />
-          </div>
+          </OmniEditorAnchor>
         ) : null}
         {editor === "type" ? (
-          <div className="omni-editor-anchor right">
+          <OmniEditorAnchor align="right">
             <TypeEditor
               value={value.sampleType}
               onChange={(sampleType) => {
@@ -657,7 +674,7 @@ export const OmniSearch = memo(function OmniSearch({
               onConfirm={confirmEditor}
               onCancel={cancelEditor}
             />
-          </div>
+          </OmniEditorAnchor>
         ) : null}
 
         {suggestOpen && !session ? (

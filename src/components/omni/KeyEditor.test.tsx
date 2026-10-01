@@ -35,7 +35,7 @@ describe("KeyEditor", () => {
     expect(toggle.className).toContain(" on");
   });
 
-  it("shows key without Camelot and accidentals span two columns", () => {
+  it("shows accidentals spanning two piano columns", () => {
     const { container } = render(
       <KeyEditor
         value={{ pitchClass: 9, mode: "min" }}
@@ -47,7 +47,6 @@ describe("KeyEditor", () => {
         onCancel={vi.fn()}
       />,
     );
-    expect(container.querySelector(".omni-key-read")?.textContent).toBe("A min");
     const blacks = container.querySelectorAll(".omni-piano-row.blacks .omni-piano-cell");
     expect(blacks).toHaveLength(5);
     for (const cell of blacks) {
