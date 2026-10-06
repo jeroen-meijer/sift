@@ -4,6 +4,7 @@
 - fix(search): stop autocorrect from changing what you type in search
 - fix(library): Show parent folder selects that folder in the sidebar and scrolls it into view
 - feat(library): show nested folders at any depth in the sidebar
+- docs: add a codebase review with prioritized bugs, performance work, and refactors
 
 ## 0.5.2
 
